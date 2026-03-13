@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+/* Highland theme – primary #03474A */
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  /* Primary: used for main bg and text headings */
+  --highland-primary: #03474A;
+  --highland-primary-hover: #02383a;
+  --highland-secondary: #03474A;
+  --highland-accent: #03474A;
+  --highland-surface: #f5f5f5;
+  --highland-border: #e2e8e4;
+  --highland-muted: #64748b;
+  --highland-success: #16a34a;
+  --highland-warning: #d97706;
+  --highland-error: #dc2626;
+  --sidebar-bg: var(--highland-primary);
+  --sidebar-text: #e8f0eb;
+  --sidebar-text-muted: rgba(255, 255, 255, 0.7);
+  /* Content section: image as bg + #FFFFFF 30% overlay */
+  --content-bg-image: url("/assets/content-bg.jpg");
+  --content-bg-overlay: linear-gradient(0deg, #ffffff98, #ffffff);
+  /* Content cards/sections: primary at 10% opacity (tweak 0.08–0.15 to taste) */
+  --content-card-bg: rgba(255, 255, 255, 0.7);
+  /* --content-card-bg: rgba(3, 71, 74, 0.2); */
+  --content-card-border: rgba(3, 71, 74, 0.2);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-highland-primary: var(--highland-primary);
+  --color-highland-secondary: var(--highland-secondary);
+  --color-highland-accent: var(--highland-accent);
+  --color-highland-surface: var(--highland-surface);
+  --color-highland-border: var(--highland-border);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0f1412;
+    --foreground: #e8f0eb;
+    --highland-surface: #1a2420;
+    --highland-border: #2d3d36;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Admin content section: fixed bg (image + overlay), only inner content scrolls */
+.admin-content-section {
+  position: relative;
+  color: var(--highland-primary);
+  min-height: 0;
+}
+.admin-content-section::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-image: var(--content-bg-overlay), var(--content-bg-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.admin-content-scroll {
+  position: relative;
+  z-index: 1;
+}
+
+/* Content area cards/boxes: primary bg at 10% opacity */
+.admin-content-card {
+  background: var(--content-card-bg);
+  border: 1px solid var(--content-card-border);
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px 0 rgb(3 71 74 / 0.08);
+}
