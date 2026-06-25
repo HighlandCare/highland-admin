@@ -5,14 +5,13 @@
   "licence": "MIT",
   "homepage": "",
   "private": false,
-  "scripts": {
-    "dev": "next",
-    "build": "next build && next export",
-    "dev:static": "serve ./out",
-    "start": "next start",
-    "lint": "next lint",
-    "lint-fix": "next lint --fix"
-  },
+"scripts": {
+  "dev": "next dev",
+  "build": "next build",
+  "start": "next start -p 4006",
+  "lint": "next lint",
+  "lint-fix": "next lint --fix"
+},
   "dependencies": {
     "@emotion/cache": "11.10.5",
     "@emotion/react": "11.10.6",
