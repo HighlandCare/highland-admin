@@ -109,7 +109,7 @@ const Page = () => {
   return (
     <>
       <Head>
-        <title>{driver ? `${getDriverDisplayName(driver)} | Driver` : "Driver Details"} | Cura</title>
+        <title>{driver ? `${getDriverDisplayName(driver)} | Driver` : "Driver Details"} | Highland Care</title>
       </Head>
 
       <Box component="main" sx={pageMainSx}>

@@ -124,6 +124,18 @@ export function createComponents(config) {
           minHeight: "100%",
           width: "100%",
         },
+        ".Toastify__toast-container": {
+          left: "50%",
+          maxWidth: "calc(100vw - 32px)",
+          transform: "translateX(-50%)",
+          width: "auto",
+        },
+        "@media only screen and (max-width: 480px)": {
+          ".Toastify__toast-container--top-right": {
+            right: "auto",
+            top: "1rem",
+          },
+        },
         "#__next": {
           display: "flex",
           flex: "1 1 auto",
@@ -333,7 +345,7 @@ export function createComponents(config) {
             fontWeight: 600,
             letterSpacing: 0,
             lineHeight: 1.4,
-            padding: "12px 24px",
+            padding: { xs: "10px 12px", sm: "12px 24px" },
             textTransform: "none",
           },
         },

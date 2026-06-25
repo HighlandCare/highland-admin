@@ -376,6 +376,33 @@ export const updateChapStatus = async (chaperonId, status) => {
   }
 };
 
+export const updateUserStatus = async (customerAuthId, status) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const response = await Action.patch(
+      `admin/updateuserstatus/${customerAuthId}`,
+      {
+        status: status,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
 export const addUser = async (email, password, name) => {
   try {
     const authToken = JSON.parse(localStorage.getItem("token"));

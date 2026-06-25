@@ -3,7 +3,8 @@ import PropTypes from "prop-types";
 import { useRouter } from "next/router";
 import EyeIcon from "@heroicons/react/24/outline/EyeIcon";
 import CheckCircleIcon from "@heroicons/react/24/outline/CheckCircleIcon";
-import XCircleIcon from "@heroicons/react/24/outline/XCircleIcon";
+import { BlockUserIcon, UnblockUserIcon } from "../../components/block-user-icons";
+import { toast } from "react-toastify";
 import { TableBody, TableCell, TableHead, TableRow, Typography } from "@mui/material";
 import {
   DataTable,
@@ -20,13 +21,25 @@ import {
   TablePersonCell,
   TableQuickActions,
 } from "../../components/table-cells";
-import { updateChapStatus } from "../../Services/Auth.service";
+import { updateChapStatus, updateDriverPersonaStatus } from "../../Services/Auth.service";
 import {
+  getDriverAccountStatusMeta,
   getDriverDisplayName,
   getDriverList,
+  getDriverPersonaStatus,
   getDriverProfileImage,
-  getDriverStatusLabel,
+  getDriverUserId,
+  getIsApprovedFromResponse,
+  getPersonaStatusFromResponse,
+  getPersonaStatusMeta,
+  isDriverBlocked,
+  isPersonaApproved,
+  mergeDriverApprovalUpdate,
+  mergePersonaStatusUpdate,
+  setDriverListInResponse,
   storeDriverDetail,
+  updateDriverApprovalInList,
+  updateDriverPersonaInList,
 } from "../../utils/driverUtils";
 
 export const ChapTable = (props) => {
@@ -37,31 +50,74 @@ export const ChapTable = (props) => {
     title = "Drivers",
   } = props;
   const router = useRouter();
-  const [submitting, setSubmitting] = useState(false);
+  const [submittingId, setSubmittingId] = useState(null);
   const [items, setItems] = useState(initialItems);
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    setItems(initialItems);
+    setItems((current) => {
+      const currentDrivers = getDriverList(current);
+      const nextDrivers = getDriverList(initialItems);
+
+      if (!currentDrivers.length) {
+        return initialItems;
+      }
+
+      const personaByUserId = new Map(
+        currentDrivers
+          .map((driver) => [getDriverUserId(driver), getDriverPersonaStatus(driver)])
+          .filter(([userId, status]) => userId && status)
+      );
+      const approvalById = new Map(
+        currentDrivers
+          .map((driver) => [driver._id, driver.isApproved])
+          .filter(([id, isApproved]) => id && typeof isApproved === "boolean")
+      );
+
+      if (!personaByUserId.size && !approvalById.size) {
+        return initialItems;
+      }
+
+      const mergedDrivers = nextDrivers.map((driver) => {
+        let nextDriver = driver;
+        const savedStatus = personaByUserId.get(getDriverUserId(driver));
+
+        if (savedStatus) {
+          nextDriver = mergePersonaStatusUpdate(nextDriver, savedStatus);
+        }
+
+        if (approvalById.has(driver._id)) {
+          nextDriver = mergeDriverApprovalUpdate(nextDriver, approvalById.get(driver._id));
+        }
+
+        return nextDriver;
+      });
+
+      return setDriverListInResponse(initialItems, mergedDrivers);
+    });
   }, [initialItems]);
 
   const pageDrivers = useMemo(() => getDriverList(items), [items]);
   const isEmpty = !pageDrivers.length && !(items?.total_records ?? items?.totalRecords);
 
-  const handleStatusChange = async (chaperonId, newStatus) => {
+  const handleApprovePersona = async (driver) => {
+    const driverUserId = getDriverUserId(driver);
+
+    if (!driverUserId) {
+      console.error("Unable to approve persona: missing driver user id");
+      return;
+    }
+
     try {
-      setSubmitting(true);
-      await updateChapStatus(chaperonId, newStatus);
+      setSubmittingId(driver._id);
+      const response = await updateDriverPersonaStatus(driverUserId, "approved");
+      const updatedStatus = getPersonaStatusFromResponse(response);
 
-      const updatedDrivers = pageDrivers.map((chape) =>
-        chape._id === chaperonId ? { ...chape, isApproved: newStatus } : chape
-      );
-
-      setItems({ ...items, data: updatedDrivers });
+      setItems((current) => updateDriverPersonaInList(current, driver, updatedStatus));
     } catch (error) {
-      console.error("Error changing chaperone status:", error);
+      console.error("Error updating persona status:", error);
     } finally {
-      setSubmitting(false);
+      setSubmittingId(null);
     }
   };
 
@@ -70,24 +126,53 @@ export const ChapTable = (props) => {
     router.push(`/chaperone/detail?id=${driver._id}`);
   };
 
+  const handleToggleDriverBlock = async (driver) => {
+    const chaperoneId = driver._id;
+    const shouldBlock = !isDriverBlocked(driver);
+
+    if (!chaperoneId) {
+      console.error("Unable to update driver status: missing chaperone id");
+      return;
+    }
+
+    try {
+      setSubmittingId(chaperoneId);
+      const response = await updateChapStatus(chaperoneId, !shouldBlock);
+      const isApproved = getIsApprovedFromResponse(response);
+
+      setItems((current) => updateDriverApprovalInList(current, driver, isApproved));
+      toast.success(shouldBlock ? "Driver blocked successfully" : "Driver unblocked successfully");
+    } catch (error) {
+      console.error("Error updating driver status:", error);
+      toast.error("Unable to update driver status. Please try again.");
+    } finally {
+      setSubmittingId(null);
+    }
+  };
+
   const rows = useMemo(() => {
     if (!pageDrivers.length) {
       return [];
     }
 
-    const filtered = filterBySearch(pageDrivers, search, (driver) =>
-      [
+    const filtered = filterBySearch(pageDrivers, search, (driver) => {
+      const personaMeta = getPersonaStatusMeta(getDriverPersonaStatus(driver));
+
+      const accountMeta = getDriverAccountStatusMeta(driver);
+
+      return [
         getDriverDisplayName(driver),
         driver?.user?.email,
         driver?.vehicleName,
         driver?.vehicleNo,
         driver?.experience,
         driver?.licenceNumber,
-        driver?.status,
+        personaMeta.label,
+        accountMeta.label,
       ]
         .filter(Boolean)
-        .join(" ")
-    );
+        .join(" ");
+    });
 
     return sortItems(filtered, "newest", (a, b) => ({
       dateA: new Date(a?.createdAt || 0).getTime(),
@@ -130,14 +215,15 @@ export const ChapTable = (props) => {
           <TableCell>E-mail</TableCell>
           <TableCell>Vehicle</TableCell>
           <TableCell>Experience</TableCell>
-          <TableCell>Status</TableCell>
+          <TableCell>Persona Status</TableCell>
+          <TableCell>Account Status</TableCell>
           <TableCell align="right">Quick Actions</TableCell>
         </TableRow>
       </TableHead>
       <TableBody>
         {rows.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={6}>
+            <TableCell colSpan={7}>
               <Typography color="text.secondary" textAlign="center" variant="body2">
                 No matching results found.
               </Typography>
@@ -145,7 +231,45 @@ export const ChapTable = (props) => {
           </TableRow>
         ) : (
           rows.map((driver) => {
-            const status = getDriverStatusLabel(driver);
+            const personaStatus = getDriverPersonaStatus(driver);
+            const personaMeta = getPersonaStatusMeta(personaStatus);
+            const isPersonaApprovedStatus = isPersonaApproved(personaStatus);
+            const accountMeta = getDriverAccountStatusMeta(driver);
+            const isBlocked = isDriverBlocked(driver);
+            const isSubmitting = submittingId === driver._id;
+
+            const actions = [
+              {
+                icon: EyeIcon,
+                label: "View details",
+                onClick: () => handleOpenViewDetail(driver),
+              },
+            ];
+
+            if (!isPersonaApprovedStatus) {
+              actions.push({
+                icon: CheckCircleIcon,
+                color: "success.main",
+                label: isSubmitting ? "Approving..." : "Approve Persona",
+                onClick: () => !isSubmitting && handleApprovePersona(driver),
+              });
+            }
+
+            if (isBlocked) {
+              actions.push({
+                icon: UnblockUserIcon,
+                color: "success.main",
+                label: isSubmitting ? "Unblocking..." : "Unblock Driver",
+                onClick: () => !isSubmitting && handleToggleDriverBlock(driver),
+              });
+            } else {
+              actions.push({
+                icon: BlockUserIcon,
+                color: "error.main",
+                label: isSubmitting ? "Blocking..." : "Block Driver",
+                onClick: () => !isSubmitting && handleToggleDriverBlock(driver),
+              });
+            }
 
             return (
               <TableRow hover key={driver._id}>
@@ -164,23 +288,13 @@ export const ChapTable = (props) => {
                 </TableCell>
                 <TableCell>{driver?.experience || "—"}</TableCell>
                 <TableCell>
-                  <StatusBadge color={status.color} label={status.label} />
+                  <StatusBadge color={personaMeta.color} label={personaMeta.label} />
+                </TableCell>
+                <TableCell>
+                  <StatusBadge color={accountMeta.color} label={accountMeta.label} />
                 </TableCell>
                 <TableCell align="right">
-                  <TableQuickActions
-                    actions={[
-                      {
-                        icon: EyeIcon,
-                        label: "View details",
-                        onClick: () => handleOpenViewDetail(driver),
-                      },
-                      {
-                        icon: driver.isApproved ? XCircleIcon : CheckCircleIcon,
-                        label: driver.isApproved ? "Revoke approval" : "Approve driver",
-                        onClick: () => !submitting && handleStatusChange(driver._id, !driver.isApproved),
-                      },
-                    ]}
-                  />
+                  <TableQuickActions actions={actions} />
                 </TableCell>
               </TableRow>
             );

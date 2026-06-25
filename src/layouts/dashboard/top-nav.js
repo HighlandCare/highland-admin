@@ -28,12 +28,13 @@ export const TopNav = (props) => {
         sx={{
           backdropFilter: "blur(6px)",
           backgroundColor: (theme) => alpha(theme.palette.background.default, 0.8),
-          position: "sticky",
           left: {
             lg: `${SIDE_NAV_WIDTH}px`,
           },
+          position: "sticky",
           top: 0,
           width: {
+            xs: "100%",
             lg: `calc(100% - ${SIDE_NAV_WIDTH}px)`,
           },
           zIndex: (theme) => theme.zIndex.appBar,

@@ -61,27 +61,35 @@ StatusBadge.propTypes = {
   label: PropTypes.string.isRequired,
 };
 
+const tableTextSx = {
+  minWidth: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
 export const TablePersonCell = ({ imageUrl, name, subtitle }) => (
-  <Stack alignItems="center" direction="row" spacing={1.5}>
+  <Stack alignItems="center" direction="row" spacing={{ xs: 1, sm: 1.5 }} sx={{ minWidth: 0 }}>
     <Avatar
       src={imageUrl}
       sx={{
         bgcolor: "neutral.100",
         color: "neutral.700",
+        flexShrink: 0,
         fontSize: 14,
         fontWeight: 600,
-        height: 40,
-        width: 40,
+        height: { xs: 36, sm: 40 },
+        width: { xs: 36, sm: 40 },
       }}
     >
       {name?.charAt(0)?.toUpperCase() || "?"}
     </Avatar>
-    <Box>
-      <Typography fontWeight={600} variant="body2">
+    <Box sx={{ minWidth: 0 }}>
+      <Typography fontWeight={600} sx={tableTextSx} variant="body2">
         {name || "—"}
       </Typography>
       {subtitle && (
-        <Typography color="text.secondary" variant="caption">
+        <Typography color="text.secondary" sx={tableTextSx} variant="caption">
           {subtitle}
         </Typography>
       )}
@@ -96,11 +104,11 @@ TablePersonCell.propTypes = {
 };
 
 export const TableEmailCell = ({ email }) => (
-  <Stack alignItems="center" direction="row" spacing={1}>
-    <SvgIcon fontSize="small" sx={{ color: "neutral.400" }}>
+  <Stack alignItems="center" direction="row" spacing={1} sx={{ maxWidth: { xs: 140, sm: 220, md: "none" }, minWidth: 0 }}>
+    <SvgIcon fontSize="small" sx={{ color: "neutral.400", flexShrink: 0 }}>
       <EnvelopeIcon />
     </SvgIcon>
-    <Typography color="text.secondary" variant="body2">
+    <Typography color="text.secondary" sx={tableTextSx} variant="body2">
       {email || "—"}
     </Typography>
   </Stack>
@@ -111,11 +119,11 @@ TableEmailCell.propTypes = {
 };
 
 export const TablePhoneCell = ({ phone }) => (
-  <Stack alignItems="center" direction="row" spacing={1}>
-    <SvgIcon fontSize="small" sx={{ color: "neutral.400" }}>
+  <Stack alignItems="center" direction="row" spacing={1} sx={{ minWidth: 0 }}>
+    <SvgIcon fontSize="small" sx={{ color: "neutral.400", flexShrink: 0 }}>
       <PhoneIcon />
     </SvgIcon>
-    <Typography color="text.secondary" variant="body2">
+    <Typography color="text.secondary" sx={tableTextSx} variant="body2">
       {phone || "—"}
     </Typography>
   </Stack>
@@ -126,18 +134,18 @@ TablePhoneCell.propTypes = {
 };
 
 export const TableDetailCell = ({ icon: Icon, primary, secondary }) => (
-  <Stack alignItems="center" direction="row" spacing={1.25}>
+  <Stack alignItems="center" direction="row" spacing={1.25} sx={{ minWidth: 0 }}>
     {Icon && (
-      <SvgIcon fontSize="small" sx={{ color: "neutral.400" }}>
+      <SvgIcon fontSize="small" sx={{ color: "neutral.400", flexShrink: 0 }}>
         <Icon />
       </SvgIcon>
     )}
-    <Box>
-      <Typography fontWeight={600} variant="body2">
+    <Box sx={{ minWidth: 0 }}>
+      <Typography fontWeight={600} sx={tableTextSx} variant="body2">
         {primary || "—"}
       </Typography>
       {secondary && (
-        <Typography color="text.secondary" variant="caption">
+        <Typography color="text.secondary" sx={tableTextSx} variant="caption">
           {secondary}
         </Typography>
       )}
@@ -162,25 +170,30 @@ TableLocationCell.propTypes = {
 
 export const TableQuickActions = ({ actions }) => (
   <Stack direction="row" justifyContent="flex-end" spacing={0.5}>
-    {actions.map(({ icon: Icon, label, onClick, color = "neutral.500" }) => (
-      <Tooltip key={label} title={label}>
-        <IconButton
-          onClick={onClick}
-          size="small"
-          sx={{
-            color,
-            "&:hover": {
-              bgcolor: "neutral.50",
-              color: "neutral.800",
-            },
-          }}
-        >
-          <SvgIcon fontSize="small">
-            <Icon />
-          </SvgIcon>
-        </IconButton>
-      </Tooltip>
-    ))}
+    {actions.map(({ icon: Icon, label, onClick, color = "neutral.500" }) => {
+      const hasActionColor = color !== "neutral.500";
+
+      return (
+        <Tooltip key={label} title={label}>
+          <IconButton
+            aria-label={label}
+            onClick={onClick}
+            size="small"
+            sx={{
+              color,
+              "&:hover": {
+                bgcolor: hasActionColor ? alpha(brand.primary, 0.06) : "neutral.50",
+                color: hasActionColor ? color : "neutral.800",
+              },
+            }}
+          >
+            <SvgIcon fontSize="small">
+              <Icon />
+            </SvgIcon>
+          </IconButton>
+        </Tooltip>
+      );
+    })}
   </Stack>
 );
 

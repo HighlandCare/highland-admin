@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import PropTypes from "prop-types";
-import CheckCircleIcon from "@heroicons/react/24/outline/CheckCircleIcon";
 import { TableBody, TableCell, TableHead, TableRow, Typography } from "@mui/material";
 import {
   DataTable,
@@ -11,13 +10,10 @@ import {
   sortItems,
 } from "../../components/data-table";
 import {
-  StatusBadge,
   TableEmailCell,
   TablePersonCell,
   TablePhoneCell,
-  TableQuickActions,
 } from "../../components/table-cells";
-import { updateDriverPersonaStatus } from "../../Services/Auth.service";
 import { formatRelativeDate } from "../../utils/dateUtils";
 import { getListFromResponse } from "../../utils/listUtils";
 
@@ -36,36 +32,6 @@ const formatCurrency = (value) => {
   return currencyFormatter.format(Number(value));
 };
 
-const formatPersonaLabel = (status) => {
-  if (!status) {
-    return "Not set";
-  }
-
-  return status
-    .split(/[_-]/)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-};
-
-const getPersonaStatusMeta = (status) => {
-  const normalized = String(status || "").toLowerCase();
-
-  switch (normalized) {
-    case "approved":
-      return { color: "success", label: "Approved" };
-    case "pending":
-    case "created":
-    case "started":
-      return { color: "warning", label: formatPersonaLabel(status) };
-    case "declined":
-    case "failed":
-    case "rejected":
-      return { color: "error", label: formatPersonaLabel(status) };
-    default:
-      return { color: "neutral", label: formatPersonaLabel(status) };
-  }
-};
-
 const earningsSortValue = "newest";
 
 export const DriverEarningsTable = (props) => {
@@ -77,7 +43,6 @@ export const DriverEarningsTable = (props) => {
   } = props;
   const [items, setItems] = useState(initialItems);
   const [search, setSearch] = useState("");
-  const [submittingId, setSubmittingId] = useState(null);
 
   useEffect(() => {
     setItems(initialItems);
@@ -101,7 +66,6 @@ export const DriverEarningsTable = (props) => {
         driver?.rideCount,
         driver?.totalEarned,
         driver?.walletBalance,
-        driver?.personaStatus,
       ]
         .filter((value) => value != null && value !== "")
         .join(" ")
@@ -125,35 +89,9 @@ export const DriverEarningsTable = (props) => {
     onPageChange(1);
   };
 
-  const handleApprovePersona = async (driverId) => {
-    try {
-      setSubmittingId(driverId);
-      const response = await updateDriverPersonaStatus(driverId, "approved");
-      const updatedDriver = response?.data;
-
-      setItems((current) => ({
-        ...current,
-        data: getListFromResponse(current).map((driver) =>
-          driver._id === driverId
-            ? {
-                ...driver,
-                ...updatedDriver,
-                personaStatus: updatedDriver?.personaStatus || "approved",
-              }
-            : driver
-        ),
-      }));
-    } catch (error) {
-      console.error("Error updating persona status:", error);
-    } finally {
-      setSubmittingId(null);
-    }
-  };
-
   return (
     <DataTable
       empty={isEmpty}
-      minWidth={960}
       pagination={getServerPaginationProps({
         currentPage: page,
         onPageChange,
@@ -177,70 +115,45 @@ export const DriverEarningsTable = (props) => {
           <TableCell>Rides</TableCell>
           <TableCell>Total Earned</TableCell>
           <TableCell>Wallet Balance</TableCell>
-          <TableCell>Persona Status</TableCell>
-          <TableCell align="right">Actions</TableCell>
         </TableRow>
       </TableHead>
       <TableBody>
         {rows.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={8}>
+            <TableCell colSpan={6}>
               <Typography color="text.secondary" textAlign="center" variant="body2">
                 No matching results found.
               </Typography>
             </TableCell>
           </TableRow>
         ) : (
-          rows.map((driver) => {
-            const personaStatus = getPersonaStatusMeta(driver?.personaStatus);
-            const isApproved = String(driver?.personaStatus || "").toLowerCase() === "approved";
-            const isSubmitting = submittingId === driver._id;
-
-            return (
-              <TableRow hover key={driver._id}>
-                <TableCell>
-                  <TablePersonCell
-                    name={driver?.fullName || driver?.email || "—"}
-                    subtitle={formatRelativeDate(driver?.createdAt)}
-                  />
-                </TableCell>
-                <TableCell>
-                  <TableEmailCell email={driver?.email} />
-                </TableCell>
-                <TableCell>
-                  <TablePhoneCell phone={driver?.phone} />
-                </TableCell>
-                <TableCell>{driver?.rideCount ?? 0}</TableCell>
-                <TableCell>
-                  <Typography fontWeight={600} variant="body2">
-                    {formatCurrency(driver?.totalEarned)}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <Typography color="text.secondary" variant="body2">
-                    {formatCurrency(driver?.walletBalance)}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <StatusBadge color={personaStatus.color} label={personaStatus.label} />
-                </TableCell>
-                <TableCell align="right">
-                  {!isApproved && (
-                    <TableQuickActions
-                      actions={[
-                        {
-                          icon: CheckCircleIcon,
-                          color: "success.main",
-                          label: isSubmitting ? "Approving..." : "Approve Persona",
-                          onClick: () => !isSubmitting && handleApprovePersona(driver._id),
-                        },
-                      ]}
-                    />
-                  )}
-                </TableCell>
-              </TableRow>
-            );
-          })
+          rows.map((driver) => (
+            <TableRow hover key={driver._id}>
+              <TableCell>
+                <TablePersonCell
+                  name={driver?.fullName || driver?.email || "—"}
+                  subtitle={formatRelativeDate(driver?.createdAt)}
+                />
+              </TableCell>
+              <TableCell>
+                <TableEmailCell email={driver?.email} />
+              </TableCell>
+              <TableCell>
+                <TablePhoneCell phone={driver?.phone} />
+              </TableCell>
+              <TableCell>{driver?.rideCount ?? 0}</TableCell>
+              <TableCell>
+                <Typography fontWeight={600} variant="body2">
+                  {formatCurrency(driver?.totalEarned)}
+                </Typography>
+              </TableCell>
+              <TableCell>
+                <Typography color="text.secondary" variant="body2">
+                  {formatCurrency(driver?.walletBalance)}
+                </Typography>
+              </TableCell>
+            </TableRow>
+          ))
         )}
       </TableBody>
     </DataTable>

@@ -58,7 +58,7 @@ const Page = () => {
   return (
     <>
       <Head>
-        <title>Users | Cura</title>
+        <title>Users | Highland Care</title>
       </Head>
 
       <Box component="main" sx={pageMainSx}>

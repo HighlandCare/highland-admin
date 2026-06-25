@@ -50,7 +50,7 @@ export const Layout = (props) => {
             }}
           >
             <img
-              alt="Cura Dashboard"
+              alt="Highland Care Dashboard"
               src="/assets/logo.png"
               style={{
                 display: "inline-block",

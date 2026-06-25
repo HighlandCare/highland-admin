@@ -69,7 +69,7 @@ const Page = () => {
   return (
     <>
       <Head>
-        <title>Privacy | Cura</title>
+        <title>Privacy | Highland Care</title>
       </Head>
 
       <Box component="main" sx={pageMainSx}>

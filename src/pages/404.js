@@ -6,7 +6,7 @@ import { Box, Button, Container, SvgIcon, Typography } from "@mui/material";
 const Page = () => (
   <>
     <Head>
-      <title>404 | Cura</title>
+      <title>404 | Highland Care</title>
     </Head>
     <Box
       component="main"
@@ -31,17 +31,19 @@ const Page = () => (
               textAlign: "center",
             }}
           >
-            <img
+            <Box
+              component="img"
               alt="Under development"
               src="/assets/errors/error-404.png"
-              style={{
+              sx={{
                 display: "inline-block",
+                height: "auto",
                 maxWidth: "100%",
-                width: 400,
+                width: { xs: "100%", sm: 400 },
               }}
             />
           </Box>
-          <Typography align="center" sx={{ mb: 3 }} variant="h3">
+          <Typography align="center" sx={{ mb: 3, fontSize: { xs: "1.5rem", sm: "2rem", md: "3rem" } }} variant="h3">
             404: The page you are looking for isn’t here
           </Typography>
           <Typography align="center" color="text.secondary" variant="body1">

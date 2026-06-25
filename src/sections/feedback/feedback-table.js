@@ -168,7 +168,7 @@ export const FeedbackTable = (props) => {
                   {feedback.subject}
                 </Typography>
               </TableCell>
-              <TableCell sx={{ maxWidth: 360 }}>
+              <TableCell sx={{ maxWidth: { xs: 180, sm: 280, md: 360 } }}>
                 <Typography
                   color="text.secondary"
                   sx={{

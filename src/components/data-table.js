@@ -13,6 +13,19 @@ import {
 } from "@mui/material";
 import { Scrollbar } from "./scrollbar";
 
+export const dataTableScrollSx = {
+  maxWidth: "100%",
+  overflowX: "auto",
+  WebkitOverflowScrolling: "touch",
+  width: "100%",
+};
+
+export const getResponsiveTableMinWidth = (minWidth = 800) => ({
+  xs: Math.min(minWidth, 560),
+  sm: Math.min(minWidth, 720),
+  md: minWidth,
+});
+
 export const dataTableCardSx = {
   border: "1px solid",
   borderColor: "neutral.200",
@@ -162,9 +175,13 @@ export const DataTablePagination = (props) => (
       "& .MuiTablePagination-toolbar": {
         flexWrap: "wrap",
         gap: 1,
+        justifyContent: { xs: "center", sm: "flex-end" },
         minHeight: 56,
         px: { xs: 1.5, sm: 3 },
         py: { xs: 1, sm: 0 },
+      },
+      "& .MuiTablePagination-spacer": {
+        display: { xs: "none", sm: "block" },
       },
       "& .MuiTablePagination-displayedRows": {
         fontSize: 13,
@@ -233,11 +250,13 @@ export const DataTable = ({
   return (
     <Card sx={dataTableCardSx}>
       {toolbar}
-      <Scrollbar>
-        <Box sx={{ minWidth }}>
-          <Table sx={dataTableSx}>{children}</Table>
-        </Box>
-      </Scrollbar>
+      <Box sx={dataTableScrollSx}>
+        <Scrollbar>
+          <Box sx={{ minWidth: getResponsiveTableMinWidth(minWidth), width: "100%" }}>
+            <Table sx={dataTableSx}>{children}</Table>
+          </Box>
+        </Scrollbar>
+      </Box>
       {pagination && <DataTablePagination {...pagination} />}
     </Card>
   );

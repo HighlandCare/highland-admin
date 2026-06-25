@@ -50,7 +50,7 @@ export const OverviewTotalFeedbacks = (props) => {
         >
           <Stack spacing={2}>
             <Typography color="text.secondary" variant="overline">
-              Total Chaperone
+              Total Drivers
             </Typography>
             <Box sx={{ alignItems: "center", display: "flex", minHeight: 40 }}>
               {isLoading ? (
@@ -86,7 +86,7 @@ export const OverviewTotalFeedbacks = (props) => {
                 }
                 size="small"
               >
-                See all chaperone
+                See all drivers
               </Button>
             </Link>
           </CardActions>

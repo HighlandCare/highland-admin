@@ -34,7 +34,7 @@ const Page = () => {
           setChape(response);
         }
       } catch (error) {
-        console.error("Error fetching Chaperone:", error);
+        console.error("Error fetching drivers:", error);
       } finally {
         if (active) {
           setIsLoading(false);
@@ -58,7 +58,7 @@ const Page = () => {
   return (
     <>
       <Head>
-        <title>Drivers | Cura</title>
+        <title>Drivers | Highland Care</title>
       </Head>
 
       <Box component="main" sx={pageMainSx}>

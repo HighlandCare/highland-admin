@@ -40,7 +40,7 @@ const Page = () => {
   return (
     <>
       <Head>
-        <title>Home | Cura</title>
+        <title>Home | Highland Care</title>
       </Head>
       <Layout>
         {isLogin ? (
@@ -51,12 +51,12 @@ const Page = () => {
                   Dashboard
                 </Typography>
               </Stack>
-              <Grid container spacing={3}>
-                <Grid xs={12} sm={6} lg={6}>
-                  <OverviewBudget sx={{ height: "90%", padding: 0 }} />
+              <Grid container spacing={{ xs: 2, sm: 3 }}>
+                <Grid xs={12} md={6}>
+                  <OverviewBudget sx={{ height: { xs: "auto", md: "90%" }, padding: 0 }} />
                 </Grid>
-                <Grid xs={12} sm={6} lg={6}>
-                  <OverviewTotalFeedbacks sx={{ height: "90%", padding: 0 }} />
+                <Grid xs={12} md={6}>
+                  <OverviewTotalFeedbacks sx={{ height: { xs: "auto", md: "90%" }, padding: 0 }} />
                 </Grid>
               </Grid>
             </Container>

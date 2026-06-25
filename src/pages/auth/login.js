@@ -104,7 +104,7 @@ const Page = () => {
   return (
     <>
       <Head>
-        <title>Login | Cura</title>
+        <title>Login | Highland Care</title>
       </Head>
       <Box
         sx={{

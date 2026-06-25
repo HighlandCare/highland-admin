@@ -26,8 +26,8 @@ const App = (props) => {
   return (
     <CacheProvider value={emotionCache}>
       <Head>
-        <title>Aldeberan</title>
-        <meta name="viewport" content="initial-scale=1, width=device-width" />
+        <title>Highland Care</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <link rel="icon" type="image/png" href="/assets/logo.png" />
       </Head>
       <LocalizationProvider dateAdapter={AdapterDateFns}>
