@@ -94,7 +94,7 @@ const Page = () => {
         const found = getDriverList(response).find((item) => item._id === id);
         setDriver(found || null);
       } catch (error) {
-        console.error("Error loading driver details:", error);
+        console.error("Error is loading driver details:", error);
         setDriver(null);
       } finally {
         setIsLoading(false);
