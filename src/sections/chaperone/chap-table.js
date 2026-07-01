@@ -3,6 +3,7 @@ import PropTypes from "prop-types";
 import { useRouter } from "next/router";
 import EyeIcon from "@heroicons/react/24/outline/EyeIcon";
 import CheckCircleIcon from "@heroicons/react/24/outline/CheckCircleIcon";
+import XCircleIcon from "@heroicons/react/24/outline/XCircleIcon";
 import { BlockUserIcon, UnblockUserIcon } from "../../components/block-user-icons";
 import { toast } from "react-toastify";
 import { TableBody, TableCell, TableHead, TableRow, Typography } from "@mui/material";
@@ -35,7 +36,7 @@ import {
   isDriverBlocked,
   isPersonaApproved,
   mergeDriverApprovalUpdate,
-  mergePersonaStatusUpdate,
+  setAdminPersonaDeclined,
   setDriverListInResponse,
   storeDriverDetail,
   updateDriverApprovalInList,
@@ -63,35 +64,21 @@ export const ChapTable = (props) => {
         return initialItems;
       }
 
-      const personaByUserId = new Map(
-        currentDrivers
-          .map((driver) => [getDriverUserId(driver), getDriverPersonaStatus(driver)])
-          .filter(([userId, status]) => userId && status)
-      );
       const approvalById = new Map(
         currentDrivers
           .map((driver) => [driver._id, driver.isApproved])
           .filter(([id, isApproved]) => id && typeof isApproved === "boolean")
       );
 
-      if (!personaByUserId.size && !approvalById.size) {
+      if (!approvalById.size) {
         return initialItems;
       }
 
-      const mergedDrivers = nextDrivers.map((driver) => {
-        let nextDriver = driver;
-        const savedStatus = personaByUserId.get(getDriverUserId(driver));
-
-        if (savedStatus) {
-          nextDriver = mergePersonaStatusUpdate(nextDriver, savedStatus);
-        }
-
-        if (approvalById.has(driver._id)) {
-          nextDriver = mergeDriverApprovalUpdate(nextDriver, approvalById.get(driver._id));
-        }
-
-        return nextDriver;
-      });
+      const mergedDrivers = nextDrivers.map((driver) =>
+        approvalById.has(driver._id)
+          ? mergeDriverApprovalUpdate(driver, approvalById.get(driver._id))
+          : driver
+      );
 
       return setDriverListInResponse(initialItems, mergedDrivers);
     });
@@ -100,22 +87,34 @@ export const ChapTable = (props) => {
   const pageDrivers = useMemo(() => getDriverList(items), [items]);
   const isEmpty = !pageDrivers.length && !(items?.total_records ?? items?.totalRecords);
 
-  const handleApprovePersona = async (driver) => {
+  const handleUpdatePersonaStatus = async (driver, personaStatus) => {
     const driverUserId = getDriverUserId(driver);
 
     if (!driverUserId) {
-      console.error("Unable to approve persona: missing driver user id");
+      console.error("Unable to update persona status: missing driver user id");
       return;
     }
 
     try {
       setSubmittingId(driver._id);
-      const response = await updateDriverPersonaStatus(driverUserId, "approved");
-      const updatedStatus = getPersonaStatusFromResponse(response);
+      const response = await updateDriverPersonaStatus(driverUserId, personaStatus);
+      const updatedStatus = getPersonaStatusFromResponse(response, personaStatus);
 
-      setItems((current) => updateDriverPersonaInList(current, driver, updatedStatus));
+      setItems((current) =>
+        updateDriverPersonaInList(current, driver, updatedStatus, {
+          adminDeclined: personaStatus === "declined",
+          clearAdminDeclined: personaStatus === "approved",
+        })
+      );
+      setAdminPersonaDeclined(driverUserId, personaStatus === "declined");
+      toast.success(
+        personaStatus === "approved"
+          ? "Persona approved successfully"
+          : "Persona declined successfully"
+      );
     } catch (error) {
       console.error("Error updating persona status:", error);
+      toast.error("Unable to update persona status. Please try again.");
     } finally {
       setSubmittingId(null);
     }
@@ -156,7 +155,7 @@ export const ChapTable = (props) => {
     }
 
     const filtered = filterBySearch(pageDrivers, search, (driver) => {
-      const personaMeta = getPersonaStatusMeta(getDriverPersonaStatus(driver));
+      const personaMeta = getPersonaStatusMeta(driver);
 
       const accountMeta = getDriverAccountStatusMeta(driver);
 
@@ -232,7 +231,7 @@ export const ChapTable = (props) => {
         ) : (
           rows.map((driver) => {
             const personaStatus = getDriverPersonaStatus(driver);
-            const personaMeta = getPersonaStatusMeta(personaStatus);
+            const personaMeta = getPersonaStatusMeta(driver);
             const isPersonaApprovedStatus = isPersonaApproved(personaStatus);
             const accountMeta = getDriverAccountStatusMeta(driver);
             const isBlocked = isDriverBlocked(driver);
@@ -251,9 +250,16 @@ export const ChapTable = (props) => {
                 icon: CheckCircleIcon,
                 color: "success.main",
                 label: isSubmitting ? "Approving..." : "Approve Persona",
-                onClick: () => !isSubmitting && handleApprovePersona(driver),
+                onClick: () => !isSubmitting && handleUpdatePersonaStatus(driver, "approved"),
               });
             }
+
+            actions.push({
+              icon: XCircleIcon,
+              color: "error.main",
+              label: isSubmitting ? "Declining..." : "Decline Persona",
+              onClick: () => !isSubmitting && handleUpdatePersonaStatus(driver, "declined"),
+            });
 
             if (isBlocked) {
               actions.push({

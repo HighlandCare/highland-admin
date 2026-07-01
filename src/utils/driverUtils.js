@@ -114,16 +114,17 @@ export const getDriverStatusLabel = (driver) => {
   return { color: "success", label: "Approved" };
 };
 
+export const normalizePersonaStatus = (status) => String(status ?? "").trim().toLowerCase();
+
 export const getDriverPersonaStatus = (driver) => {
   if (!driver) {
     return "";
   }
 
-  if (typeof driver.user === "object" && driver.user?.personaStatus) {
-    return driver.user.personaStatus;
-  }
+  const userStatus = typeof driver.user === "object" ? driver.user?.personaStatus : undefined;
+  const driverStatus = driver.personaStatus;
 
-  return driver.personaStatus ?? "";
+  return userStatus ?? driverStatus ?? "";
 };
 
 export const getDriverUserId = (driver) => {
@@ -142,16 +143,77 @@ export const getDriverUserId = (driver) => {
   return driver.userId ?? driver._id ?? null;
 };
 
-export const getPersonaStatusFromResponse = (response) =>
-  response?.data?.personaStatus ?? response?.personaStatus ?? "approved";
+export const getPersonaInquiryId = (driver) =>
+  driver?.user?.personaInquiryId ?? driver?.personaInquiryId ?? "";
 
-export const mergePersonaStatusUpdate = (driver, status = "approved") => ({
-  ...driver,
-  personaStatus: status,
-  ...(driver?.user && typeof driver.user === "object"
-    ? { user: { ...driver.user, personaStatus: status } }
-    : {}),
-});
+export const hasPersonaInquiry = (driver) => Boolean(getPersonaInquiryId(driver));
+
+const ADMIN_PERSONA_DECLINED_KEY = "adminPersonaDeclinedUserIds";
+
+const getAdminPersonaDeclinedIds = () => {
+  if (typeof window === "undefined") {
+    return new Set();
+  }
+
+  try {
+    return new Set(JSON.parse(sessionStorage.getItem(ADMIN_PERSONA_DECLINED_KEY) || "[]"));
+  } catch {
+    return new Set();
+  }
+};
+
+export const setAdminPersonaDeclined = (userId, declined) => {
+  if (typeof window === "undefined" || !userId) {
+    return;
+  }
+
+  const ids = getAdminPersonaDeclinedIds();
+
+  if (declined) {
+    ids.add(userId);
+  } else {
+    ids.delete(userId);
+  }
+
+  sessionStorage.setItem(ADMIN_PERSONA_DECLINED_KEY, JSON.stringify([...ids]));
+};
+
+export const isAdminPersonaDeclined = (driver) => {
+  if (!driver) {
+    return false;
+  }
+
+  if (driver.adminPersonaDeclinedByAdmin) {
+    return true;
+  }
+
+  const userId = getDriverUserId(driver);
+
+  return Boolean(userId && getAdminPersonaDeclinedIds().has(userId));
+};
+
+export const getPersonaStatusFromResponse = (response, fallback = "") =>
+  response?.data?.personaStatus ?? response?.personaStatus ?? fallback;
+
+export const mergePersonaStatusUpdate = (driver, status = "approved", options = {}) => {
+  const { adminDeclined = false, clearAdminDeclined = false } = options;
+  const declinedByAdmin =
+    adminDeclined || (clearAdminDeclined ? false : driver?.adminPersonaDeclinedByAdmin);
+
+  return {
+    ...driver,
+    personaStatus: status,
+    adminPersonaDeclinedByAdmin: declinedByAdmin,
+    ...(driver?.user && typeof driver.user === "object"
+      ? {
+          user: {
+            ...driver.user,
+            personaStatus: status,
+          },
+        }
+      : {}),
+  };
+};
 
 export const isSameDriverRecord = (a, b) => {
   if (!a || !b) {
@@ -168,29 +230,91 @@ export const isSameDriverRecord = (a, b) => {
   return Boolean(userIdA && userIdB && userIdA === userIdB);
 };
 
-export const updateDriverPersonaInList = (response, targetDriver, personaStatus) => {
+export const updateDriverPersonaInList = (response, targetDriver, personaStatus, options = {}) => {
   const nextList = getDriverList(response).map((entry) =>
     isSameDriverRecord(entry, targetDriver)
-      ? mergePersonaStatusUpdate(entry, personaStatus)
+      ? mergePersonaStatusUpdate(entry, personaStatus, options)
       : entry
   );
 
   return setDriverListInResponse(response, nextList);
 };
 
-export const isPersonaApproved = (status) => String(status || "").toLowerCase() === "approved";
+export const isPersonaApproved = (status) => normalizePersonaStatus(status) === "approved";
 
-export const getPersonaStatusMeta = (status) =>
-  isPersonaApproved(status)
-    ? { color: "success", label: "Approved" }
-    : { color: "warning", label: "Pending" };
+export const isPersonaDeclined = (driverOrStatus) => {
+  if (typeof driverOrStatus === "object" && driverOrStatus !== null) {
+    return (
+      normalizePersonaStatus(getDriverPersonaStatus(driverOrStatus)) === "declined" &&
+      isAdminPersonaDeclined(driverOrStatus)
+    );
+  }
+
+  return normalizePersonaStatus(driverOrStatus) === "declined";
+};
+
+const PERSONA_UNDER_REVIEW_STATUSES = [
+  "completed",
+  "created",
+  "expired",
+  "failed",
+  "in_progress",
+  "needs_review",
+  "pending",
+  "rejected",
+  "started",
+  "under_review",
+];
+
+export const isPersonaUnderReview = (status) => {
+  const normalized = normalizePersonaStatus(status);
+  return !normalized || PERSONA_UNDER_REVIEW_STATUSES.includes(normalized);
+};
+
+export const getPersonaStatusMeta = (driverOrStatus) => {
+  const driver =
+    typeof driverOrStatus === "object" && driverOrStatus !== null ? driverOrStatus : null;
+  const status = driver ? getDriverPersonaStatus(driver) : driverOrStatus;
+  const normalized = normalizePersonaStatus(status);
+
+  if (normalized === "approved") {
+    return { color: "success", label: "Approved" };
+  }
+
+  if (normalized === "declined" || normalized === "decline") {
+    if (driver && isAdminPersonaDeclined(driver)) {
+      return { color: "error", label: "Declined" };
+    }
+
+    return hasPersonaInquiry(driver)
+      ? { color: "warning", label: "Pending Persona Review" }
+      : { color: "warning", label: "Pending" };
+  }
+
+  if (!normalized) {
+    return { color: "warning", label: "Pending" };
+  }
+
+  if (PERSONA_UNDER_REVIEW_STATUSES.includes(normalized)) {
+    return { color: "warning", label: "Pending Persona Review" };
+  }
+
+  return { color: "warning", label: "Pending Persona Review" };
+};
 
 export const isDriverBlocked = (driver) => !driver?.isApproved;
 
-export const getDriverAccountStatusMeta = (driver) =>
-  isDriverBlocked(driver)
-    ? { color: "error", label: "Blocked" }
-    : { color: "success", label: "Active" };
+export const getDriverAccountStatusMeta = (driver) => {
+  if (isDriverBlocked(driver)) {
+    return { color: "error", label: "Blocked" };
+  }
+
+  if (!isPersonaApproved(getDriverPersonaStatus(driver))) {
+    return { color: "warning", label: "Inactive" };
+  }
+
+  return { color: "success", label: "Active" };
+};
 
 export const getIsApprovedFromResponse = (response) =>
   response?.data?.isApproved ?? response?.isApproved ?? true;

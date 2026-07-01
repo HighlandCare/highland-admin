@@ -65,6 +65,76 @@ export const getDriverEarnings = async (page, limit = 10) => {
   }
 };
 
+export const getRideHistory = async (page, limit = 20, filters = {}) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+
+    if (filters.status) {
+      params.set("status", filters.status);
+    }
+
+    if (filters.havePaid === true || filters.havePaid === "true") {
+      params.set("havePaid", "true");
+    } else if (filters.havePaid === false || filters.havePaid === "false") {
+      params.set("havePaid", "false");
+    }
+
+    if (filters.startDate) {
+      params.set("startDate", filters.startDate);
+    }
+
+    if (filters.endDate) {
+      params.set("endDate", filters.endDate);
+    }
+
+    if (filters.search?.trim()) {
+      params.set("search", filters.search.trim());
+    }
+
+    const response = await Action.get(`admin/ride-history?${params.toString()}`, {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
+export const getRideById = async (rideId) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+
+    const response = await Action.get(`admin/ride-history/${rideId}`, {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
 export const updateDriverPersonaStatus = async (driverId, personaStatus = "approved") => {
   try {
     const authToken = JSON.parse(localStorage.getItem("token"));

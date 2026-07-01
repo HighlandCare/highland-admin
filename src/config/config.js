@@ -1,5 +1,10 @@
+const normalizeBaseUrl = (url) => {
+  if (!url) {
+    return "";
+  }
 
-// export const baseURL = "https://aldebaran-api.thesuitchstaging.com:3090/api/v1/";
-// export const baseURL = "https://mainapi.thecuraapp.com/api/v1/"
-export const baseURL = "https://test.prodservers.com:1110/api/v1/"
+  const trimmed = String(url).trim();
+  return trimmed.endsWith("/") ? trimmed : `${trimmed}/`;
+};
 
+export const baseURL = normalizeBaseUrl(process.env.NEXT_PUBLIC_BASE_URL);
