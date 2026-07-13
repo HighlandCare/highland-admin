@@ -25,4 +25,4 @@ jobs:
             git pull
             npm i
             npm run build
-            pm2 restart highland-admin
+            pm2 restart admin-dashboard
