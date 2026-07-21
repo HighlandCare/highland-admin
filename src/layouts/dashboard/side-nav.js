@@ -103,7 +103,9 @@ export const SideNav = (props) => {
           >
             {items.map((item) => {
               const active = item.path
-                ? pathname === item.path || pathname === `${item.path}/`
+                ? pathname === item.path ||
+                  pathname === `${item.path}/` ||
+                  (item.path !== "/" && pathname?.startsWith(`${item.path}/`))
                 : false;
               return (
                 <SideNavItem
