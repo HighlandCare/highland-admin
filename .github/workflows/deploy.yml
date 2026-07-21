@@ -1,0 +1,28 @@
+name: Deploy Admin to EC2
+
+on:
+  push:
+    branches: [highland-dahsboard]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 20m
+          script: |
+            # Load nvm so npm/pm2 are on PATH in this non-login shell
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+            cd /home/deploy/highland-care/highland-admin
+            git pull
+            npm i
+            npm run build
+            pm2 restart admin-dashboard
