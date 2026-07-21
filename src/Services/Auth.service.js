@@ -43,11 +43,53 @@ export const getChap = async (page, limit = 10) => {
   }
 };
 
+export const getChaperoneById = async (chaperoneId) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const response = await Action.get(`admin/getchaperone/${chaperoneId}`, {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
 export const getDriverEarnings = async (page, limit = 10) => {
   try {
     const authToken = JSON.parse(localStorage.getItem("token"));
 
     const response = await Action.get(`admin/all-driver-earnings?page=${page}&limit=${limit}`, {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
+export const getDriverTransactions = async (driverId) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const response = await Action.get(`admin/driver-transactions/${driverId}`, {
       headers: {
         Authorization: `Bearer ${authToken}`,
       },
@@ -405,7 +447,41 @@ export const addPrivacy = async (contentType = "privacy", title) => {
 
 export const deleteUsers = async (_id) => {
   try {
-    const response = await Action.patch(`deleteuser/${_id}`);
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const response = await Action.patch(
+      `admin/deleteuser/${_id}`,
+      {},
+      {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
+export const deleteDriver = async (chaperoneId) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const response = await Action.patch(
+      `admin/deletedriver/${chaperoneId}`,
+      {},
+      {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      }
+    );
     return response.data;
   } catch (error) {
     if (error.response) {

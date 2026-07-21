@@ -64,6 +64,7 @@ export const SideNav = (props) => {
               }}
             />
             <Typography
+              data-brand="true"
               sx={{
                 background: "linear-gradient(135deg, #FFFFFF 0%, #B8E8EB 100%)",
                 backgroundClip: "text",

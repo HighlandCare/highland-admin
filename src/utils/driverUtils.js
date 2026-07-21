@@ -334,6 +334,43 @@ export const updateDriverApprovalInList = (response, targetDriver, isApproved) =
   return setDriverListInResponse(response, nextList);
 };
 
+export const removeDriverFromList = (response, targetDriver) => {
+  const nextList = getDriverList(response).filter(
+    (entry) => !isSameDriverRecord(entry, targetDriver)
+  );
+
+  if (Array.isArray(response)) {
+    return nextList;
+  }
+
+  const totalRecords = response?.total_records ?? response?.totalRecords;
+  const nextTotal =
+    typeof totalRecords === "number" ? Math.max(0, totalRecords - 1) : totalRecords;
+
+  if (Array.isArray(response?.data?.data)) {
+    return {
+      ...response,
+      data: {
+        ...response.data,
+        data: nextList,
+      },
+      ...(response.total_records !== undefined ? { total_records: nextTotal } : {}),
+      ...(response.totalRecords !== undefined ? { totalRecords: nextTotal } : {}),
+    };
+  }
+
+  if (Array.isArray(response?.data)) {
+    return {
+      ...response,
+      data: nextList,
+      ...(response.total_records !== undefined ? { total_records: nextTotal } : {}),
+      ...(response.totalRecords !== undefined ? { totalRecords: nextTotal } : {}),
+    };
+  }
+
+  return setDriverListInResponse(response, nextList);
+};
+
 export const storeDriverDetail = (driver) => {
   if (typeof window !== "undefined") {
     sessionStorage.setItem("selectedDriver", JSON.stringify(driver));
@@ -347,12 +384,94 @@ export const getStoredDriverDetail = (id) => {
 
   try {
     const stored = JSON.parse(sessionStorage.getItem("selectedDriver"));
-    if (stored?._id === id) {
+
+    if (!stored) {
+      return null;
+    }
+
+    if (stored._id === id || stored?.summary?.chaperoneId === id) {
       return stored;
     }
+
+    return null;
   } catch (error) {
     return null;
   }
+};
+
+const formatBooleanLabel = (value, trueLabel, falseLabel) => {
+  if (typeof value !== "boolean") {
+    return null;
+  }
+
+  return value ? trueLabel : falseLabel;
+};
+
+export const normalizeChaperoneDetailResponse = (response) => {
+  const payload = response?.data ?? response;
+
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+
+  if (payload.summary || payload.personalInformation || payload.vehicleAndLicense) {
+    return {
+      summary: payload.summary || {},
+      personalInformation: payload.personalInformation || {},
+      vehicleAndLicense: payload.vehicleAndLicense || {},
+      walletAndPayments: payload.walletAndPayments || {},
+      mediaAndDocuments: payload.mediaAndDocuments || {},
+      transactionHistory: Array.isArray(payload.transactionHistory)
+        ? payload.transactionHistory
+        : [],
+    };
+  }
 
   return null;
+};
+
+export const getChaperoneDetailDisplayName = (detail) =>
+  detail?.summary?.fullName ||
+  detail?.personalInformation?.fullName ||
+  "Unknown Driver";
+
+export const getChaperoneDetailEmail = (detail) =>
+  detail?.summary?.email || detail?.personalInformation?.email || null;
+
+export const getChaperoneMediaUrl = (media) => getMediaUrl(media?.file ?? media);
+
+export const getChaperoneApprovalLabel = (detail) =>
+  formatBooleanLabel(detail?.summary?.isApproved, "Approved", "Pending") || "—";
+
+export const getChaperoneOnlineLabel = (detail) =>
+  formatBooleanLabel(detail?.summary?.isOnline, "Online", "Offline") || "—";
+
+export const getChaperoneBlockedLabel = (detail) => {
+  const blocked =
+    detail?.summary?.isBlocked ?? detail?.personalInformation?.isBlocked;
+
+  return formatBooleanLabel(blocked, "Blocked", "Active") || "—";
+};
+
+export const getChaperoneVerifiedLabel = (detail) =>
+  formatBooleanLabel(detail?.personalInformation?.isVerified, "Verified", "Unverified") ||
+  "—";
+
+export const getChaperoneRideStatusLabel = (detail) => {
+  const rideStatus = detail?.summary?.rideStatus;
+  const activeRide = detail?.summary?.activeRide;
+
+  if (rideStatus) {
+    return rideStatus;
+  }
+
+  if (activeRide && typeof activeRide === "object") {
+    return activeRide.status || "In Ride";
+  }
+
+  if (activeRide) {
+    return "In Ride";
+  }
+
+  return "Idle";
 };

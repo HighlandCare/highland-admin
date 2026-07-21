@@ -9,7 +9,6 @@ import {
   Card,
   CardContent,
   Container,
-  Divider,
   Grid,
   Stack,
   SvgIcon,
@@ -17,27 +16,56 @@ import {
 } from "@mui/material";
 import { Layout as DashboardLayout } from "../../layouts/dashboard/layout";
 import Loader from "../../components/Loader";
-import { getChap } from "../../Services/Auth.service";
+import { DriverTransactionHistory } from "../../components/driver-transaction-history";
+import { getChaperoneById } from "../../Services/Auth.service";
 import { formatDate, formatRelativeDate } from "../../utils/dateUtils";
 import {
-  getDriverDisplayName,
-  getDriverList,
-  getDriverProfileImage,
-  getMediaUrl,
-  getStoredDriverDetail,
+  getChaperoneApprovalLabel,
+  getChaperoneBlockedLabel,
+  getChaperoneDetailDisplayName,
+  getChaperoneDetailEmail,
+  getChaperoneMediaUrl,
+  getChaperoneOnlineLabel,
+  getChaperoneRideStatusLabel,
+  getChaperoneVerifiedLabel,
+  normalizeChaperoneDetailResponse,
 } from "../../utils/driverUtils";
+import { formatEarningsCurrency, normalizeDriverTransactions } from "../../utils/earningsUtils";
 import { pageContainerSx, pageMainSx, pageTitleSx } from "../../utils/pageLayout";
 
-const DetailItem = ({ label, value }) => (
-  <Box>
-    <Typography color="text.secondary" variant="caption">
-      {label}
-    </Typography>
-    <Typography fontWeight={600} variant="body2">
-      {value || "—"}
-    </Typography>
-  </Box>
-);
+const DetailItem = ({ label, value }) => {
+  const isEmail = label === "Email" || (typeof value === "string" && value.includes("@"));
+  const displayValue = isEmail && value ? String(value).toLowerCase() : value;
+
+  if (displayValue == null || displayValue === "") {
+    return (
+      <Box>
+        <Typography color="text.secondary" variant="caption">
+          {label}
+        </Typography>
+        <Typography fontWeight={600} variant="body2">
+          —
+        </Typography>
+      </Box>
+    );
+  }
+
+  return (
+    <Box>
+      <Typography color="text.secondary" variant="caption">
+        {label}
+      </Typography>
+      <Typography
+        data-email={isEmail ? "true" : undefined}
+        fontWeight={600}
+        sx={{ wordBreak: "break-word", ...(isEmail ? { textTransform: "lowercase" } : {}) }}
+        variant="body2"
+      >
+        {displayValue}
+      </Typography>
+    </Box>
+  );
+};
 
 const DocumentCard = ({ label, src }) => (
   <Card sx={{ border: "1px solid", borderColor: "neutral.200", boxShadow: "none" }}>
@@ -68,10 +96,23 @@ const DocumentCard = ({ label, src }) => (
   </Card>
 );
 
+const formatHourlyFare = (value) => {
+  if (value == null || value === "") {
+    return "—";
+  }
+
+  const number = Number(value);
+  if (Number.isFinite(number)) {
+    return formatEarningsCurrency(number);
+  }
+
+  return String(value);
+};
+
 const Page = () => {
   const router = useRouter();
   const { id } = router.query;
-  const [driver, setDriver] = useState(null);
+  const [detail, setDetail] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -79,37 +120,56 @@ const Page = () => {
       return;
     }
 
+    let active = true;
+
     const loadDriver = async () => {
       setIsLoading(true);
 
-      const cached = getStoredDriverDetail(id);
-      if (cached) {
-        setDriver(cached);
-        setIsLoading(false);
-        return;
-      }
-
       try {
-        const response = await getChap(1);
-        const found = getDriverList(response).find((item) => item._id === id);
-        setDriver(found || null);
+        const response = await getChaperoneById(id);
+        const normalized = normalizeChaperoneDetailResponse(response);
+
+        if (active) {
+          setDetail(normalized);
+        }
       } catch (error) {
-        console.error("Error is loading driver details:", error);
-        setDriver(null);
+        console.error("Error loading driver details:", error);
+        if (active) {
+          setDetail(null);
+        }
       } finally {
-        setIsLoading(false);
+        if (active) {
+          setIsLoading(false);
+        }
       }
     };
 
     loadDriver();
+
+    return () => {
+      active = false;
+    };
   }, [id]);
 
-  const profileImage = driver ? getDriverProfileImage(driver) : null;
+  const summary = detail?.summary || {};
+  const personal = detail?.personalInformation || {};
+  const vehicle = detail?.vehicleAndLicense || {};
+  const wallet = detail?.walletAndPayments || {};
+  const media = detail?.mediaAndDocuments || {};
+  const transactions = normalizeDriverTransactions(detail?.transactionHistory || []);
+
+  const displayName = getChaperoneDetailDisplayName(detail);
+  const email = getChaperoneDetailEmail(detail);
+  const profileImage =
+    getChaperoneMediaUrl(summary.profileImage) ||
+    getChaperoneMediaUrl(media.profilePhoto);
 
   return (
     <>
       <Head>
-        <title>{driver ? `${getDriverDisplayName(driver)} | Driver` : "Driver Details"} | Highland Care</title>
+        <title>
+          {detail ? `${displayName} | Driver` : "Driver Details"} | Highland Care
+        </title>
       </Head>
 
       <Box component="main" sx={pageMainSx}>
@@ -123,14 +183,14 @@ const Page = () => {
                   <ArrowLeftIcon />
                 </SvgIcon>
               }
-              sx={{ alignSelf: "flex-start", textTransform: "none" }}
+              sx={{ alignSelf: "flex-start", textTransform: "capitalize" }}
             >
               Back to Drivers
             </Button>
 
             {isLoading ? (
               <Loader page />
-            ) : !driver ? (
+            ) : !detail ? (
               <Card sx={{ border: "1px solid", borderColor: "neutral.200", boxShadow: "none" }}>
                 <CardContent sx={{ py: 8, textAlign: "center" }}>
                   <Typography variant="h6">Driver not found</Typography>
@@ -143,11 +203,15 @@ const Page = () => {
               <>
                 <Card sx={{ border: "1px solid", borderColor: "neutral.200", boxShadow: "none" }}>
                   <CardContent>
-                    <Stack alignItems={{ xs: "flex-start", md: "center" }} direction={{ xs: "column", md: "row" }} spacing={3}>
+                    <Stack
+                      alignItems={{ xs: "flex-start", md: "center" }}
+                      direction={{ xs: "column", md: "row" }}
+                      spacing={3}
+                    >
                       <Box
                         component="img"
                         src={profileImage || undefined}
-                        alt={getDriverDisplayName(driver)}
+                        alt={displayName}
                         sx={{
                           bgcolor: "neutral.100",
                           border: "1px solid",
@@ -160,16 +224,39 @@ const Page = () => {
                       />
                       <Box flex={1}>
                         <Typography sx={pageTitleSx} variant="h4">
-                          {getDriverDisplayName(driver)}
+                          {displayName}
                         </Typography>
-                        <Typography color="text.secondary" sx={{ mt: 0.5 }} variant="body1">
-                          {driver?.user?.email || "No email linked"}
+                        <Typography
+                          color="text.secondary"
+                          data-email={email ? "true" : undefined}
+                          sx={{
+                            mt: 0.5,
+                            ...(email ? { textTransform: "lowercase" } : {}),
+                          }}
+                          variant="body1"
+                        >
+                          {email ? email.toLowerCase() : "No email linked"}
                         </Typography>
                         <Stack direction="row" flexWrap="wrap" gap={3} mt={2}>
-                          <DetailItem label="Approval" value={driver.isApproved ? "Approved" : "Pending"} />
-                          <DetailItem label="Online" value={driver.isOnline ? "Online" : "Offline"} />
-                          <DetailItem label="Ride Status" value={driver.status || "—"} />
-                          <DetailItem label="Rating" value={driver.rating ?? "—"} />
+                          <DetailItem label="Approval" value={getChaperoneApprovalLabel(detail)} />
+                          <DetailItem label="Online" value={getChaperoneOnlineLabel(detail)} />
+                          <DetailItem
+                            label="Account Status"
+                            value={getChaperoneBlockedLabel(detail)}
+                          />
+                          <DetailItem
+                            label="Ride Status"
+                            value={getChaperoneRideStatusLabel(detail)}
+                          />
+                          <DetailItem label="Rating" value={summary.rating ?? "—"} />
+                          <DetailItem
+                            label="Wallet Balance"
+                            value={formatEarningsCurrency(summary.walletBalance ?? wallet.walletBalance)}
+                          />
+                          <DetailItem
+                            label="Stripe"
+                            value={summary.stripeStatus || wallet.stripeStatus || "—"}
+                          />
                         </Stack>
                       </Box>
                     </Stack>
@@ -178,55 +265,139 @@ const Page = () => {
 
                 <Grid container spacing={3}>
                   <Grid item md={6} xs={12}>
-                    <Card sx={{ border: "1px solid", borderColor: "neutral.200", boxShadow: "none", height: "100%" }}>
+                    <Card
+                      sx={{
+                        border: "1px solid",
+                        borderColor: "neutral.200",
+                        boxShadow: "none",
+                        height: "100%",
+                      }}
+                    >
                       <CardContent>
                         <Typography sx={{ mb: 2 }} variant="h6">
                           Personal Information
                         </Typography>
                         <Stack spacing={2}>
-                          <DetailItem label="Full Name" value={driver?.user?.fullName} />
-                          <DetailItem label="Email" value={driver?.user?.email} />
-                          <DetailItem label="Phone" value={driver?.user?.phone} />
-                          <DetailItem label="Address" value={driver?.user?.address} />
+                          <DetailItem label="Full Name" value={personal.fullName} />
+                          <DetailItem label="Email" value={personal.email} />
+                          <DetailItem label="Phone" value={personal.phone} />
+                          <DetailItem label="Date of Birth" value={formatDate(personal.dob)} />
+                          <DetailItem label="Address" value={personal.address} />
+                          <DetailItem label="Location" value={personal.location} />
+                          <DetailItem label="City" value={personal.city} />
+                          <DetailItem label="State" value={personal.state} />
+                          <DetailItem label="Zip Code" value={personal.zipCode} />
                           <DetailItem
-                            label="Location"
-                            value={[driver?.user?.city, driver?.user?.state, driver?.user?.zipCode]
-                              .filter(Boolean)
-                              .join(", ")}
+                            label="Persona Status"
+                            value={
+                              personal.personaStatus
+                                ? String(personal.personaStatus).replace(/^\w/, (c) => c.toUpperCase())
+                                : "—"
+                            }
                           />
-                          <DetailItem label="Joined" value={formatDate(driver?.createdAt)} />
-                          <DetailItem label="Last Active" value={formatRelativeDate(driver?.updatedAt)} />
+                          <DetailItem
+                            label="Verified"
+                            value={getChaperoneVerifiedLabel(detail)}
+                          />
+                          <DetailItem
+                            label="Account Status"
+                            value={getChaperoneBlockedLabel(detail)}
+                          />
+                          <DetailItem label="Joined" value={formatDate(personal.joinedAt)} />
+                          <DetailItem
+                            label="Last Active"
+                            value={formatRelativeDate(personal.lastActiveAt)}
+                          />
                         </Stack>
                       </CardContent>
                     </Card>
                   </Grid>
 
                   <Grid item md={6} xs={12}>
-                    <Card sx={{ border: "1px solid", borderColor: "neutral.200", boxShadow: "none", height: "100%" }}>
+                    <Card
+                      sx={{
+                        border: "1px solid",
+                        borderColor: "neutral.200",
+                        boxShadow: "none",
+                        height: "100%",
+                      }}
+                    >
                       <CardContent>
                         <Typography sx={{ mb: 2 }} variant="h6">
                           Vehicle & License
                         </Typography>
                         <Stack spacing={2}>
-                          <DetailItem label="Vehicle Name" value={driver?.vehicleName} />
-                          <DetailItem label="Vehicle Number" value={driver?.vehicleNo} />
-                          <DetailItem label="Experience" value={driver?.experience} />
-                          <DetailItem label="License Number" value={driver?.licenceNumber} />
-                          <DetailItem label="License Expiry" value={driver?.licenceExpiry} />
-                          <DetailItem label="Hourly Fare" value={driver?.hourlyFare ? `$${driver.hourlyFare}` : null} />
+                          <DetailItem label="Vehicle Name" value={vehicle.vehicleName} />
+                          <DetailItem label="Vehicle Number" value={vehicle.vehicleNumber} />
+                          <DetailItem label="Experience" value={vehicle.experience} />
+                          <DetailItem label="License Number" value={vehicle.licenseNumber} />
+                          <DetailItem label="License Expiry" value={vehicle.licenseExpiry} />
+                          <DetailItem
+                            label="Hourly Fare"
+                            value={formatHourlyFare(vehicle.hourlyFare)}
+                          />
+                        </Stack>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+
+                  <Grid item xs={12}>
+                    <Card sx={{ border: "1px solid", borderColor: "neutral.200", boxShadow: "none" }}>
+                      <CardContent>
+                        <Typography sx={{ mb: 2 }} variant="h6">
+                          Wallet & Payments
+                        </Typography>
+                        <Stack direction="row" flexWrap="wrap" gap={4}>
+                          <DetailItem
+                            label="Wallet Balance"
+                            value={formatEarningsCurrency(wallet.walletBalance)}
+                          />
+                          <DetailItem
+                            label="Total Earned"
+                            value={formatEarningsCurrency(wallet.totalEarned)}
+                          />
+                          <DetailItem
+                            label="Total Withdrawn"
+                            value={formatEarningsCurrency(wallet.totalWithdrawn)}
+                          />
+                          <DetailItem
+                            label="Completed Rides"
+                            value={wallet.completedRides ?? "—"}
+                          />
+                          <DetailItem
+                            label="Stripe Connection"
+                            value={wallet.stripeStatus || "—"}
+                          />
+                          <DetailItem
+                            label="Stripe Business Name"
+                            value={wallet.stripeBusinessName || "—"}
+                          />
                         </Stack>
                       </CardContent>
                     </Card>
                   </Grid>
 
                   <Grid item md={4} xs={12}>
-                    <DocumentCard label="Profile Photo" src={profileImage} />
+                    <DocumentCard
+                      label="Profile Photo"
+                      src={getChaperoneMediaUrl(media.profilePhoto) || profileImage}
+                    />
                   </Grid>
                   <Grid item md={4} xs={12}>
-                    <DocumentCard label="ID Card" src={getMediaUrl(driver?.idCard?.file)} />
+                    <DocumentCard
+                      label="ID Card"
+                      src={getChaperoneMediaUrl(media.idCard)}
+                    />
                   </Grid>
                   <Grid item md={4} xs={12}>
-                    <DocumentCard label="Driving License" src={getMediaUrl(driver?.drivingLicense?.file)} />
+                    <DocumentCard
+                      label="Driving License"
+                      src={getChaperoneMediaUrl(media.drivingLicense)}
+                    />
+                  </Grid>
+
+                  <Grid item xs={12}>
+                    <DriverTransactionHistory transactions={transactions} />
                   </Grid>
                 </Grid>
               </>

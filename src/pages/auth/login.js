@@ -67,10 +67,20 @@ const Page = () => {
         return router.push("/");
       }
 
-      const errorMessage = formatApiErrorMessage(response.message) || "Invalid email or password.";
+      // Failed login (e.g. blocked account) — clear any stale session
+      localStorage.removeItem("isLogin");
+      localStorage.removeItem("user");
+      localStorage.removeItem("token");
+
+      const errorMessage =
+        formatApiErrorMessage(response?.message) || "Invalid email or password.";
       setSubmitError?.(errorMessage);
       toast.error(errorMessage);
     } catch (err) {
+      localStorage.removeItem("isLogin");
+      localStorage.removeItem("user");
+      localStorage.removeItem("token");
+
       const errorMessage = err.message || "Unable to sign in. Please try again.";
       setSubmitError?.(errorMessage);
       toast.error(errorMessage);
@@ -81,8 +91,8 @@ const Page = () => {
 
   const formik = useFormik({
     initialValues: {
-      email: "admin@admin.com",
-      password: "123456",
+      email: "",
+      password: "",
     },
     validationSchema: Yup.object({
       email: Yup.string().email("Must be a valid email").max(255).required("Email is required"),
@@ -140,10 +150,13 @@ const Page = () => {
                     error={!!(formik.touched.email && formik.errors.email)}
                     fullWidth
                     helperText={formik.touched.email && formik.errors.email}
+                    inputProps={{ style: { textTransform: "lowercase" } }}
                     label="Email Address"
                     name="email"
                     onBlur={formik.handleBlur}
-                    onChange={formik.handleChange}
+                    onChange={(event) => {
+                      formik.setFieldValue("email", event.target.value.toLowerCase());
+                    }}
                     type="email"
                     value={formik.values.email}
                   />
@@ -161,20 +174,21 @@ const Page = () => {
                 </Stack>
 
                 {formik.errors.submit && (
-                  <Typography color="error" sx={{ mt: 3 }} variant="body2">
+                  <Alert severity="error" sx={{ mt: 3 }}>
                     {formik.errors.submit}
-                  </Typography>
+                  </Alert>
                 )}
                 <Button
+                  disabled={isLoading}
                   fullWidth
                   color="primary"
                   size="large"
-                  sx={{ mt: 3 }}
+                  sx={{ mt: 3, minHeight: 48 }}
                   type="submit"
                   variant="contained"
                   onClick={formik.handleSubmit}
                 >
-                  {isLoading ? <Loader inline size="xs" /> : "Login"}
+                  {isLoading ? <Loader color="#fff" inline size="xs" /> : "Login"}
                 </Button>
               </form>
             )}

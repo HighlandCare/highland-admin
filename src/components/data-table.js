@@ -62,7 +62,7 @@ export const tableActionButtonSx = {
   borderRadius: 2,
   minWidth: 72,
   px: 2,
-  textTransform: "none",
+  textTransform: "capitalize",
 };
 
 export const DataTableToolbar = ({

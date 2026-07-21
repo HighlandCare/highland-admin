@@ -39,16 +39,39 @@ import {
   storeRideDetail,
 } from "../../utils/rideUtils";
 
-const DetailItem = ({ label, value }) => (
-  <Box>
-    <Typography color="text.secondary" variant="caption">
-      {label}
-    </Typography>
-    <Typography fontWeight={600} sx={{ wordBreak: "break-word" }} variant="body2">
-      {value || "—"}
-    </Typography>
-  </Box>
-);
+const hasDetailValue = (value) => {
+  if (value == null) {
+    return false;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed !== "" && trimmed !== "—" && trimmed !== "false" && trimmed.toLowerCase() !== "n/a";
+  }
+
+  return true;
+};
+
+const DetailItem = ({ label, value }) => {
+  const isEmail = label === "Email" || (typeof value === "string" && value.includes("@"));
+  const displayValue = isEmail && value ? String(value).toLowerCase() : value;
+
+  return (
+    <Box>
+      <Typography color="text.secondary" variant="caption">
+        {label}
+      </Typography>
+      <Typography
+        data-email={isEmail ? "true" : undefined}
+        fontWeight={600}
+        sx={{ wordBreak: "break-word", ...(isEmail ? { textTransform: "lowercase" } : {}) }}
+        variant="body2"
+      >
+        {displayValue || "—"}
+      </Typography>
+    </Box>
+  );
+};
 
 const SectionCard = ({ children, title }) => (
   <Card sx={{ border: "1px solid", borderColor: "neutral.200", boxShadow: "none", height: "100%" }}>
@@ -120,10 +143,24 @@ const Page = () => {
 
   const statusMeta = ride ? getRideStatusMeta(ride.status) : null;
 
+  const scheduleItems = ride
+    ? [
+        { label: "Scheduled At", value: formatRideTimestamp(ride.scheduledAt) },
+        { label: "Pre Date", value: formatRideField(ride.pre_date) },
+        { label: "Pre Time", value: formatRideField(ride.pre_time) },
+        { label: "Ride Start Time", value: formatRideTimestamp(ride.rideStartTime) },
+        { label: "Ride End Time", value: formatRideTimestamp(ride.rideEndTime) },
+        { label: "Created At", value: formatRideTimestamp(ride.createdAt) },
+        { label: "Updated At", value: formatRelativeDate(ride.updatedAt) },
+        { label: "Cancel Reason", value: formatRideReason(ride.reasonOfCancel) },
+        { label: "Dispute Reason", value: formatRideReason(ride.reasonOfDispute) },
+      ].filter((item) => hasDetailValue(item.value))
+    : [];
+
   return (
     <>
       <Head>
-        <title>{ride ? `Ride ${ride.rideId}` : "Ride Details"} | Highland Care</title>
+        <title>Ride Details | Highland Care</title>
       </Head>
 
       <Box component="main" sx={pageMainSx}>
@@ -137,7 +174,7 @@ const Page = () => {
                   <ArrowLeftIcon />
                 </SvgIcon>
               }
-              sx={{ alignSelf: "flex-start", textTransform: "none" }}
+              sx={{ alignSelf: "flex-start", textTransform: "capitalize" }}
             >
               Back to Ride History
             </Button>
@@ -180,8 +217,6 @@ const Page = () => {
                   <Grid item md={6} xs={12}>
                     <SectionCard title="Ride Overview">
                       <Stack spacing={2}>
-                        <DetailItem label="Ride ID" value={ride.rideId} />
-                        <DetailItem label="Mode" value={formatRideField(ride.mode)} />
                         <DetailItem label="Type" value={formatRideField(ride.type)} />
                         <DetailItem label="Status" value={formatRideField(ride.status)} />
                         <DetailItem label="Distance" value={formatRideField(ride.distance)} />
@@ -193,26 +228,21 @@ const Page = () => {
                     </SectionCard>
                   </Grid>
 
-                  <Grid item md={6} xs={12}>
-                    <SectionCard title="Schedule & Timing">
-                      <Stack spacing={2}>
-                        <DetailItem label="Scheduled At" value={formatRideTimestamp(ride.scheduledAt)} />
-                        <DetailItem label="Pre Date" value={formatRideField(ride.pre_date)} />
-                        <DetailItem label="Pre Time" value={formatRideField(ride.pre_time)} />
-                        <DetailItem label="Ride Start Time" value={formatRideTimestamp(ride.rideStartTime)} />
-                        <DetailItem label="Ride End Time" value={formatRideTimestamp(ride.rideEndTime)} />
-                        <DetailItem label="Created At" value={formatRideTimestamp(ride.createdAt)} />
-                        <DetailItem label="Updated At" value={formatRelativeDate(ride.updatedAt)} />
-                        <DetailItem label="Cancel Reason" value={formatRideReason(ride.reasonOfCancel)} />
-                        <DetailItem label="Dispute Reason" value={formatRideReason(ride.reasonOfDispute)} />
-                      </Stack>
-                    </SectionCard>
-                  </Grid>
+                  {scheduleItems.length > 0 && (
+                    <Grid item md={6} xs={12}>
+                      <SectionCard title="Schedule & Timing">
+                        <Stack spacing={2}>
+                          {scheduleItems.map((item) => (
+                            <DetailItem key={item.label} label={item.label} value={item.value} />
+                          ))}
+                        </Stack>
+                      </SectionCard>
+                    </Grid>
+                  )}
 
                   <Grid item md={6} xs={12}>
                     <SectionCard title="Customer">
                       <Stack spacing={2}>
-                        <DetailItem label="ID" value={ride.customer?._id} />
                         <DetailItem label="Full Name" value={ride.customer?.fullName} />
                         <DetailItem label="Email" value={ride.customer?.email} />
                         <DetailItem label="Phone" value={ride.customer?.phone} />
@@ -224,7 +254,6 @@ const Page = () => {
                     <SectionCard title="Driver">
                       {ride.driver ? (
                         <Stack spacing={2}>
-                          <DetailItem label="ID" value={ride.driver._id} />
                           <DetailItem label="Full Name" value={ride.driver.fullName} />
                           <DetailItem label="Email" value={ride.driver.email} />
                           <DetailItem label="Phone" value={ride.driver.phone} />

@@ -17,6 +17,12 @@ const SIZE_MAP = {
   xl: 24,
 };
 
+const INLINE_MIN_HEIGHT_MAP = {
+  xs: 24,
+  sm: 28,
+  md: 32,
+};
+
 const MIN_HEIGHT_MAP = {
   xs: undefined,
   sm: 36,
@@ -34,12 +40,37 @@ const resolveSize = (size, page) => {
   return typeof size === "number" ? size : SIZE_MAP[size] || SIZE_MAP.md;
 };
 
-export default function Loader({ inline = false, minHeight, page = false, size = "md", sx }) {
+export default function Loader({
+  color = LOADER_COLOR,
+  inline = false,
+  minHeight,
+  page = false,
+  size = "md",
+  sx,
+}) {
   const isPageLoader = page || size === "page";
-  const loader = <RiseLoader color={LOADER_COLOR} size={resolveSize(size, page)} />;
+  const loader = <RiseLoader color={color} size={resolveSize(size, page)} />;
 
   if (inline) {
-    return loader;
+    const inlineMinHeight =
+      typeof size === "number" ? size * 3 : INLINE_MIN_HEIGHT_MAP[size] ?? INLINE_MIN_HEIGHT_MAP.xs;
+
+    return (
+      <Box
+        component="span"
+        sx={{
+          alignItems: "center",
+          display: "inline-flex",
+          justifyContent: "center",
+          lineHeight: 1,
+          minHeight: inlineMinHeight,
+          verticalAlign: "middle",
+          ...sx,
+        }}
+      >
+        {loader}
+      </Box>
+    );
   }
 
   return (
@@ -62,6 +93,7 @@ export default function Loader({ inline = false, minHeight, page = false, size =
 }
 
 Loader.propTypes = {
+  color: PropTypes.string,
   inline: PropTypes.bool,
   minHeight: PropTypes.oneOfType([PropTypes.number, PropTypes.string]),
   page: PropTypes.bool,
