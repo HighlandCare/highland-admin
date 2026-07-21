@@ -1,4 +1,4 @@
-import { React, useState, useEffect } from "react";
+import { React, useCallback, useEffect, useState } from "react";
 import { Layout as DashboardLayout } from "../layouts/dashboard/layout";
 import Head from "next/head";
 import { Box, Container, Stack } from "@mui/material";
@@ -19,39 +19,38 @@ const Page = () => {
     const islogin = JSON.parse(typeof window !== "undefined" && localStorage.getItem("isLogin"));
     if (!islogin) {
       setIsLoading(true);
-      return router.push("auth/login");
+      router.push("/auth/login");
     }
-  }, []);
+  }, [router]);
 
-  useEffect(() => {
-    let active = true;
-
-    const fetchData = async () => {
+  const fetchData = useCallback(
+    async ({ silent = false } = {}) => {
       try {
-        setIsLoading(true);
-        const response = await getChap(page, ROWS_PER_PAGE);
-        if (active) {
-          setChape(response);
+        if (!silent) {
+          setIsLoading(true);
         }
+        const response = await getChap(page, ROWS_PER_PAGE);
+        setChape(response);
       } catch (error) {
         console.error("Error fetching drivers:", error);
       } finally {
-        if (active) {
+        if (!silent) {
           setIsLoading(false);
         }
       }
-    };
+    },
+    [page]
+  );
 
+  useEffect(() => {
     fetchData();
-
-    return () => {
-      active = false;
-    };
-  }, [page]);
+  }, [fetchData]);
 
   const handlePageChange = (newPage) => {
     setPage(newPage);
   };
+
+  const handleRefresh = () => fetchData({ silent: true });
 
   const hasData = Boolean(chape?.data?.length);
 
@@ -83,7 +82,13 @@ const Page = () => {
                     <Loader size="md" />
                   </Box>
                 )}
-                <ChapTable items={chape} onPageChange={handlePageChange} page={page} title="Drivers" />
+                <ChapTable
+                  items={chape}
+                  onPageChange={handlePageChange}
+                  onRefresh={handleRefresh}
+                  page={page}
+                  title="Drivers"
+                />
               </Box>
             )}
           </Stack>

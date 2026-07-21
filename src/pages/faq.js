@@ -8,11 +8,14 @@ import {
   Container,
   Stack,
   Typography,
-  Table,
   Modal,
   TextField,
   IconButton,
-  Card,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from "@mui/material";
 
 import { addFAQ, getFAQ } from "../Services/Auth.service";
@@ -27,26 +30,29 @@ const Page = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [faq, setFAQ] = useState([]);
   const [page, setPage] = useState(1);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAddFAQModalOpen, setIsAddFAQModalOpen] = useState(false);
-  const [newFAQ, setNewFAQ] = useState([{ question: "Question 1", answer: "Answer 1" }]);
+  const [isEditFAQModalOpen, setIsEditFAQModalOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [newFAQ, setNewFAQ] = useState([{ question: "", answer: "" }]);
+  const [editFAQ, setEditFAQ] = useState({ question: "", answer: "" });
+  const [editIndex, setEditIndex] = useState(null);
+  const [deleteIndex, setDeleteIndex] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     const islogin = JSON.parse(typeof window !== "undefined" && localStorage.getItem("isLogin"));
     if (!islogin) {
       setIsLoading(true);
-      return router.push("auth/login");
+      router.push("/auth/login");
     }
-  }, []);
+  }, [router]);
 
   const fetchFAQ = async () => {
     try {
       setIsLoading(true);
       const response = await getFAQ();
-      console.log(JSON.stringify(response.data, null, 2));
-      setFAQ(response.data.item);
-      console.log(faq);
+      setFAQ(response.data.item || []);
       setIsLoading(false);
     } catch (error) {
       console.error("Error fetching faq:", error);
@@ -58,10 +64,16 @@ const Page = () => {
     fetchFAQ();
   }, []);
 
+  const persistFAQ = async (items, successMessage) => {
+    await addFAQ("faq", items);
+    const response = await getFAQ();
+    setFAQ(response.data.item || []);
+    toast.success(successMessage);
+  };
+
   const handleOpenAddFAQModal = () => {
+    setNewFAQ([{ question: "", answer: "" }]);
     setIsAddFAQModalOpen(true);
-    // Prepopulate the modal fields with existing FAQ data
-    setNewFAQ([...faq.map((item) => ({ question: item.question, answer: item.answer }))]);
   };
 
   const handleCloseAddFAQModal = () => {
@@ -79,34 +91,116 @@ const Page = () => {
   };
 
   const handleSaveFAQ = async () => {
-    // Check if any of the fields (questions or answers) are empty
     const isEmptyField = newFAQ.some((faqItem) => !faqItem.question || !faqItem.answer);
 
     if (isEmptyField) {
-      // Display an error message or perform an action if fields are empty
       toast.error("Some fields are empty. Please fill in all fields.");
       return;
     }
+
     try {
-      setIsLoading(true);
-      // Call the addFAQ function with the new FAQ items
-      await addFAQ("faq", newFAQ);
-      // Fetch the updated FAQ data
-      const response = await getFAQ();
-      setFAQ(response.data.item);
+      setIsSaving(true);
+      const updatedList = [...faq, ...newFAQ];
+      await persistFAQ(updatedList, "FAQs Added Successfully!");
       setIsAddFAQModalOpen(false);
-      toast.success("FAQs Added Successfully!");
-      setIsLoading(false);
     } catch (error) {
       console.error(error);
-      setIsLoading(false);
+      toast.error("Failed to save FAQs.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleDeleteFAQ = (indexToDelete) => {
-    const updatedFAQ = newFAQ.filter((item, index) => index !== indexToDelete);
+  const handleDeleteFAQFromModal = (indexToDelete) => {
+    if (newFAQ.length === 1) {
+      toast.error("At least one FAQ entry is required.");
+      return;
+    }
+    const updatedFAQ = newFAQ.filter((_, index) => index !== indexToDelete);
     setNewFAQ(updatedFAQ);
   };
+
+  const handleOpenEditFAQ = (faqItem, index) => {
+    if (index < 0) {
+      return;
+    }
+    setEditIndex(index);
+    setEditFAQ({ question: faqItem.question || "", answer: faqItem.answer || "" });
+    setIsEditFAQModalOpen(true);
+  };
+
+  const handleCloseEditFAQ = () => {
+    setIsEditFAQModalOpen(false);
+    setEditIndex(null);
+    setEditFAQ({ question: "", answer: "" });
+  };
+
+  const handleEditFAQChange = (event) => {
+    setEditFAQ((prev) => ({
+      ...prev,
+      [event.target.name]: event.target.value,
+    }));
+  };
+
+  const handleUpdateFAQ = async () => {
+    if (!editFAQ.question || !editFAQ.answer) {
+      toast.error("Please fill in all fields.");
+      return;
+    }
+
+    if (editIndex === null || editIndex < 0) {
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      const updatedList = faq.map((item, index) =>
+        index === editIndex ? { question: editFAQ.question, answer: editFAQ.answer } : item
+      );
+      await persistFAQ(updatedList, "FAQ Updated Successfully!");
+      handleCloseEditFAQ();
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to update FAQ.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleOpenDeleteFAQ = (_faqItem, index) => {
+    if (index < 0) {
+      return;
+    }
+    setDeleteIndex(index);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleCloseDeleteFAQ = () => {
+    setIsDeleteDialogOpen(false);
+    setDeleteIndex(null);
+  };
+
+  const handleConfirmDeleteFAQ = async () => {
+    if (deleteIndex === null || deleteIndex < 0) {
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      const updatedList = faq.filter((_, index) => index !== deleteIndex);
+      await persistFAQ(updatedList, "FAQ Deleted Successfully!");
+      handleCloseDeleteFAQ();
+      if (page > 1 && updatedList.length <= (page - 1) * 10) {
+        setPage(Math.max(1, page - 1));
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to delete FAQ.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handlePageChange = (newPage) => {
     setPage(newPage);
   };
@@ -130,6 +224,8 @@ const Page = () => {
                   </Button>
                 }
                 items={faq}
+                onDelete={handleOpenDeleteFAQ}
+                onEdit={handleOpenEditFAQ}
                 onPageChange={handlePageChange}
                 page={page}
               />
@@ -141,6 +237,9 @@ const Page = () => {
       {/* Add FAQ Modal */}
       <Modal open={isAddFAQModalOpen} onClose={handleCloseAddFAQModal}>
         <Box sx={responsiveModalSx}>
+          <Typography sx={{ mb: 2 }} variant="h6">
+            Add FAQ
+          </Typography>
           <Box sx={{ maxHeight: { xs: "50vh", sm: "400px" }, overflowY: "auto" }}>
             {newFAQ.map((item, index) => (
               <Stack
@@ -168,15 +267,15 @@ const Page = () => {
                     value={item.answer}
                   />
                 </Stack>
-                {index > 0 && (
+                {newFAQ.length > 1 && (
                   <Stack alignItems="center" justifyContent="center">
                     <IconButton
                       aria-label={`Delete Question ${index + 1}`}
                       color="error"
-                      onClick={() => handleDeleteFAQ(index)}
+                      onClick={() => handleDeleteFAQFromModal(index)}
                       size="small"
                     >
-                      <TrashIcon width={30} />
+                      <TrashIcon width={24} />
                     </IconButton>
                   </Stack>
                 )}
@@ -185,20 +284,84 @@ const Page = () => {
           </Box>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ mt: 2 }}>
             <Button color="primary" fullWidth onClick={handleAddFAQ} variant="outlined">
-              Add FAQ
+              Add Another
             </Button>
             <Button
               color="primary"
-              disabled={isLoading}
+              disabled={isSaving}
               fullWidth
               onClick={handleSaveFAQ}
               variant="contained"
             >
-              {isLoading ? <Loader inline size="xs" /> : "Save"}
+              {isSaving ? <Loader color="#fff" inline size="xs" /> : "Save"}
             </Button>
           </Stack>
         </Box>
       </Modal>
+
+      {/* Edit FAQ Modal */}
+      <Modal open={isEditFAQModalOpen} onClose={handleCloseEditFAQ}>
+        <Box sx={responsiveModalSx}>
+          <Typography sx={{ mb: 2 }} variant="h6">
+            Edit FAQ
+          </Typography>
+          <Stack spacing={2}>
+            <TextField
+              fullWidth
+              label="Question"
+              name="question"
+              onChange={handleEditFAQChange}
+              value={editFAQ.question}
+            />
+            <TextField
+              fullWidth
+              label="Answer"
+              multiline
+              minRows={4}
+              name="answer"
+              onChange={handleEditFAQChange}
+              value={editFAQ.answer}
+            />
+          </Stack>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ mt: 3 }}>
+            <Button color="inherit" fullWidth onClick={handleCloseEditFAQ} variant="outlined">
+              Cancel
+            </Button>
+            <Button
+              color="primary"
+              disabled={isSaving}
+              fullWidth
+              onClick={handleUpdateFAQ}
+              variant="contained"
+            >
+              {isSaving ? <Loader color="#fff" inline size="xs" /> : "Update"}
+            </Button>
+          </Stack>
+        </Box>
+      </Modal>
+
+      {/* Delete Confirmation */}
+      <Dialog open={isDeleteDialogOpen} onClose={handleCloseDeleteFAQ}>
+        <DialogTitle>Delete FAQ</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to delete this FAQ? This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={isSaving} onClick={handleCloseDeleteFAQ}>
+            Cancel
+          </Button>
+          <Button
+            color="error"
+            disabled={isSaving}
+            onClick={handleConfirmDeleteFAQ}
+            variant="contained"
+          >
+            {isSaving ? <Loader color="#fff" inline size="xs" /> : "Delete"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };

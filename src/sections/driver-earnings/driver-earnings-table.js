@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import PropTypes from "prop-types";
+import EyeIcon from "@heroicons/react/24/outline/EyeIcon";
+import { useRouter } from "next/router";
 import { TableBody, TableCell, TableHead, TableRow, Typography } from "@mui/material";
 import {
   DataTable,
@@ -13,24 +15,16 @@ import {
   TableEmailCell,
   TablePersonCell,
   TablePhoneCell,
+  TableQuickActions,
 } from "../../components/table-cells";
 import { formatRelativeDate } from "../../utils/dateUtils";
 import { getListFromResponse } from "../../utils/listUtils";
-
-const currencyFormatter = new Intl.NumberFormat("en-US", {
-  currency: "USD",
-  maximumFractionDigits: 2,
-  minimumFractionDigits: 2,
-  style: "currency",
-});
-
-const formatCurrency = (value) => {
-  if (value == null || Number.isNaN(Number(value))) {
-    return "—";
-  }
-
-  return currencyFormatter.format(Number(value));
-};
+import {
+  formatEarningsCurrency,
+  getEarningsDriverId,
+  getEarningsDriverImage,
+  storeEarningsDetail,
+} from "../../utils/earningsUtils";
 
 const earningsSortValue = "newest";
 
@@ -41,6 +35,7 @@ export const DriverEarningsTable = (props) => {
     page = 1,
     title = "Driver Earnings",
   } = props;
+  const router = useRouter();
   const [items, setItems] = useState(initialItems);
   const [search, setSearch] = useState("");
 
@@ -52,6 +47,15 @@ export const DriverEarningsTable = (props) => {
   const isEmpty =
     !pageDrivers.length &&
     !(items?.total_records ?? items?.totalRecords ?? items?.total_drivers);
+
+  const handleOpenViewDetail = (driver) => {
+    storeEarningsDetail(driver);
+    const detailId = getEarningsDriverId(driver);
+    if (!detailId) {
+      return;
+    }
+    router.push(`/driver-earnings/detail?id=${detailId}`);
+  };
 
   const rows = useMemo(() => {
     if (!pageDrivers.length) {
@@ -115,12 +119,13 @@ export const DriverEarningsTable = (props) => {
           <TableCell>Rides</TableCell>
           <TableCell>Total Earned</TableCell>
           <TableCell>Wallet Balance</TableCell>
+          <TableCell align="right">Actions</TableCell>
         </TableRow>
       </TableHead>
       <TableBody>
         {rows.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={6}>
+            <TableCell colSpan={7}>
               <Typography color="text.secondary" textAlign="center" variant="body2">
                 No matching results found.
               </Typography>
@@ -128,9 +133,10 @@ export const DriverEarningsTable = (props) => {
           </TableRow>
         ) : (
           rows.map((driver) => (
-            <TableRow hover key={driver._id}>
+            <TableRow hover key={getEarningsDriverId(driver)}>
               <TableCell>
                 <TablePersonCell
+                  imageUrl={getEarningsDriverImage(driver) || undefined}
                   name={driver?.fullName || driver?.email || "—"}
                   subtitle={formatRelativeDate(driver?.createdAt)}
                 />
@@ -144,13 +150,24 @@ export const DriverEarningsTable = (props) => {
               <TableCell>{driver?.rideCount ?? 0}</TableCell>
               <TableCell>
                 <Typography fontWeight={600} variant="body2">
-                  {formatCurrency(driver?.totalEarned)}
+                  {formatEarningsCurrency(driver?.totalEarned)}
                 </Typography>
               </TableCell>
               <TableCell>
                 <Typography color="text.secondary" variant="body2">
-                  {formatCurrency(driver?.walletBalance)}
+                  {formatEarningsCurrency(driver?.walletBalance)}
                 </Typography>
+              </TableCell>
+              <TableCell align="right">
+                <TableQuickActions
+                  actions={[
+                    {
+                      icon: EyeIcon,
+                      label: "View details",
+                      onClick: () => handleOpenViewDetail(driver),
+                    },
+                  ]}
+                />
               </TableCell>
             </TableRow>
           ))
