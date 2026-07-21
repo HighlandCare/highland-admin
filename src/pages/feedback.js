@@ -1,5 +1,5 @@
 /* eslint-disable react/jsx-max-props-per-line */
-import { React, useState, useEffect } from "react";
+import { React, useCallback, useEffect, useState } from "react";
 import { Layout as DashboardLayout } from "../layouts/dashboard/layout";
 import Head from "next/head";
 import { Box, Container, Stack } from "@mui/material";
@@ -20,39 +20,38 @@ const Page = () => {
     const islogin = JSON.parse(typeof window !== "undefined" && localStorage.getItem("isLogin"));
     if (!islogin) {
       setIsLoading(true);
-      return router.push("auth/login");
+      router.push("/auth/login");
     }
-  }, []);
+  }, [router]);
 
-  useEffect(() => {
-    let active = true;
-
-    const fetchFeedback = async () => {
+  const fetchFeedback = useCallback(
+    async ({ silent = false } = {}) => {
       try {
-        setIsLoading(true);
-        const response = await getFeedbacks(page, ROWS_PER_PAGE);
-        if (active) {
-          setFeedback(response?.data ?? response);
+        if (!silent) {
+          setIsLoading(true);
         }
+        const response = await getFeedbacks(page, ROWS_PER_PAGE);
+        setFeedback(response?.data ?? response);
       } catch (error) {
         console.error(error);
       } finally {
-        if (active) {
+        if (!silent) {
           setIsLoading(false);
         }
       }
-    };
+    },
+    [page]
+  );
 
+  useEffect(() => {
     fetchFeedback();
-
-    return () => {
-      active = false;
-    };
-  }, [page]);
+  }, [fetchFeedback]);
 
   const handlePageChange = (newPage) => {
     setPage(newPage);
   };
+
+  const handleRefresh = () => fetchFeedback({ silent: true });
 
   const hasData = Boolean(feedback?.feedbacks?.length);
 
@@ -84,7 +83,12 @@ const Page = () => {
                     <Loader size="md" />
                   </Box>
                 )}
-                <FeedbackTable items={feedback} page={page} onPageChange={handlePageChange} />
+                <FeedbackTable
+                  items={feedback}
+                  onPageChange={handlePageChange}
+                  onRefresh={handleRefresh}
+                  page={page}
+                />
               </Box>
             )}
           </Stack>

@@ -30,9 +30,9 @@ const Page = () => {
     const islogin = JSON.parse(typeof window !== "undefined" && localStorage.getItem("isLogin"));
     if (!islogin) {
       setIsLoading(true);
-      return router.push("auth/login");
+      router.push("/auth/login");
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     const fetchPrivacy = async () => {
@@ -91,7 +91,7 @@ const Page = () => {
                 </Box>
                 <Box sx={formActionsSx}>
                   <Button disabled={isLoading} variant="contained" onClick={handleSave}>
-                    {isLoading ? <Loader inline size="xs" /> : "Save"}
+                    {isLoading ? <Loader color="#fff" inline size="xs" /> : "Save"}
                   </Button>
                 </Box>
               </Stack>

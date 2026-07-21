@@ -29,7 +29,7 @@ export function createComponents(config) {
       styleOverrides: {
         root: {
           borderRadius: "12px",
-          textTransform: "none",
+          textTransform: "capitalize",
         },
         containedPrimary: {
           background: gradients.button,
@@ -122,7 +122,23 @@ export function createComponents(config) {
           flex: "1 1 auto",
           flexDirection: "column",
           minHeight: "100%",
+          textTransform: "capitalize",
           width: "100%",
+        },
+        "input, textarea, select, [contenteditable='true'], .ql-editor, code, pre, kbd, samp": {
+          textTransform: "none",
+        },
+        '[data-email="true"], [data-email="true"] *': {
+          textTransform: "lowercase",
+        },
+        'input[type="email"]': {
+          textTransform: "lowercase",
+        },
+        '[data-brand="true"]': {
+          textTransform: "uppercase",
+        },
+        ".Toastify__toast-body": {
+          textTransform: "capitalize",
         },
         ".Toastify__toast-container": {
           left: "50%",
@@ -295,7 +311,7 @@ export function createComponents(config) {
           minWidth: "auto",
           paddingLeft: 0,
           paddingRight: 0,
-          textTransform: "none",
+          textTransform: "capitalize",
           "& + &": {
             marginLeft: 24,
           },
@@ -346,7 +362,7 @@ export function createComponents(config) {
             letterSpacing: 0,
             lineHeight: 1.4,
             padding: { xs: "10px 12px", sm: "12px 24px" },
-            textTransform: "none",
+            textTransform: "capitalize",
           },
         },
       },

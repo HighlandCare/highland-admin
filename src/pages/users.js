@@ -1,4 +1,4 @@
-import { React, useState, useEffect } from "react";
+import { React, useCallback, useEffect, useState } from "react";
 import { Layout as DashboardLayout } from "../layouts/dashboard/layout";
 import Head from "next/head";
 import { Box, Container, Stack } from "@mui/material";
@@ -8,6 +8,7 @@ import Loader from "../components/Loader";
 import { UsersTable } from "../sections/users/users-table";
 import { ROWS_PER_PAGE } from "../components/data-table";
 import { pageContainerSx, pageMainSx } from "../utils/pageLayout";
+import { excludeAdminUsersFromResponse } from "../utils/userUtils";
 
 const Page = () => {
   const [page, setPage] = useState(1);
@@ -19,39 +20,38 @@ const Page = () => {
     const islogin = JSON.parse(typeof window !== "undefined" && localStorage.getItem("isLogin"));
     if (!islogin) {
       setIsLoading(true);
-      return router.push("auth/login");
+      router.push("/auth/login");
     }
-  }, []);
+  }, [router]);
 
-  useEffect(() => {
-    let active = true;
-
-    const fetchUsers = async () => {
+  const fetchUsers = useCallback(
+    async ({ silent = false } = {}) => {
       try {
-        setIsLoading(true);
-        const response = await getUsers(page, ROWS_PER_PAGE);
-        if (active) {
-          setUsers(response);
+        if (!silent) {
+          setIsLoading(true);
         }
+        const response = await getUsers(page, ROWS_PER_PAGE);
+        setUsers(excludeAdminUsersFromResponse(response));
       } catch (error) {
         console.error("Error fetching users:", error);
       } finally {
-        if (active) {
+        if (!silent) {
           setIsLoading(false);
         }
       }
-    };
+    },
+    [page]
+  );
 
+  useEffect(() => {
     fetchUsers();
-
-    return () => {
-      active = false;
-    };
-  }, [page]);
+  }, [fetchUsers]);
 
   const handlePageChange = (newPage) => {
     setPage(newPage);
   };
+
+  const handleRefresh = () => fetchUsers({ silent: true });
 
   const hasData = Boolean(users?.data?.length);
 
@@ -83,7 +83,12 @@ const Page = () => {
                     <Loader size="md" />
                   </Box>
                 )}
-                <UsersTable items={users} page={page} onPageChange={handlePageChange} />
+                <UsersTable
+                  items={users}
+                  onPageChange={handlePageChange}
+                  onRefresh={handleRefresh}
+                  page={page}
+                />
               </Box>
             )}
           </Stack>

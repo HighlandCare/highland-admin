@@ -39,6 +39,7 @@ export const FeedbackTable = (props) => {
   const {
     items = [],
     onPageChange = () => {},
+    onRefresh,
     page = 1,
     title = "Feedback",
   } = props;
@@ -78,11 +79,16 @@ export const FeedbackTable = (props) => {
       const feedID = modalFeedback._id;
       setIsSubmitting(true);
       await replyToCustomer(feedID, replySubject, reply);
-      setIsSubmitting(false);
       handleCloseModal();
       toast.success("Email Sent!");
+      if (typeof onRefresh === "function") {
+        await onRefresh();
+      }
     } catch (error) {
       console.error("Error sending reply:", error);
+      toast.error("Unable to send reply. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -295,7 +301,7 @@ export const FeedbackTable = (props) => {
                     sx={{ ...tableActionButtonSx, width: { xs: "100%", sm: "auto" } }}
                     variant="contained"
                   >
-                    {isSubmitting ? <Loader inline size="xs" /> : "Reply"}
+                    {isSubmitting ? <Loader color="#fff" inline size="xs" /> : "Reply"}
                   </Button>
                 )}
               </Stack>
@@ -310,6 +316,7 @@ export const FeedbackTable = (props) => {
 FeedbackTable.propTypes = {
   items: PropTypes.object,
   onPageChange: PropTypes.func,
+  onRefresh: PropTypes.func,
   page: PropTypes.number,
   title: PropTypes.string,
 };
