@@ -1,11 +1,15 @@
+import { useState } from "react";
 import PropTypes from "prop-types";
 import EnvelopeIcon from "@heroicons/react/24/outline/EnvelopeIcon";
 import PhoneIcon from "@heroicons/react/24/outline/PhoneIcon";
 import MapPinIcon from "@heroicons/react/24/outline/MapPinIcon";
+import EllipsisVerticalIcon from "@heroicons/react/24/solid/EllipsisVerticalIcon";
 import {
   Avatar,
   Box,
   IconButton,
+  Menu,
+  MenuItem,
   Stack,
   SvgIcon,
   Tooltip,
@@ -48,6 +52,7 @@ export const StatusBadge = ({ color = "neutral", label }) => (
       lineHeight: 1.4,
       px: 1.5,
       py: 0.5,
+      textTransform: "capitalize",
       whiteSpace: "nowrap",
       ...badgeColors[color],
     }}
@@ -68,7 +73,12 @@ const tableTextSx = {
   whiteSpace: "nowrap",
 };
 
-export const TablePersonCell = ({ imageUrl, name, subtitle }) => (
+export const TablePersonCell = ({ imageUrl, name, subtitle }) => {
+  const nameLooksLikeEmail = typeof name === "string" && name.includes("@");
+  const subtitleLooksLikeEmail = typeof subtitle === "string" && subtitle.includes("@");
+  const displayName = nameLooksLikeEmail ? name.toLowerCase() : name;
+
+  return (
   <Stack alignItems="center" direction="row" spacing={{ xs: 1, sm: 1.5 }} sx={{ minWidth: 0 }}>
     <Avatar
       src={imageUrl}
@@ -82,20 +92,37 @@ export const TablePersonCell = ({ imageUrl, name, subtitle }) => (
         width: { xs: 36, sm: 40 },
       }}
     >
-      {name?.charAt(0)?.toUpperCase() || "?"}
+      {displayName?.charAt(0)?.toUpperCase() || "?"}
     </Avatar>
     <Box sx={{ minWidth: 0 }}>
-      <Typography fontWeight={600} sx={tableTextSx} variant="body2">
-        {name || "—"}
+      <Typography
+        data-email={nameLooksLikeEmail ? "true" : undefined}
+        fontWeight={600}
+        sx={{
+          ...tableTextSx,
+          ...(nameLooksLikeEmail ? { textTransform: "lowercase" } : {}),
+        }}
+        variant="body2"
+      >
+        {displayName || "—"}
       </Typography>
       {subtitle && (
-        <Typography color="text.secondary" sx={tableTextSx} variant="caption">
-          {subtitle}
+        <Typography
+          color="text.secondary"
+          data-email={subtitleLooksLikeEmail ? "true" : undefined}
+          sx={{
+            ...tableTextSx,
+            ...(subtitleLooksLikeEmail ? { textTransform: "lowercase" } : {}),
+          }}
+          variant="caption"
+        >
+          {subtitleLooksLikeEmail ? subtitle.toLowerCase() : subtitle}
         </Typography>
       )}
     </Box>
   </Stack>
-);
+  );
+};
 
 TablePersonCell.propTypes = {
   imageUrl: PropTypes.string,
@@ -108,8 +135,13 @@ export const TableEmailCell = ({ email }) => (
     <SvgIcon fontSize="small" sx={{ color: "neutral.400", flexShrink: 0 }}>
       <EnvelopeIcon />
     </SvgIcon>
-    <Typography color="text.secondary" sx={tableTextSx} variant="body2">
-      {email || "—"}
+    <Typography
+      color="text.secondary"
+      data-email="true"
+      sx={{ ...tableTextSx, textTransform: "lowercase" }}
+      variant="body2"
+    >
+      {email ? email.toLowerCase() : "—"}
     </Typography>
   </Stack>
 );
@@ -206,4 +238,107 @@ TableQuickActions.propTypes = {
       color: PropTypes.string,
     })
   ).isRequired,
+};
+
+export const TableActionsMenu = ({ actions, disabled = false }) => {
+  const [anchorEl, setAnchorEl] = useState(null);
+  const open = Boolean(anchorEl);
+  const menuId = open ? "table-actions-menu" : undefined;
+
+  const handleOpen = (event) => {
+    event.stopPropagation();
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleActionClick = (onClick) => {
+    handleClose();
+    if (typeof onClick === "function") {
+      onClick();
+    }
+  };
+
+  return (
+    <>
+      <Tooltip title="Actions">
+        <span>
+          <IconButton
+            aria-controls={menuId}
+            aria-expanded={open ? "true" : undefined}
+            aria-haspopup="true"
+            aria-label="Open actions menu"
+            disabled={disabled || !actions?.length}
+            onClick={handleOpen}
+            size="small"
+            sx={{
+              color: "neutral.500",
+              "&:hover": {
+                bgcolor: "neutral.50",
+                color: "neutral.800",
+              },
+            }}
+          >
+            <SvgIcon fontSize="small">
+              <EllipsisVerticalIcon />
+            </SvgIcon>
+          </IconButton>
+        </span>
+      </Tooltip>
+      <Menu
+        anchorEl={anchorEl}
+        anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
+        id={menuId}
+        onClose={handleClose}
+        open={open}
+        transformOrigin={{ horizontal: "right", vertical: "top" }}
+        slotProps={{
+          paper: {
+            sx: {
+              border: "1px solid",
+              borderColor: "neutral.200",
+              boxShadow: "0px 8px 24px rgba(15, 23, 42, 0.08)",
+              minWidth: 200,
+              mt: 0.5,
+            },
+          },
+        }}
+      >
+        {actions.map(({ icon: Icon, label, onClick, color = "neutral.700", disabled: actionDisabled }) => (
+          <MenuItem
+            disabled={actionDisabled}
+            key={label}
+            onClick={() => handleActionClick(onClick)}
+            sx={{
+              color,
+              gap: 1.25,
+              py: 1.1,
+            }}
+          >
+            {Icon && (
+              <SvgIcon fontSize="small" sx={{ color: "inherit" }}>
+                <Icon />
+              </SvgIcon>
+            )}
+            <Typography variant="body2">{label}</Typography>
+          </MenuItem>
+        ))}
+      </Menu>
+    </>
+  );
+};
+
+TableActionsMenu.propTypes = {
+  actions: PropTypes.arrayOf(
+    PropTypes.shape({
+      icon: PropTypes.elementType,
+      label: PropTypes.string.isRequired,
+      onClick: PropTypes.func,
+      color: PropTypes.string,
+      disabled: PropTypes.bool,
+    })
+  ).isRequired,
+  disabled: PropTypes.bool,
 };

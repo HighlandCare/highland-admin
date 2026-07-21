@@ -10,6 +10,26 @@ export const formatDate = (dateString) => {
   });
 };
 
+export const formatDateTime = (dateString) => {
+  if (!dateString) {
+    return "—";
+  }
+
+  const date = new Date(dateString);
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  return date.toLocaleString("en-US", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+
 export const formatRelativeDate = (dateString) => {
   if (!dateString) {
     return "—";
