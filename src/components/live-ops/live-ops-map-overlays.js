@@ -1,0 +1,427 @@
+import PropTypes from "prop-types";
+import { useState } from "react";
+import {
+  Box,
+  Button,
+  Checkbox,
+  FormControlLabel,
+  FormGroup,
+  IconButton,
+  MenuItem,
+  Popover,
+  Select,
+  Stack,
+  Switch,
+  Tooltip,
+  Typography,
+} from "@mui/material";
+import FunnelIcon from "@heroicons/react/24/solid/FunnelIcon";
+import MapPinIcon from "@heroicons/react/24/solid/MapPinIcon";
+import ArrowsPointingOutIcon from "@heroicons/react/24/solid/ArrowsPointingOutIcon";
+import ArrowsPointingInIcon from "@heroicons/react/24/solid/ArrowsPointingInIcon";
+import LiveOpsLocationSearch from "./live-ops-location-search";
+
+const LEGEND_ITEMS = [
+  { key: "customer_signup", label: "Customers", color: "#22c55e" },
+  { key: "driver_signup", label: "Drivers", color: "#eab308" },
+  { key: "ride_request", label: "Pending", color: "#3b82f6" },
+  { key: "food_order", label: "Food", color: "#a855f7" },
+  { key: "online_driver", label: "Online", color: "#f97316" },
+  { key: "emergency", label: "Urgent", color: "#ef4444" },
+];
+
+const glass = {
+  bgcolor: "rgba(255, 255, 255, 0.94)",
+  backdropFilter: "blur(12px)",
+  border: "1px solid",
+  borderColor: "divider",
+  borderRadius: "14px",
+  boxShadow: "0 8px 28px rgba(15, 23, 42, 0.08)",
+};
+
+export default function LiveOpsMapOverlays({
+  legend,
+  locationSearch,
+  onLocationSearchChange,
+  onPlaceSelect,
+  onCurrentLocation,
+  locating,
+  region,
+  regionOptions,
+  onRegionChange,
+  categories,
+  selectedCategories,
+  onCategoryToggle,
+  onlineOnly,
+  onOnlineOnlyChange,
+  showTraffic,
+  onShowTrafficChange,
+  selectedMarker,
+  onCloseMarker,
+  onLocateRegion,
+  isMapFullscreen,
+  onToggleFullscreen,
+  tourStopIndex,
+  tourStopTotal,
+}) {
+  const [filterAnchor, setFilterAnchor] = useState(null);
+
+  const markerBorder =
+    selectedMarker?.color === "yellow"
+      ? "#eab308"
+      : selectedMarker?.color === "blue"
+        ? "#3b82f6"
+        : selectedMarker?.color === "purple"
+          ? "#a855f7"
+          : selectedMarker?.color === "red"
+            ? "#ef4444"
+            : "#00828A";
+
+  return (
+    <>
+      <Box
+        sx={{
+          position: "absolute",
+          top: 16,
+          left: 16,
+          zIndex: 1000,
+          ...glass,
+          px: 2,
+          py: 1,
+          display: "flex",
+          alignItems: "center",
+          gap: 1,
+        }}
+      >
+        <Box
+          sx={{
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            bgcolor: "success.main",
+            boxShadow: "0 0 10px rgba(34,197,94,.55)",
+            animation: "pulse 2s infinite",
+            "@keyframes pulse": {
+              "0%, 100%": { opacity: 1 },
+              "50%": { opacity: 0.4 },
+            },
+          }}
+        />
+        <Typography sx={{ color: "text.primary", fontSize: 13, fontWeight: 600 }}>
+          Live Activity
+        </Typography>
+        <Typography sx={{ color: "text.secondary", fontSize: 12 }}>Real-time</Typography>
+      </Box>
+
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          position: "absolute",
+          top: 16,
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 1000,
+          width: { xs: "calc(100% - 32px)", md: 420 },
+        }}
+      >
+        <LiveOpsLocationSearch
+          value={locationSearch}
+          onChange={onLocationSearchChange}
+          onPlaceSelect={onPlaceSelect}
+          onCurrentLocation={onCurrentLocation}
+          locating={locating}
+        />
+        <IconButton
+          onClick={(e) => setFilterAnchor(e.currentTarget)}
+          sx={{
+            ...glass,
+            width: 40,
+            height: 40,
+            color: "primary.main",
+            flexShrink: 0,
+            "&:hover": { bgcolor: "primary.alpha8" },
+          }}
+        >
+          <FunnelIcon width={20} />
+        </IconButton>
+        {!isMapFullscreen ? (
+          <Tooltip title="Full screen map">
+            <IconButton
+              onClick={onToggleFullscreen}
+              sx={{
+                ...glass,
+                width: 40,
+                height: 40,
+                color: "primary.main",
+                flexShrink: 0,
+                "&:hover": { bgcolor: "primary.alpha8" },
+              }}
+            >
+              <ArrowsPointingOutIcon width={20} />
+            </IconButton>
+          </Tooltip>
+        ) : null}
+      </Stack>
+
+      {tourStopIndex && tourStopTotal ? (
+        <Box
+          sx={{
+            position: "absolute",
+            top: 72,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 1000,
+            ...glass,
+            px: 2,
+            py: 0.75,
+          }}
+        >
+          <Typography sx={{ color: "primary.main", fontSize: 12, fontWeight: 700 }}>
+            Viewing location {tourStopIndex} of {tourStopTotal}
+          </Typography>
+        </Box>
+      ) : null}
+
+      <Popover
+        open={Boolean(filterAnchor)}
+        anchorEl={filterAnchor}
+        onClose={() => setFilterAnchor(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        transformOrigin={{ vertical: "top", horizontal: "right" }}
+        PaperProps={{
+          sx: {
+            ...glass,
+            p: 2,
+            width: 300,
+            mt: 1,
+          },
+        }}
+      >
+        <Typography sx={{ color: "text.primary", fontWeight: 700, mb: 1.5 }}>Filters</Typography>
+
+        <Typography sx={{ color: "text.secondary", fontSize: 11, mb: 0.5 }}>Region</Typography>
+        <Select
+          fullWidth
+          size="small"
+          value={region}
+          onChange={(e) => onRegionChange?.(e.target.value)}
+          sx={{
+            mb: 2,
+            color: "text.primary",
+            bgcolor: "background.default",
+            ".MuiOutlinedInput-notchedOutline": { borderColor: "divider" },
+          }}
+        >
+          {(regionOptions ?? []).map((opt) => (
+            <MenuItem key={opt.key} value={opt.key}>
+              {opt.label}
+            </MenuItem>
+          ))}
+        </Select>
+
+        <Typography sx={{ color: "text.secondary", fontSize: 11, mb: 0.5 }}>Categories</Typography>
+        <FormGroup sx={{ mb: 1.5, maxHeight: 200, overflow: "auto" }}>
+          {(categories ?? []).map((cat) => (
+            <FormControlLabel
+              key={cat.key}
+              control={
+                <Checkbox
+                  size="small"
+                  checked={selectedCategories.includes(cat.key)}
+                  onChange={() => onCategoryToggle?.(cat.key)}
+                  sx={{ color: "neutral.400", "&.Mui-checked": { color: "primary.main" } }}
+                />
+              }
+              label={
+                <Typography sx={{ color: "text.primary", fontSize: 13 }}>{cat.label}</Typography>
+              }
+            />
+          ))}
+        </FormGroup>
+
+        <FormControlLabel
+          control={
+            <Switch
+              size="small"
+              checked={onlineOnly}
+              onChange={(e) => onOnlineOnlyChange?.(e.target.checked)}
+            />
+          }
+          label={
+            <Typography sx={{ color: "text.primary", fontSize: 13 }}>
+              Available drivers only
+            </Typography>
+          }
+        />
+        <FormControlLabel
+          control={
+            <Switch
+              size="small"
+              checked={showTraffic}
+              onChange={(e) => onShowTrafficChange?.(e.target.checked)}
+            />
+          }
+          label={
+            <Typography sx={{ color: "text.primary", fontSize: 13 }}>Show traffic layer</Typography>
+          }
+        />
+      </Popover>
+
+      {selectedMarker ? (
+        <Box
+          sx={{
+            position: "absolute",
+            top: 72,
+            left: 16,
+            zIndex: 1000,
+            ...glass,
+            borderColor: markerBorder,
+            borderWidth: 2,
+            p: 2,
+            minWidth: 260,
+            maxWidth: 320,
+          }}
+        >
+          <Typography sx={{ color: markerBorder, fontSize: 12, fontWeight: 700, mb: 0.5 }}>
+            {selectedMarker.type === "driver_signup" || selectedMarker.type === "online_driver"
+              ? "Driver"
+              : selectedMarker.type === "food_order"
+                ? "Food Order"
+                : selectedMarker.type === "ride_request"
+                  ? "Ride Request"
+                  : "Customer"}
+          </Typography>
+          <Typography sx={{ color: "text.primary", fontWeight: 700, fontSize: 16 }}>
+            {selectedMarker.title}
+          </Typography>
+          <Typography sx={{ color: "text.secondary", fontSize: 13, mt: 0.5 }}>
+            {selectedMarker.subtitle}
+          </Typography>
+          {selectedMarker.phone ? (
+            <Typography sx={{ color: "text.primary", fontSize: 13, mt: 1 }}>
+              {selectedMarker.phone}
+            </Typography>
+          ) : null}
+          <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+            <Button
+              size="small"
+              variant="contained"
+              sx={{
+                bgcolor: markerBorder,
+                color: "#fff",
+                fontWeight: 700,
+                "&:hover": { bgcolor: markerBorder, opacity: 0.9 },
+              }}
+            >
+              View Details
+            </Button>
+            <Button size="small" sx={{ color: "text.secondary" }} onClick={onCloseMarker}>
+              Close
+            </Button>
+          </Stack>
+        </Box>
+      ) : null}
+
+      <Box
+        sx={{
+          position: "absolute",
+          bottom: 20,
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 1000,
+          ...glass,
+          px: 2.5,
+          py: 1.25,
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 2,
+          justifyContent: "center",
+        }}
+      >
+        {LEGEND_ITEMS.map((item) => (
+          <Stack key={item.key} direction="row" spacing={0.75} alignItems="center">
+            <Box
+              sx={{
+                width: 10,
+                height: 10,
+                borderRadius: "50%",
+                bgcolor: item.color,
+              }}
+            />
+            <Typography sx={{ color: "text.secondary", fontSize: 12 }}>
+              {item.label}: {legend?.[item.key] ?? 0}
+            </Typography>
+          </Stack>
+        ))}
+      </Box>
+
+      <Stack
+        spacing={1}
+        sx={{
+          position: "absolute",
+          bottom: 88,
+          right: 16,
+          zIndex: 1000,
+        }}
+      >
+        <Tooltip title="Reset map to selected region">
+          <IconButton
+            onClick={onLocateRegion}
+            sx={{
+              ...glass,
+              width: 44,
+              height: 44,
+              color: "primary.main",
+            }}
+          >
+            <MapPinIcon width={22} />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title={isMapFullscreen ? "Exit full screen" : "Full screen map"}>
+          <IconButton
+            onClick={onToggleFullscreen}
+            sx={{
+              ...glass,
+              width: 44,
+              height: 44,
+              color: "primary.main",
+            }}
+          >
+            {isMapFullscreen ? (
+              <ArrowsPointingInIcon width={22} />
+            ) : (
+              <ArrowsPointingOutIcon width={22} />
+            )}
+          </IconButton>
+        </Tooltip>
+      </Stack>
+    </>
+  );
+}
+
+LiveOpsMapOverlays.propTypes = {
+  legend: PropTypes.object,
+  locationSearch: PropTypes.string,
+  onLocationSearchChange: PropTypes.func,
+  onPlaceSelect: PropTypes.func,
+  onCurrentLocation: PropTypes.func,
+  locating: PropTypes.bool,
+  region: PropTypes.string,
+  regionOptions: PropTypes.array,
+  onRegionChange: PropTypes.func,
+  categories: PropTypes.array,
+  selectedCategories: PropTypes.array,
+  onCategoryToggle: PropTypes.func,
+  onlineOnly: PropTypes.bool,
+  onOnlineOnlyChange: PropTypes.func,
+  showTraffic: PropTypes.bool,
+  onShowTrafficChange: PropTypes.func,
+  selectedMarker: PropTypes.object,
+  onCloseMarker: PropTypes.func,
+  onLocateRegion: PropTypes.func,
+  isMapFullscreen: PropTypes.bool,
+  onToggleFullscreen: PropTypes.func,
+  tourStopIndex: PropTypes.number,
+  tourStopTotal: PropTypes.number,
+};
