@@ -1,4 +1,5 @@
 import ChartBarIcon from "@heroicons/react/24/solid/ChartBarIcon";
+import MapIcon from "@heroicons/react/24/solid/MapIcon";
 
 import UsersIcon from "@heroicons/react/24/solid/UsersIcon";
 import ShieldCheckIcon from "@heroicons/react/24/solid/ShieldCheckIcon";
@@ -18,6 +19,15 @@ export const items = [
     icon: (
       <SvgIcon fontSize="small">
         <ChartBarIcon />
+      </SvgIcon>
+    ),
+  },
+  {
+    title: "Live Operations",
+    path: "/live-operations",
+    icon: (
+      <SvgIcon fontSize="small">
+        <MapIcon />
       </SvgIcon>
     ),
   },
