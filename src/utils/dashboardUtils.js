@@ -1,50 +1,4 @@
-import { ROWS_PER_PAGE } from "../components/data-table";
-import { fetchAllPages, getListFromResponse } from "./listUtils";
-import { isDriverBlocked } from "./driverUtils";
-import { filterOutAdminUsers, isUserBlocked } from "./userUtils";
-import {
-  getRideAdminEarning,
-  getRideDriverEarning,
-  getRideList,
-} from "./rideUtils";
-import {
-  getChap,
-  getDriverEarnings,
-  getRideHistory,
-  getUsers,
-} from "../Services/Auth.service";
-
-export const getTotalCount = (response, fallbackList = []) => {
-  const candidates = [
-    response?.total_records,
-    response?.totalRecords,
-    response?.total_drivers,
-    response?.total,
-    response?.data?.total_records,
-    response?.data?.totalRecords,
-    response?.data?.total,
-  ];
-
-  for (const candidate of candidates) {
-    if (candidate == null || candidate === "") {
-      continue;
-    }
-
-    const total = Number(candidate);
-    if (Number.isFinite(total) && total >= 0) {
-      return total;
-    }
-  }
-
-  const list = fallbackList.length ? fallbackList : getListFromResponse(response);
-  return list.length;
-};
-
-export const sumNumericField = (items, getValue) =>
-  items.reduce((sum, item) => {
-    const value = Number(getValue(item));
-    return sum + (Number.isFinite(value) ? value : 0);
-  }, 0);
+import { getDashboardAnalytics } from "../Services/Auth.service";
 
 export const formatCompactCurrency = (value) => {
   if (value == null || Number.isNaN(Number(value))) {
@@ -59,99 +13,83 @@ export const formatCompactCurrency = (value) => {
   }).format(Number(value));
 };
 
-export const buildMonthlyRideSeries = (rides = []) => {
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const rideCounts = Array(12).fill(0);
+const emptyMonthly = { hasData: false, categories: [], series: [] };
+const emptyStatusDistribution = { hasData: false, labels: [], values: [] };
 
-  rides.forEach((ride) => {
-    const dateValue = ride?.createdAt || ride?.rideStartTime || ride?.scheduledAt;
-    if (!dateValue) {
-      return;
-    }
+const normalizeMonthly = (monthly) => {
+  if (!monthly || typeof monthly !== "object") {
+    return emptyMonthly;
+  }
 
-    const date = new Date(dateValue);
-    if (Number.isNaN(date.getTime())) {
-      return;
-    }
-
-    rideCounts[date.getMonth()] += 1;
-  });
-
-  const hasData = rideCounts.some((count) => count > 0);
+  const categories = Array.isArray(monthly.categories) ? monthly.categories : [];
+  const series = Array.isArray(monthly.series) ? monthly.series : [];
+  const hasData =
+    typeof monthly.hasData === "boolean"
+      ? monthly.hasData
+      : series.some((entry) =>
+          Array.isArray(entry?.data) ? entry.data.some((value) => Number(value) > 0) : false
+        );
 
   return {
     hasData,
-    categories: months,
-    series: [{ name: "Rides", data: rideCounts }],
+    categories,
+    series,
   };
 };
 
-export const buildRideStatusDistribution = (rides = []) => {
-  const counts = {};
+const normalizeStatusDistribution = (statusDistribution) => {
+  if (!statusDistribution || typeof statusDistribution !== "object") {
+    return emptyStatusDistribution;
+  }
 
-  rides.forEach((ride) => {
-    const status = String(ride?.status || "").trim().toLowerCase();
-    if (!status) {
-      return;
-    }
-
-    const label = status.charAt(0).toUpperCase() + status.slice(1);
-    counts[label] = (counts[label] || 0) + 1;
-  });
-
-  const labels = Object.keys(counts);
-  const values = labels.map((label) => counts[label]);
+  const labels = Array.isArray(statusDistribution.labels) ? statusDistribution.labels : [];
+  const values = Array.isArray(statusDistribution.values) ? statusDistribution.values : [];
+  const hasData =
+    typeof statusDistribution.hasData === "boolean"
+      ? statusDistribution.hasData
+      : labels.length > 0 && values.some((value) => Number(value) > 0);
 
   return {
-    hasData: labels.length > 0,
+    hasData,
     labels,
     values,
   };
 };
 
-export const loadDashboardAnalytics = async () => {
-  const pageSize = ROWS_PER_PAGE;
+const toNumber = (value, fallback = 0) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+};
 
-  const [users, drivers, rides, earningsDrivers] = await Promise.all([
-    fetchAllPages((page) => getUsers(page, pageSize), { pageSize }),
-    fetchAllPages((page) => getChap(page, pageSize), { pageSize }),
-    fetchAllPages((page) => getRideHistory(page, pageSize), {
-      getItems: getRideList,
-      pageSize,
-    }),
-    fetchAllPages((page) => getDriverEarnings(page, pageSize), { pageSize }),
-  ]);
+export const loadDashboardAnalytics = async ({ latestLimit = 10, year } = {}) => {
+  const response = await getDashboardAnalytics({ latestLimit, year });
+  const data = response?.data && typeof response.data === "object" ? response.data : response;
 
-  const customers = filterOutAdminUsers(users);
-  const activeUsers = customers.filter((user) => !isUserBlocked(user)).length;
-  const activeDrivers = drivers.filter((driver) => !isDriverBlocked(driver)).length;
-  const completedRides = rides.filter(
-    (ride) => String(ride?.status || "").toLowerCase() === "completed"
-  ).length;
+  if (!data || typeof data !== "object") {
+    throw new Error("Invalid dashboard analytics response");
+  }
 
-  const adminEarningsFromRides = sumNumericField(rides, getRideAdminEarning);
-  const driverEarningsFromRides = sumNumericField(rides, getRideDriverEarning);
-  const driverEarningsFromReport = sumNumericField(
-    earningsDrivers,
-    (driver) => driver?.totalEarned
-  );
-
-  const monthly = buildMonthlyRideSeries(rides);
-  const statusDistribution = buildRideStatusDistribution(rides);
+  const adminEarnings = toNumber(data.adminEarnings);
+  const driverEarningsTotal = toNumber(data.driverEarningsTotal);
+  const rides = Array.isArray(data.rides) ? data.rides : [];
 
   return {
-    totalUsers: customers.length,
-    activeUsers,
-    totalDrivers: drivers.length,
-    activeDrivers,
-    totalRides: rides.length,
-    completedRides,
-    adminEarnings: adminEarningsFromRides,
-    driverEarningsTotal: driverEarningsFromReport || driverEarningsFromRides,
-    hasAdminEarnings: adminEarningsFromRides > 0,
-    hasDriverEarnings: (driverEarningsFromReport || driverEarningsFromRides) > 0,
+    totalUsers: toNumber(data.totalUsers),
+    activeUsers: toNumber(data.activeUsers),
+    totalDrivers: toNumber(data.totalDrivers),
+    activeDrivers: toNumber(data.activeDrivers),
+    totalRides: toNumber(data.totalRides),
+    completedRides: toNumber(data.completedRides),
+    adminEarnings,
+    driverEarningsTotal,
+    hasAdminEarnings:
+      typeof data.hasAdminEarnings === "boolean" ? data.hasAdminEarnings : adminEarnings > 0,
+    hasDriverEarnings:
+      typeof data.hasDriverEarnings === "boolean"
+        ? data.hasDriverEarnings
+        : driverEarningsTotal > 0,
     rides,
-    monthly,
-    statusDistribution,
+    monthly: normalizeMonthly(data.monthly),
+    statusDistribution: normalizeStatusDistribution(data.statusDistribution),
   };
 };
