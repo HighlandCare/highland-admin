@@ -231,15 +231,14 @@ export const UsersTable = (props) => {
             <TableCell>E-mail</TableCell>
             <TableCell>Location</TableCell>
             <TableCell>Phone</TableCell>
-            <TableCell>Address</TableCell>
             <TableCell>Account Status</TableCell>
-          <TableCell align="right">Actions</TableCell>
+            <TableCell align="right">Actions</TableCell>
         </TableRow>
       </TableHead>
       <TableBody>
         {rows.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={7}>
+            <TableCell colSpan={6}>
               <Typography color="text.secondary" textAlign="center" variant="body2">
                 No matching results found.
               </Typography>
@@ -304,7 +303,6 @@ export const UsersTable = (props) => {
                 <TableCell>
                   <TablePhoneCell phone={user?.user?.phone} />
                 </TableCell>
-                <TableCell>{user?.user?.address || "—"}</TableCell>
                 <TableCell>
                   <StatusBadge color={accountMeta.color} label={accountMeta.label} />
                 </TableCell>

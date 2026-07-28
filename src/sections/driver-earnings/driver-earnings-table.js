@@ -21,6 +21,9 @@ import { formatRelativeDate } from "../../utils/dateUtils";
 import { getListFromResponse } from "../../utils/listUtils";
 import {
   formatEarningsCurrency,
+  getDriverRideCount,
+  getDriverTotalEarned,
+  getDriverWalletBalance,
   getEarningsDriverId,
   getEarningsDriverImage,
   storeEarningsDetail,
@@ -67,9 +70,9 @@ export const DriverEarningsTable = (props) => {
         driver?.fullName,
         driver?.email,
         driver?.phone,
-        driver?.rideCount,
-        driver?.totalEarned,
-        driver?.walletBalance,
+        getDriverRideCount(driver),
+        getDriverTotalEarned(driver),
+        getDriverWalletBalance(driver),
       ]
         .filter((value) => value != null && value !== "")
         .join(" ")
@@ -147,15 +150,15 @@ export const DriverEarningsTable = (props) => {
               <TableCell>
                 <TablePhoneCell phone={driver?.phone} />
               </TableCell>
-              <TableCell>{driver?.rideCount ?? 0}</TableCell>
+              <TableCell>{getDriverRideCount(driver) ?? 0}</TableCell>
               <TableCell>
                 <Typography fontWeight={600} variant="body2">
-                  {formatEarningsCurrency(driver?.totalEarned)}
+                  {formatEarningsCurrency(getDriverTotalEarned(driver))}
                 </Typography>
               </TableCell>
               <TableCell>
                 <Typography color="text.secondary" variant="body2">
-                  {formatEarningsCurrency(driver?.walletBalance)}
+                  {formatEarningsCurrency(getDriverWalletBalance(driver))}
                 </Typography>
               </TableCell>
               <TableCell align="right">

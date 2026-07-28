@@ -1,4 +1,4 @@
-import { React, useState, useEffect, useMemo } from "react";
+import { React, useState, useEffect, useRef } from "react";
 import { Layout as DashboardLayout } from "../layouts/dashboard/layout";
 import Head from "next/head";
 import { Box, Container, Stack, Unstable_Grid2 as Grid, Typography } from "@mui/material";
@@ -14,16 +14,32 @@ import { EarningsAnalytics } from "../sections/driver-earnings/earnings-analytic
 import { OverviewStatCard } from "../sections/overview/overview-stat-card";
 import { ROWS_PER_PAGE } from "../components/data-table";
 import { pageContainerSx, pageMainSx, pageTitleSx } from "../utils/pageLayout";
-import { getListFromResponse } from "../utils/listUtils";
+import { fetchAllPages, getListFromResponse } from "../utils/listUtils";
 import {
   formatEarningsCurrency,
+  hasEarningsApiTotals,
   summarizeEarningsAnalytics,
 } from "../utils/earningsUtils";
+
+const emptyAnalytics = {
+  drivers: [],
+  driversCount: 0,
+  totalEarned: 0,
+  totalWallet: 0,
+  totalRides: 0,
+  averageEarned: 0,
+  topEarners: [],
+  hasApiTotals: false,
+  hasEarnings: false,
+};
 
 const Page = () => {
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(true);
   const [earnings, setEarnings] = useState({});
+  const [analytics, setAnalytics] = useState(emptyAnalytics);
+  const analyticsLoadedRef = useRef(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -37,13 +53,54 @@ const Page = () => {
   useEffect(() => {
     let active = true;
 
+    const loadAnalytics = async (pageResponse) => {
+      if (analyticsLoadedRef.current) {
+        return;
+      }
+
+      setIsAnalyticsLoading(true);
+
+      try {
+        let nextAnalytics = summarizeEarningsAnalytics(pageResponse);
+
+        // Older API builds only return total_drivers — sum every page of driver rows.
+        if (!hasEarningsApiTotals(pageResponse)) {
+          const allDrivers = await fetchAllPages(
+            (nextPage) => getDriverEarnings(nextPage, ROWS_PER_PAGE)
+          );
+          nextAnalytics = summarizeEarningsAnalytics({
+            ...pageResponse,
+            data: allDrivers,
+          });
+        }
+
+        if (active) {
+          setAnalytics(nextAnalytics);
+          analyticsLoadedRef.current = true;
+        }
+      } catch (error) {
+        console.error("Error loading driver earnings analytics:", error);
+        if (active) {
+          setAnalytics(summarizeEarningsAnalytics(pageResponse));
+          analyticsLoadedRef.current = true;
+        }
+      } finally {
+        if (active) {
+          setIsAnalyticsLoading(false);
+        }
+      }
+    };
+
     const fetchEarnings = async () => {
       try {
         setIsLoading(true);
         const response = await getDriverEarnings(page, ROWS_PER_PAGE);
-        if (active) {
-          setEarnings(response);
+        if (!active) {
+          return;
         }
+
+        setEarnings(response);
+        await loadAnalytics(response);
       } catch (error) {
         console.error("Error fetching driver earnings:", error);
       } finally {
@@ -64,8 +121,9 @@ const Page = () => {
     setPage(newPage);
   };
 
-  const analytics = useMemo(() => summarizeEarningsAnalytics(earnings), [earnings]);
   const hasData = Boolean(getListFromResponse(earnings).length);
+  const showStats = isLoading || isAnalyticsLoading || analytics.hasEarnings;
+  const statsLoading = isLoading || isAnalyticsLoading;
 
   return (
     <>
@@ -85,13 +143,13 @@ const Page = () => {
               </Typography>
             </Stack>
 
-            {(isLoading || analytics.hasEarnings) && (
+            {showStats && (
               <Grid container spacing={{ xs: 2, sm: 3 }}>
                 <Grid xs={12} sm={6} lg={3}>
                   <OverviewStatCard
                     icon={UsersIcon}
                     iconColor="info.main"
-                    loading={isLoading}
+                    loading={statsLoading}
                     title="Drivers"
                     value={analytics.driversCount}
                   />
@@ -100,7 +158,7 @@ const Page = () => {
                   <OverviewStatCard
                     icon={CurrencyDollarIcon}
                     iconColor="primary.main"
-                    loading={isLoading}
+                    loading={statsLoading}
                     title="Total Earned"
                     value={formatEarningsCurrency(analytics.totalEarned)}
                   />
@@ -109,7 +167,7 @@ const Page = () => {
                   <OverviewStatCard
                     icon={WalletIcon}
                     iconColor="success.main"
-                    loading={isLoading}
+                    loading={statsLoading}
                     title="Wallet Balance"
                     value={formatEarningsCurrency(analytics.totalWallet)}
                   />
@@ -118,15 +176,15 @@ const Page = () => {
                   <OverviewStatCard
                     icon={ClockIcon}
                     iconColor="warning.main"
-                    loading={isLoading}
+                    loading={statsLoading}
                     title="Total Rides"
                     value={analytics.totalRides}
                   />
                 </Grid>
 
-                {(isLoading || analytics.topEarners.length > 0) && (
+                {(statsLoading || analytics.topEarners.length > 0) && (
                   <Grid xs={12}>
-                    <EarningsAnalytics analytics={analytics} loading={isLoading} />
+                    <EarningsAnalytics analytics={analytics} loading={statsLoading} />
                   </Grid>
                 )}
               </Grid>

@@ -86,6 +86,62 @@ export const getDriverEarnings = async (page, limit = 10) => {
   }
 };
 
+export const getDriverEarningsById = async (driverId) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const response = await Action.get(`admin/driver-earnings/${driverId}`, {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
+export const getDashboardAnalytics = async ({ latestLimit = 10, year } = {}) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const params = new URLSearchParams();
+
+    if (latestLimit != null) {
+      params.set("latestLimit", String(Math.min(Math.max(Number(latestLimit) || 10, 1), 50)));
+    }
+
+    if (year != null && year !== "") {
+      params.set("year", String(year));
+    }
+
+    const query = params.toString();
+    const response = await Action.get(
+      `admin/dashboard-analytics${query ? `?${query}` : ""}`,
+      {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
 export const getDriverTransactions = async (driverId) => {
   try {
     const authToken = JSON.parse(localStorage.getItem("token"));

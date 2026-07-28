@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
 import NextLink from "next/link";
 import { useRouter } from "next/router";
@@ -17,22 +17,35 @@ import {
 import { Layout as DashboardLayout } from "../../layouts/dashboard/layout";
 import Loader from "../../components/Loader";
 import { DriverTransactionHistory } from "../../components/driver-transaction-history";
-import { getChap, getChaperoneById, getDriverEarnings, getDriverTransactions } from "../../Services/Auth.service";
+import { getDriverEarningsById } from "../../Services/Auth.service";
 import { formatDate, formatRelativeDate } from "../../utils/dateUtils";
-import { getDriverList, normalizeChaperoneDetailResponse } from "../../utils/driverUtils";
-import { fetchAllPages } from "../../utils/listUtils";
 import { pageContainerSx, pageMainSx, pageTitleSx } from "../../utils/pageLayout";
 import {
   formatEarningsCurrency,
-  getEarningsChaperoneIdCandidates,
-  getEarningsDriverId,
+  getDriverRideCount,
+  getDriverTotalEarned,
+  getDriverTotalWithdrawn,
+  getDriverWalletBalance,
+  getEarningsDriverEmail,
   getEarningsDriverImage,
   getEarningsDriverName,
+  getEarningsDriverPhone,
+  getEarningsDriverProfileFields,
   getStoredEarningsDetail,
   getTransactionsFromDriverRecord,
+  mergeEarningsDriverRecords,
+  normalizeDriverEarningsByIdResponse,
   normalizeDriverTransactions,
 } from "../../utils/earningsUtils";
-import { ROWS_PER_PAGE } from "../../components/data-table";
+
+const DATE_FIELD_KEYS = new Set([
+  "createdAt",
+  "updatedAt",
+  "lastActiveAt",
+  "lastActive",
+  "dob",
+  "dateOfBirth",
+]);
 
 const hasDetailValue = (value) => {
   if (value == null) {
@@ -47,11 +60,31 @@ const hasDetailValue = (value) => {
   return true;
 };
 
-const DetailItem = ({ label, value }) => {
-  const isEmail = label === "Email" || (typeof value === "string" && value.includes("@"));
-  const displayValue = isEmail && value ? String(value).toLowerCase() : value;
+const formatProfileDisplayValue = (field) => {
+  if (!field) {
+    return "—";
+  }
 
-  if (!hasDetailValue(displayValue)) {
+  if (DATE_FIELD_KEYS.has(field.key)) {
+    if (field.key === "updatedAt" || field.key === "lastActiveAt" || field.key === "lastActive") {
+      return formatRelativeDate(field.value) || "—";
+    }
+    return formatDate(field.value) || "—";
+  }
+
+  return field.value;
+};
+
+const DetailItem = ({ label, value, alwaysShow = false }) => {
+  const isEmail = label === "Email" || (typeof value === "string" && value.includes("@"));
+  const hasValue = hasDetailValue(value);
+  const displayValue = !hasValue
+    ? "—"
+    : isEmail && value
+      ? String(value).toLowerCase()
+      : value;
+
+  if (!alwaysShow && !hasValue) {
     return null;
   }
 
@@ -61,9 +94,12 @@ const DetailItem = ({ label, value }) => {
         {label}
       </Typography>
       <Typography
-        data-email={isEmail ? "true" : undefined}
+        data-email={isEmail && hasValue ? "true" : undefined}
         fontWeight={600}
-        sx={{ wordBreak: "break-word", ...(isEmail ? { textTransform: "lowercase" } : {}) }}
+        sx={{
+          wordBreak: "break-word",
+          ...(isEmail && hasValue ? { textTransform: "lowercase" } : {}),
+        }}
         variant="body2"
       >
         {displayValue}
@@ -83,78 +119,12 @@ const SectionCard = ({ children, title }) => (
   </Card>
 );
 
-const loadTransactionsForEarningsDriver = async (driver) => {
-  const nestedTransactions = getTransactionsFromDriverRecord(driver);
-  if (nestedTransactions.length) {
-    return nestedTransactions;
-  }
-
-  const candidateIds = getEarningsChaperoneIdCandidates(driver);
-
-  for (const candidateId of candidateIds) {
-    try {
-      const response = await getChaperoneById(candidateId);
-      const detail = normalizeChaperoneDetailResponse(response);
-      const transactions = normalizeDriverTransactions(detail?.transactionHistory || []);
-      if (transactions.length) {
-        return transactions;
-      }
-    } catch (error) {
-      // Try next candidate
-    }
-  }
-
-  try {
-    const chaperones = await fetchAllPages(
-      (page) => getChap(page, ROWS_PER_PAGE),
-      { getItems: getDriverList, pageSize: ROWS_PER_PAGE }
-    );
-
-    const driverEmail = driver?.email ? String(driver.email).toLowerCase() : null;
-    const matchedChaperone = chaperones.find((item) => {
-      const email = item?.user?.email ? String(item.user.email).toLowerCase() : null;
-      const ids = [item?._id, item?.user?._id, item?.userId].filter(Boolean).map(String);
-
-      return (
-        (driverEmail && email === driverEmail) ||
-        candidateIds.some((id) => ids.includes(String(id)))
-      );
-    });
-
-    if (matchedChaperone?._id) {
-      const response = await getChaperoneById(matchedChaperone._id);
-      const detail = normalizeChaperoneDetailResponse(response);
-      const transactions = normalizeDriverTransactions(detail?.transactionHistory || []);
-      if (transactions.length) {
-        return transactions;
-      }
-    }
-  } catch (error) {
-    // Fall through to transactions endpoint
-  }
-
-  for (const candidateId of candidateIds) {
-    try {
-      const response = await getDriverTransactions(candidateId);
-      const normalized = normalizeDriverTransactions(response);
-      if (normalized.length) {
-        return normalized;
-      }
-    } catch (error) {
-      // Try next candidate
-    }
-  }
-
-  return [];
-};
-
 const Page = () => {
   const router = useRouter();
   const { id } = router.query;
   const [driver, setDriver] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isTransactionsLoading, setIsTransactionsLoading] = useState(false);
 
   useEffect(() => {
     if (!id) {
@@ -169,22 +139,34 @@ const Page = () => {
       const cached = getStoredEarningsDetail(id);
       if (cached && active) {
         setDriver(cached);
+        setTransactions(getTransactionsFromDriverRecord(cached));
         setIsLoading(false);
       }
 
       try {
-        const earningsDrivers = await fetchAllPages(
-          (page) => getDriverEarnings(page, ROWS_PER_PAGE),
-          { pageSize: ROWS_PER_PAGE }
-        );
-        const found = earningsDrivers.find((item) => getEarningsDriverId(item) === id);
-        if (active) {
-          setDriver(found || cached || null);
+        const response = await getDriverEarningsById(id);
+        const detail = normalizeDriverEarningsByIdResponse(response);
+
+        if (!active) {
+          return;
+        }
+
+        if (detail) {
+          const merged = mergeEarningsDriverRecords(cached, detail);
+          setDriver(merged);
+          const nestedTransactions = getTransactionsFromDriverRecord(merged);
+          setTransactions(
+            nestedTransactions.length ? nestedTransactions : normalizeDriverTransactions(response)
+          );
+        } else if (!cached) {
+          setDriver(null);
+          setTransactions([]);
         }
       } catch (error) {
         console.error("Error loading earnings details:", error);
         if (active && !cached) {
           setDriver(null);
+          setTransactions([]);
         }
       } finally {
         if (active) {
@@ -200,42 +182,41 @@ const Page = () => {
     };
   }, [id]);
 
-  useEffect(() => {
+  const profileImage = driver ? getEarningsDriverImage(driver) : null;
+  const totalEarned = driver ? getDriverTotalEarned(driver) : null;
+  const totalWithdrawn = driver ? getDriverTotalWithdrawn(driver) : null;
+  const walletBalance = driver ? getDriverWalletBalance(driver) : null;
+  const rideCount = driver ? getDriverRideCount(driver) : null;
+  const driverEmail = driver ? getEarningsDriverEmail(driver) : null;
+  const driverPhone = driver ? getEarningsDriverPhone(driver) : null;
+  const driverName = driver ? getEarningsDriverName(driver) : null;
+
+  const profileFields = useMemo(() => {
     if (!driver) {
-      setTransactions([]);
-      return;
+      return [];
     }
 
-    let active = true;
+    const fields = getEarningsDriverProfileFields(driver);
 
-    const loadTransactions = async () => {
-      setIsTransactionsLoading(true);
+    // Ensure core contact fields always appear, even when empty.
+    const required = [
+      { key: "fullName", label: "Full Name", value: driver.fullName || driver.name || null },
+      { key: "email", label: "Email", value: driverEmail },
+      { key: "phone", label: "Phone", value: driverPhone },
+    ];
 
-      try {
-        const nextTransactions = await loadTransactionsForEarningsDriver(driver);
-        if (active) {
-          setTransactions(nextTransactions);
-        }
-      } catch (error) {
-        console.error("Error loading earnings transactions:", error);
-        if (active) {
-          setTransactions([]);
-        }
-      } finally {
-        if (active) {
-          setIsTransactionsLoading(false);
-        }
+    const byLabel = new Map();
+    required.forEach((field) => byLabel.set(field.label, field));
+    fields.forEach((field) => {
+      if (!byLabel.has(field.label)) {
+        byLabel.set(field.label, field);
+      } else if (!hasDetailValue(byLabel.get(field.label).value) && hasDetailValue(field.value)) {
+        byLabel.set(field.label, field);
       }
-    };
+    });
 
-    loadTransactions();
-
-    return () => {
-      active = false;
-    };
-  }, [driver]);
-
-  const profileImage = driver ? getEarningsDriverImage(driver) : null;
+    return Array.from(byLabel.values());
+  }, [driver, driverEmail, driverPhone]);
 
   return (
     <>
@@ -283,7 +264,7 @@ const Page = () => {
                     >
                       {profileImage ? (
                         <Box
-                          alt={getEarningsDriverName(driver)}
+                          alt={driverName}
                           component="img"
                           src={profileImage}
                           sx={{
@@ -313,34 +294,43 @@ const Page = () => {
                             width: 120,
                           }}
                         >
-                          {getEarningsDriverName(driver)?.charAt(0)?.toUpperCase() || "?"}
+                          {driverName?.charAt(0)?.toUpperCase() || "?"}
                         </Box>
                       )}
                       <Box flex={1}>
                         <Typography sx={pageTitleSx} variant="h4">
-                          {getEarningsDriverName(driver)}
+                          {driverName}
                         </Typography>
                         <Typography
                           color="text.secondary"
-                          data-email={driver?.email ? "true" : undefined}
+                          data-email={driverEmail ? "true" : undefined}
                           sx={{
                             mt: 0.5,
-                            ...(driver?.email ? { textTransform: "lowercase" } : {}),
+                            ...(driverEmail ? { textTransform: "lowercase" } : {}),
                           }}
                           variant="body1"
                         >
-                          {driver?.email ? driver.email.toLowerCase() : "No email linked"}
+                          {driverEmail ? driverEmail.toLowerCase() : "No email linked"}
                         </Typography>
                         <Stack direction="row" flexWrap="wrap" gap={3} mt={2}>
                           <DetailItem
+                            alwaysShow
                             label="Total Earned"
-                            value={formatEarningsCurrency(driver.totalEarned)}
+                            value={formatEarningsCurrency(totalEarned)}
                           />
                           <DetailItem
+                            alwaysShow
                             label="Wallet Balance"
-                            value={formatEarningsCurrency(driver.walletBalance)}
+                            value={formatEarningsCurrency(walletBalance)}
                           />
-                          <DetailItem label="Rides" value={driver.rideCount ?? 0} />
+                          <DetailItem
+                            alwaysShow
+                            label="Total Withdrawn"
+                            value={formatEarningsCurrency(totalWithdrawn)}
+                          />
+                          {rideCount != null && (
+                            <DetailItem alwaysShow label="Rides" value={rideCount} />
+                          )}
                         </Stack>
                       </Box>
                     </Stack>
@@ -349,11 +339,16 @@ const Page = () => {
 
                 <Grid container spacing={3}>
                   <Grid item md={6} xs={12}>
-                    <SectionCard title="Contact Information">
+                    <SectionCard title="Personal Information">
                       <Stack spacing={2}>
-                        <DetailItem label="Full Name" value={driver.fullName} />
-                        <DetailItem label="Email" value={driver.email} />
-                        <DetailItem label="Phone" value={driver.phone} />
+                        {profileFields.map((field) => (
+                          <DetailItem
+                            alwaysShow
+                            key={field.label}
+                            label={field.label}
+                            value={formatProfileDisplayValue(field)}
+                          />
+                        ))}
                       </Stack>
                     </SectionCard>
                   </Grid>
@@ -362,19 +357,30 @@ const Page = () => {
                     <SectionCard title="Earnings Summary">
                       <Stack spacing={2}>
                         <DetailItem
+                          alwaysShow
                           label="Total Earned"
-                          value={formatEarningsCurrency(driver.totalEarned)}
+                          value={formatEarningsCurrency(totalEarned)}
                         />
                         <DetailItem
+                          alwaysShow
                           label="Wallet Balance"
-                          value={formatEarningsCurrency(driver.walletBalance)}
+                          value={formatEarningsCurrency(walletBalance)}
                         />
-                        <DetailItem label="Completed Rides" value={driver.rideCount ?? 0} />
                         <DetailItem
+                          alwaysShow
+                          label="Total Withdrawn"
+                          value={formatEarningsCurrency(totalWithdrawn)}
+                        />
+                        {rideCount != null && (
+                          <DetailItem alwaysShow label="Completed Rides" value={rideCount} />
+                        )}
+                        <DetailItem
+                          alwaysShow
                           label="Joined"
                           value={driver.createdAt ? formatDate(driver.createdAt) : null}
                         />
                         <DetailItem
+                          alwaysShow
                           label="Last Updated"
                           value={
                             driver.updatedAt ? formatRelativeDate(driver.updatedAt) : null
@@ -385,10 +391,7 @@ const Page = () => {
                   </Grid>
 
                   <Grid item xs={12}>
-                    <DriverTransactionHistory
-                      loading={isTransactionsLoading}
-                      transactions={transactions}
-                    />
+                    <DriverTransactionHistory loading={false} transactions={transactions} />
                   </Grid>
                 </Grid>
               </>
