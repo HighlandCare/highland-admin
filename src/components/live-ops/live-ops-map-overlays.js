@@ -20,6 +20,7 @@ import MapPinIcon from "@heroicons/react/24/solid/MapPinIcon";
 import ArrowsPointingOutIcon from "@heroicons/react/24/solid/ArrowsPointingOutIcon";
 import ArrowsPointingInIcon from "@heroicons/react/24/solid/ArrowsPointingInIcon";
 import LiveOpsLocationSearch from "./live-ops-location-search";
+import { buildLegendIconSvg } from "../../utils/liveOpsMarkerIcons";
 
 const LEGEND_ITEMS = [
   { key: "customer_signup", label: "Customers", color: "#22c55e" },
@@ -342,12 +343,15 @@ export default function LiveOpsMapOverlays({
         {LEGEND_ITEMS.map((item) => (
           <Stack key={item.key} direction="row" spacing={0.75} alignItems="center">
             <Box
+              aria-hidden
               sx={{
-                width: 10,
-                height: 10,
-                borderRadius: "50%",
-                bgcolor: item.color,
+                width: 16,
+                height: 16,
+                lineHeight: 0,
+                flexShrink: 0,
+                "& svg": { display: "block" },
               }}
+              dangerouslySetInnerHTML={{ __html: buildLegendIconSvg(item.key, 16) }}
             />
             <Typography sx={{ color: "text.secondary", fontSize: 12 }}>
               {item.label}: {legend?.[item.key] ?? 0}

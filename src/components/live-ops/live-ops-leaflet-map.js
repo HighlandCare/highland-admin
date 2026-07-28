@@ -3,21 +3,8 @@ import PropTypes from "prop-types";
 import { MapContainer, Marker, TileLayer, useMap, ZoomControl } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { DEFAULT_MAP_CENTER, MARKER_COLORS, sanitizeLiveOpsMarkers } from "../../utils/googleMaps";
-
-function createDotIcon(color) {
-  const hex = MARKER_COLORS[color] ?? MARKER_COLORS.green;
-  return L.divIcon({
-    className: "",
-    html: `<div style="
-      width:14px;height:14px;border-radius:50%;
-      background:${hex};border:2.5px solid rgba(255,255,255,.95);
-      box-shadow:0 0 16px ${hex}, 0 0 32px ${hex}88, 0 2px 6px rgba(0,0,0,.5);
-    "></div>`,
-    iconSize: [14, 14],
-    iconAnchor: [7, 7],
-  });
-}
+import { DEFAULT_MAP_CENTER, sanitizeLiveOpsMarkers } from "../../utils/googleMaps";
+import { buildLeafletMarkerIcon } from "../../utils/liveOpsMarkerIcons";
 
 function MapViewport({ center, zoom, mapZoom, fitToMarkers, markers, userLocation }) {
   const map = useMap();
@@ -92,7 +79,10 @@ export default function LiveOpsLeafletMap({
         <Marker
           key={marker.id}
           position={[marker.lat, marker.lng]}
-          icon={createDotIcon(marker.color)}
+          icon={buildLeafletMarkerIcon(L, marker.type, marker.color)}
+          zIndexOffset={
+            marker.type === "emergency" ? 500 : marker.type === "online_driver" ? 400 : 200
+          }
           eventHandlers={{
             click: () => onMarkerSelect?.(marker),
           }}
@@ -101,7 +91,8 @@ export default function LiveOpsLeafletMap({
       {userLocation?.lat != null && userLocation?.lng != null ? (
         <Marker
           position={[userLocation.lat, userLocation.lng]}
-          icon={createDotIcon("purple")}
+          icon={buildLeafletMarkerIcon(L, "user_location")}
+          zIndexOffset={999}
         />
       ) : null}
     </MapContainer>

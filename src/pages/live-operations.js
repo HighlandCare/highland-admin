@@ -23,10 +23,17 @@ import LiveOpsMapOverlays from "../components/live-ops/live-ops-map-overlays";
 import LiveOpsRightPanel from "../components/live-ops/live-ops-right-panel";
 import LiveOpsStatsBar from "../components/live-ops/live-ops-stats-bar";
 import { getLiveOpsSnapshot } from "../Services/liveOps.service";
+import {
+  applyLiveOpsSocketEvent,
+  connectLiveOpsSocket,
+  mergeLiveOpsSnapshot,
+} from "../Services/liveOpsSocket";
 import { OverviewRideAnalytics } from "../sections/overview/overview-ride-analytics";
 import { OverviewRideStatus } from "../sections/overview/overview-ride-status";
 import { loadDashboardAnalytics } from "../utils/dashboardUtils";
 import { useLiveOpsUi } from "../contexts/live-ops-ui-context";
+import { parseCoordinateQuery } from "../utils/googleMaps";
+import { filterMarkersNearLocation } from "../hooks/useSmoothLiveOpsMarkers";
 import { toast } from "react-toastify";
 
 const LiveOpsMap = dynamic(() => import("../components/live-ops/live-ops-map"), {
@@ -77,8 +84,10 @@ function resolveBookingStops(item, markers = []) {
     );
   }
 
-  const lat = Number(item?.lat ?? marker?.lat);
-  const lng = Number(item?.lng ?? marker?.lng);
+  const fromLocation =
+    parseCoordinateQuery(item?.location) || parseCoordinateQuery(marker?.subtitle);
+  const lat = Number(item?.lat ?? marker?.lat ?? fromLocation?.lat);
+  const lng = Number(item?.lng ?? marker?.lng ?? fromLocation?.lng);
   if (Number.isFinite(lat) && Number.isFinite(lng)) {
     return [{ lat, lng, label: item?.location || marker?.title || "Location", kind: "location" }];
   }
@@ -94,7 +103,7 @@ const Page = () => {
   const [loading, setLoading] = useState(true);
   const [snapshot, setSnapshot] = useState(null);
   const [feedFilter, setFeedFilter] = useState("all");
-  const [region, setRegion] = useState("dfw");
+  const [region, setRegion] = useState("all");
   const [selectedCategories, setSelectedCategories] = useState(DEFAULT_CATEGORIES);
   const [onlineOnly, setOnlineOnly] = useState(false);
   const [showTraffic, setShowTraffic] = useState(false);
@@ -109,7 +118,10 @@ const Page = () => {
   const [clock, setClock] = useState("");
   const [tourStopIndex, setTourStopIndex] = useState(null);
   const [tourStopTotal, setTourStopTotal] = useState(0);
+  const [socketStatus, setSocketStatus] = useState("connecting");
   const tourTimerRef = useRef(null);
+  const refreshTimerRef = useRef(null);
+  const socketApiRef = useRef(null);
 
   const clearLocationTour = useCallback(() => {
     if (tourTimerRef.current) {
@@ -134,7 +146,7 @@ const Page = () => {
       });
 
       if (response?.status && response?.data) {
-        setSnapshot(response.data);
+        setSnapshot((prev) => mergeLiveOpsSnapshot(prev, response.data));
       }
     } catch (error) {
       console.error("Live ops snapshot failed:", error);
@@ -153,9 +165,79 @@ const Page = () => {
   useEffect(() => {
     if (!isLogin) return undefined;
     loadSnapshot();
-    const interval = setInterval(loadSnapshot, 15000);
+
+    // Fallback poll — slower when socket is connected
+    const interval = setInterval(loadSnapshot, socketStatus === "connected" ? 60000 : 15000);
     return () => clearInterval(interval);
-  }, [isLogin, loadSnapshot]);
+  }, [isLogin, loadSnapshot, socketStatus]);
+
+  useEffect(() => {
+    if (!isLogin || viewMode !== "map") return undefined;
+
+    const scheduleSoftRefresh = () => {
+      if (refreshTimerRef.current) return;
+      refreshTimerRef.current = setTimeout(() => {
+        refreshTimerRef.current = null;
+        loadSnapshot();
+      }, 800);
+    };
+
+    const connection = connectLiveOpsSocket({
+      region,
+      onConnectionChange: setSocketStatus,
+      onEvent: (eventName, payload) => {
+        if (eventName === "live-ops:refresh") {
+          scheduleSoftRefresh();
+          return;
+        }
+
+        setSnapshot((prev) => {
+          const next = applyLiveOpsSocketEvent(prev, eventName, payload);
+
+          if (
+            (eventName === "live-ops:driver.location" ||
+              eventName === "live-ops:marker.upsert") &&
+            (payload?.marker?.id || payload?.id || payload?.authId)
+          ) {
+            const liveId =
+              payload?.marker?.id ||
+              payload?.id ||
+              (payload?.authId ? `driver-online-${payload.authId}` : null);
+            setSelectedMarker((current) => {
+              if (!current || !liveId || current.id !== liveId) return current;
+              const lat = Number(payload?.marker?.lat ?? payload?.lat);
+              const lng = Number(payload?.marker?.lng ?? payload?.lng);
+              return {
+                ...current,
+                ...(payload.marker || {}),
+                lat: Number.isFinite(lat) ? lat : current.lat,
+                lng: Number.isFinite(lng) ? lng : current.lng,
+              };
+            });
+          }
+
+          return next;
+        });
+      },
+    });
+
+    socketApiRef.current = connection;
+    connection.syncNow?.();
+
+    return () => {
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+      socketApiRef.current = null;
+      connection?.disconnect?.();
+    };
+  }, [isLogin, viewMode, loadSnapshot]);
+
+  useEffect(() => {
+    socketApiRef.current?.setRegion?.(region);
+    socketApiRef.current?.syncNow?.();
+  }, [region]);
 
   useEffect(() => {
     if (!isLogin || viewMode !== "analytics") return;
@@ -205,8 +287,22 @@ const Page = () => {
       setFitToMarkers(false);
       setSelectedMarker(null);
       if (place.address) setLocationSearch(place.address);
+
+      const nearby = filterMarkersNearLocation(snapshot?.markers ?? [], place, 30);
+      const onlineNearby = nearby.filter((m) => m.type === "online_driver").length;
+      const signupNearby = nearby.filter(
+        (m) => m.type === "driver_signup" || m.type === "customer_signup"
+      ).length;
+
+      if (nearby.length) {
+        toast.info(
+          `${nearby.length} live items near here (${onlineNearby} online drivers, ${signupNearby} signups)`
+        );
+      } else {
+        toast.info("No live signups or online drivers near this location yet.");
+      }
     },
-    [clearLocationTour]
+    [clearLocationTour, snapshot?.markers]
   );
 
   const handleCurrentLocation = useCallback(() => {
@@ -268,7 +364,13 @@ const Page = () => {
     (stops, sourceItem) => {
       clearLocationTour();
       if (!stops.length) {
-        toast.info("No map locations available for this booking.");
+        const isSignup =
+          sourceItem?.type === "driver_signup" || sourceItem?.type === "customer_signup";
+        toast.info(
+          isSignup
+            ? "No signup location available for this item."
+            : "No map locations available for this booking."
+        );
         return;
       }
 
@@ -288,8 +390,14 @@ const Page = () => {
           color: sourceItem?.color || markerMatch?.color || "blue",
           lat: Number(stop.lat),
           lng: Number(stop.lng),
-          title: sourceItem?.label || markerMatch?.title || "Booking",
-          subtitle: `${stop.kind ? `${stop.kind}: ` : ""}${stop.label || "Location"}`,
+          title:
+            sourceItem?.detail ||
+            sourceItem?.label ||
+            markerMatch?.title ||
+            "Booking",
+          subtitle:
+            sourceItem?.label ||
+            `${stop.kind ? `${stop.kind}: ` : ""}${stop.label || "Location"}`,
           phone: sourceItem?.phone || markerMatch?.phone || "",
           stops,
         });
@@ -400,14 +508,21 @@ const Page = () => {
               </Typography>
               <Chip
                 size="small"
-                label="● LIVE"
+                label={
+                  socketStatus === "connected"
+                    ? "● LIVE"
+                    : socketStatus === "missing_url"
+                      ? "○ SOCKET OFF"
+                      : "○ CONNECTING"
+                }
                 sx={{
-                  bgcolor: "success.alpha12",
-                  color: "success.dark",
+                  bgcolor:
+                    socketStatus === "connected" ? "success.alpha12" : "warning.alpha12",
+                  color: socketStatus === "connected" ? "success.dark" : "warning.dark",
                   fontWeight: 800,
                   fontSize: 11,
                   height: 24,
-                  animation: "pulse 2s infinite",
+                  animation: socketStatus === "connected" ? "pulse 2s infinite" : "none",
                   "@keyframes pulse": {
                     "0%, 100%": { opacity: 1 },
                     "50%": { opacity: 0.55 },
@@ -488,7 +603,7 @@ const Page = () => {
                 >
                   Map View
                 </Button>
-                <Button
+                {/* <Button
                   onClick={() => setViewMode("analytics")}
                   sx={{
                     px: 2,
@@ -503,7 +618,7 @@ const Page = () => {
                   }}
                 >
                   Analytics View
-                </Button>
+                </Button> */}
               </ButtonGroup>
             </Stack>
           </Stack>
@@ -521,6 +636,7 @@ const Page = () => {
                       center={mapCenter}
                       zoom={snapshot?.region?.zoom ?? 11}
                       markers={snapshot?.markers ?? []}
+                      selectedMarker={selectedMarker}
                       showTraffic={showTraffic}
                       userLocation={userLocation}
                       fitToMarkers={fitToMarkers}
