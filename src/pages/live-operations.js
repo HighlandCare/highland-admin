@@ -166,10 +166,9 @@ const Page = () => {
     if (!isLogin) return undefined;
     loadSnapshot();
 
-    // Fallback poll — slower when socket is connected
-    const interval = setInterval(loadSnapshot, socketStatus === "connected" ? 60000 : 15000);
+    const interval = setInterval(loadSnapshot, 4000);
     return () => clearInterval(interval);
-  }, [isLogin, loadSnapshot, socketStatus]);
+  }, [isLogin, loadSnapshot]);
 
   useEffect(() => {
     if (!isLogin || viewMode !== "map") return undefined;
