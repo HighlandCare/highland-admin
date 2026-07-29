@@ -28,6 +28,12 @@ The existing dashboard navigation behavior remains unchanged.
 - Use a width of `min(360px, 100vw)` so it fits small phones.
 - Close through the drawer backdrop, Escape key, or a visible close action.
 - Preserve the existing filters, feed interactions, and live-stat content.
+- On `xs` and `sm`, use the complete panel as the only vertical scroll container so feed content,
+  actions, and stat cards remain in normal flow and cannot overlap.
+- Keep the `Live Signups` heading and filter tabs sticky at the top of the mobile panel. Give the
+  sticky region an opaque `background.paper`, bottom border, and stacking order above scrolling
+  content so cards and text cannot show through it.
+- At `md` and wider, retain the existing independently scrolling feed and fixed stats layout.
 
 ## Map and overlays
 
@@ -66,6 +72,8 @@ presentational component.
 - At each width, verify no page-level horizontal overflow, usable map controls, KPI scrolling, and
   readable selected-marker details.
 - Below `lg`, verify opening, interacting with, and closing the live-signups drawer.
+- At 320x568, 375x667, and a short landscape viewport, verify the full panel scrolls vertically,
+  every stat card is reachable, and no content shows through the sticky heading or tabs.
 - Verify entering and leaving map fullscreen at phone, tablet, and desktop widths.
 
 ## Scope
