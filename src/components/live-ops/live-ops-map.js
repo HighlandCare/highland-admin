@@ -9,24 +9,16 @@ import {
   getMapsSetupHelp,
   GOOGLE_MAP_LIBRARIES,
   LIVE_OPS_MAP_STYLES,
-  MARKER_COLORS,
   sanitizeLiveOpsMarkers,
 } from "../../utils/googleMaps";
+import { buildGoogleMapsMarkerIcon } from "../../utils/liveOpsMarkerIcons";
+import { useSmoothLiveOpsMarkers } from "../../hooks/useSmoothLiveOpsMarkers";
 
 const LiveOpsLeafletMap = dynamic(() => import("./live-ops-leaflet-map"), {
   ssr: false,
 });
-function buildMarkerIcon(color) {
-  if (typeof window === "undefined" || !window.google?.maps) return undefined;
-
-  return {
-    path: window.google.maps.SymbolPath.CIRCLE,
-    fillColor: MARKER_COLORS[color] ?? MARKER_COLORS.green,
-    fillOpacity: 1,
-    strokeColor: "#ffffff",
-    strokeWeight: 2.5,
-    scale: 9,
-  };
+function buildMarkerIcon(marker) {
+  return buildGoogleMapsMarkerIcon(marker?.type, marker?.color);
 }
 
 function FallbackNotice({ details }) {
@@ -122,6 +114,7 @@ export default function LiveOpsMap({
   center,
   zoom,
   markers,
+  selectedMarker,
   showTraffic,
   userLocation,
   fitToMarkers,
@@ -134,7 +127,33 @@ export default function LiveOpsMap({
   const [authFailed, setAuthFailed] = useState(false);
   const [useFallback, setUseFallback] = useState(false);
   const apiKey = getGoogleMapsApiKey();
-  const safeMarkers = useMemo(() => sanitizeLiveOpsMarkers(markers), [markers]);
+  const mergedMarkers = useMemo(() => {
+    const base = sanitizeLiveOpsMarkers(markers);
+    const selectedLat = Number(selectedMarker?.lat);
+    const selectedLng = Number(selectedMarker?.lng);
+    if (
+      !selectedMarker?.id ||
+      !Number.isFinite(selectedLat) ||
+      !Number.isFinite(selectedLng)
+    ) {
+      return base;
+    }
+
+    const withoutDup = base.filter((marker) => marker.id !== selectedMarker.id);
+    return [
+      ...withoutDup,
+      {
+        ...selectedMarker,
+        lat: selectedLat,
+        lng: selectedLng,
+        type: selectedMarker.type || "driver_signup",
+        color: selectedMarker.color || "yellow",
+        title: selectedMarker.title || selectedMarker.label || "Selected",
+      },
+    ];
+  }, [markers, selectedMarker]);
+
+  const safeMarkers = useSmoothLiveOpsMarkers(mergedMarkers);
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: "highland-live-ops-map",
@@ -273,23 +292,17 @@ export default function LiveOpsMap({
           <Marker
             key={marker.id}
             position={{ lat: marker.lat, lng: marker.lng }}
-            icon={buildMarkerIcon(marker.color)}
+            icon={buildMarkerIcon(marker)}
             onClick={() => onMarkerSelect?.(marker)}
-            title={marker.title}
+            title={`${marker.title || ""}${marker.subtitle ? ` — ${marker.subtitle}` : ""}`}
+            zIndex={marker.type === "emergency" ? 500 : marker.type === "online_driver" ? 400 : 200}
           />
         ))}
 
         {userLocation?.lat != null && userLocation?.lng != null ? (
           <Marker
             position={{ lat: userLocation.lat, lng: userLocation.lng }}
-            icon={{
-              path: window.google.maps.SymbolPath.CIRCLE,
-              fillColor: "#a78bfa",
-              fillOpacity: 1,
-              strokeColor: "#ffffff",
-              strokeWeight: 3,
-              scale: 10,
-            }}
+            icon={buildGoogleMapsMarkerIcon("user_location")}
             title="Your location"
             zIndex={999}
           />
@@ -306,6 +319,7 @@ LiveOpsMap.propTypes = {
   }),
   zoom: PropTypes.number,
   markers: PropTypes.array,
+  selectedMarker: PropTypes.object,
   showTraffic: PropTypes.bool,
   userLocation: PropTypes.shape({
     lat: PropTypes.number,
