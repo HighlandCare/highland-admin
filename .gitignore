@@ -18,6 +18,7 @@ out
 .DS_Store
 .eslintcache
 .idea
+.worktrees
 .env
 .env.example    
 .env.local
