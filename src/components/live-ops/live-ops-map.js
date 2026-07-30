@@ -118,12 +118,15 @@ export default function LiveOpsMap({
   showTraffic,
   userLocation,
   fitToMarkers,
+  mapFitKey = 0,
   mapZoom,
+  onFitComplete,
   onMarkerSelect,
   onMapReady,
 }) {
   const mapRef = useRef(null);
-  const lastFitKeyRef = useRef("");
+  const lastFitKeyRef = useRef(null);
+  const lastCameraRef = useRef("");
   const [authFailed, setAuthFailed] = useState(false);
   const [useFallback, setUseFallback] = useState(false);
   const apiKey = getGoogleMapsApiKey();
@@ -183,37 +186,37 @@ export default function LiveOpsMap({
 
   const fitMapToMarkers = useCallback(() => {
     const map = mapRef.current;
-    if (!map || !window.google?.maps || !safeMarkers.length) return;
+    if (!map || !window.google?.maps || !safeMarkers.length) return false;
 
     const bounds = new window.google.maps.LatLngBounds();
     safeMarkers.forEach((marker) => {
       bounds.extend({ lat: marker.lat, lng: marker.lng });
     });
     map.fitBounds(bounds, 64);
+    return true;
   }, [safeMarkers]);
 
   useEffect(() => {
-    if (!isLoaded || !mapRef.current) return;
+    if (!isLoaded || !mapRef.current || !fitToMarkers || !safeMarkers.length) return;
+    if (lastFitKeyRef.current === mapFitKey) return;
+
+    lastFitKeyRef.current = mapFitKey;
+    if (fitMapToMarkers()) {
+      onFitComplete?.();
+    }
+  }, [fitMapToMarkers, fitToMarkers, isLoaded, mapFitKey, onFitComplete, safeMarkers.length]);
+
+  useEffect(() => {
+    if (!isLoaded || !mapRef.current || fitToMarkers || mapZoom == null) return;
 
     const map = mapRef.current;
-    const fitKey = `${fitToMarkers}-${safeMarkers.length}-${mapCenter.lat}-${mapCenter.lng}`;
-
-    if (fitToMarkers) {
-      if (lastFitKeyRef.current !== fitKey) {
-        lastFitKeyRef.current = fitKey;
-        if (safeMarkers.length) {
-          fitMapToMarkers();
-        } else {
-          map.panTo(mapCenter);
-          map.setZoom(zoom ?? 11);
-        }
-      }
-      return;
-    }
+    const cameraKey = `${mapCenter.lat},${mapCenter.lng},${mapZoom}`;
+    if (lastCameraRef.current === cameraKey) return;
+    lastCameraRef.current = cameraKey;
 
     map.panTo(mapCenter);
-    map.setZoom(mapZoom ?? zoom ?? 13);
-  }, [fitMapToMarkers, fitToMarkers, isLoaded, mapCenter, mapZoom, safeMarkers.length, zoom]);
+    map.setZoom(mapZoom);
+  }, [fitToMarkers, isLoaded, mapCenter, mapZoom]);
 
   useEffect(() => {
     if (loadError || authFailed) {
@@ -241,6 +244,8 @@ export default function LiveOpsMap({
           showTraffic={showTraffic}
           userLocation={userLocation}
           fitToMarkers={fitToMarkers}
+          mapFitKey={mapFitKey}
+          onFitComplete={onFitComplete}
           onMarkerSelect={onMarkerSelect}
         />
       </Box>
@@ -326,7 +331,9 @@ LiveOpsMap.propTypes = {
     lng: PropTypes.number,
   }),
   fitToMarkers: PropTypes.bool,
+  mapFitKey: PropTypes.number,
   mapZoom: PropTypes.number,
+  onFitComplete: PropTypes.func,
   onMarkerSelect: PropTypes.func,
   onMapReady: PropTypes.func,
 };

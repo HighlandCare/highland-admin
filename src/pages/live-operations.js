@@ -4,19 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Button,
-  ButtonGroup,
   Chip,
   Drawer,
-  IconButton,
   Stack,
-  Tooltip,
   Typography,
 } from "@mui/material";
-import BellIcon from "@heroicons/react/24/solid/BellIcon";
 import UsersIcon from "@heroicons/react/24/solid/UsersIcon";
-import MagnifyingGlassIcon from "@heroicons/react/24/solid/MagnifyingGlassIcon";
-import ArrowsPointingOutIcon from "@heroicons/react/24/solid/ArrowsPointingOutIcon";
-import ArrowsPointingInIcon from "@heroicons/react/24/solid/ArrowsPointingInIcon";
 import { useRouter } from "next/router";
 import { Layout as DashboardLayout } from "../layouts/dashboard/layout";
 import BaseLayout from "../layouts/BaseLayout";
@@ -35,6 +28,9 @@ import { OverviewRideStatus } from "../sections/overview/overview-ride-status";
 import { loadDashboardAnalytics } from "../utils/dashboardUtils";
 import { useLiveOpsUi } from "../contexts/live-ops-ui-context";
 import { parseCoordinateQuery } from "../utils/googleMaps";
+import {
+  resolveLiveOpsListPath,
+} from "../utils/liveOpsNavigation";
 import { filterMarkersNearLocation } from "../hooks/useSmoothLiveOpsMarkers";
 import { toast } from "react-toastify";
 
@@ -60,17 +56,16 @@ const SIDE_NAV_WIDTH = 280;
 const TOP_NAV_HEIGHT = 64;
 const STOP_TOUR_DELAY_MS = 2200;
 
-const DEFAULT_CATEGORIES = [
-  "rides",
-  "food",
-  "senior_care",
-  "transportation",
-  "contractors",
-  "babysitting",
-  "cleaning",
-  "pet_care",
-  "other",
+const MARKER_TYPE_FILTERS = [
+  { key: "customer_signup", label: "Customers" },
+  { key: "driver_signup", label: "Drivers" },
+  { key: "ride_request", label: "Pending rides" },
+  { key: "food_order", label: "Food orders" },
+  { key: "online_driver", label: "Online drivers" },
+  { key: "emergency", label: "Urgent" },
 ];
+
+const DEFAULT_MARKER_TYPES = MARKER_TYPE_FILTERS.map((item) => item.key);
 
 function resolveBookingStops(item, markers = []) {
   if (Array.isArray(item?.stops) && item.stops.length) {
@@ -106,15 +101,15 @@ const Page = () => {
   const [snapshot, setSnapshot] = useState(null);
   const [feedFilter, setFeedFilter] = useState("all");
   const [region, setRegion] = useState("all");
-  const [selectedCategories, setSelectedCategories] = useState(DEFAULT_CATEGORIES);
+  const [selectedMarkerTypes, setSelectedMarkerTypes] = useState(DEFAULT_MARKER_TYPES);
   const [onlineOnly, setOnlineOnly] = useState(false);
-  const [showTraffic, setShowTraffic] = useState(false);
   const [selectedMarker, setSelectedMarker] = useState(null);
   const [locationSearch, setLocationSearch] = useState("");
   const [mapViewCenter, setMapViewCenter] = useState(null);
   const [mapZoom, setMapZoom] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const [fitToMarkers, setFitToMarkers] = useState(true);
+  const [mapFitKey, setMapFitKey] = useState(0);
   const [locating, setLocating] = useState(false);
   const [analytics, setAnalytics] = useState(null);
   const [clock, setClock] = useState("");
@@ -137,15 +132,10 @@ const Page = () => {
 
   const loadSnapshot = useCallback(async () => {
     try {
-      const categoriesParam =
-        selectedCategories.length === DEFAULT_CATEGORIES.length
-          ? "all"
-          : selectedCategories.join(",");
-
       const response = await getLiveOpsSnapshot({
         region,
-        categories: categoriesParam,
-        onlineOnly,
+        categories: "all",
+        onlineOnly: false,
       });
 
       if (response?.status && response?.data) {
@@ -156,7 +146,7 @@ const Page = () => {
     } finally {
       setLoading(false);
     }
-  }, [region, selectedCategories, onlineOnly]);
+  }, [region]);
 
   useEffect(() => {
     const loginStatus =
@@ -268,11 +258,49 @@ const Page = () => {
 
   useEffect(() => () => clearLocationTour(), [clearLocationTour]);
 
-  const handleCategoryToggle = (key) => {
-    setSelectedCategories((prev) =>
-      prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]
-    );
+  const handleMarkerTypeToggle = (key) => {
+    setSelectedMarkerTypes((prev) => {
+      if (prev.includes(key)) {
+        // Keep at least one type selected so the map never looks "stuck empty" by accident.
+        if (prev.length === 1) return prev;
+        return prev.filter((item) => item !== key);
+      }
+      return [...prev, key];
+    });
   };
+
+  const filteredMarkers = useMemo(() => {
+    const markers = snapshot?.markers ?? [];
+    return markers.filter((marker) => {
+      if (onlineOnly) {
+        return marker.type === "online_driver" && marker.available !== false;
+      }
+      return selectedMarkerTypes.includes(marker.type);
+    });
+  }, [snapshot?.markers, selectedMarkerTypes, onlineOnly]);
+
+  const filteredLegend = useMemo(() => {
+    const counts = {
+      customer_signup: 0,
+      driver_signup: 0,
+      ride_request: 0,
+      food_order: 0,
+      online_driver: 0,
+      emergency: 0,
+    };
+    filteredMarkers.forEach((marker) => {
+      if (Object.prototype.hasOwnProperty.call(counts, marker.type)) {
+        counts[marker.type] += 1;
+      }
+    });
+    return counts;
+  }, [filteredMarkers]);
+
+  useEffect(() => {
+    if (!selectedMarker) return;
+    const stillVisible = filteredMarkers.some((marker) => marker.id === selectedMarker.id);
+    if (!stillVisible) setSelectedMarker(null);
+  }, [filteredMarkers, selectedMarker]);
 
   const regionCenter = useMemo(
     () => snapshot?.region?.center ?? { lat: 32.7767, lng: -96.797 },
@@ -338,15 +366,24 @@ const Page = () => {
     );
   }, [clearLocationTour]);
 
+  const requestFitToMarkers = useCallback(() => {
+    setFitToMarkers(true);
+    setMapFitKey((key) => key + 1);
+  }, []);
+
+  const handleMapFitComplete = useCallback(() => {
+    setFitToMarkers(false);
+  }, []);
+
   const handleLocateRegion = useCallback(() => {
     clearLocationTour();
     setMapViewCenter(null);
     setMapZoom(null);
     setUserLocation(null);
-    setFitToMarkers(true);
+    requestFitToMarkers();
     setSelectedMarker(null);
     setLocationSearch("");
-  }, [clearLocationTour]);
+  }, [clearLocationTour, requestFitToMarkers]);
 
   const handleRegionChange = useCallback(
     (nextRegion) => {
@@ -355,11 +392,11 @@ const Page = () => {
       setMapViewCenter(null);
       setMapZoom(null);
       setUserLocation(null);
-      setFitToMarkers(true);
+      requestFitToMarkers();
       setSelectedMarker(null);
       setLocationSearch("");
     },
-    [clearLocationTour]
+    [clearLocationTour, requestFitToMarkers]
   );
 
   const startLocationTour = useCallback(
@@ -401,6 +438,20 @@ const Page = () => {
             sourceItem?.label ||
             `${stop.kind ? `${stop.kind}: ` : ""}${stop.label || "Location"}`,
           phone: sourceItem?.phone || markerMatch?.phone || "",
+          authId: sourceItem?.authId || markerMatch?.authId,
+          userId: sourceItem?.userId || markerMatch?.userId,
+          customerId: sourceItem?.customerId || markerMatch?.customerId,
+          driverId: sourceItem?.driverId || markerMatch?.driverId,
+          chaperoneId: sourceItem?.chaperoneId || markerMatch?.chaperoneId,
+          rideId: sourceItem?.rideId || markerMatch?.rideId,
+          bookingId: sourceItem?.bookingId || markerMatch?.bookingId,
+          orderId: sourceItem?.orderId || markerMatch?.orderId,
+          disputeId: sourceItem?.disputeId || markerMatch?.disputeId,
+          emergencyId: sourceItem?.emergencyId || markerMatch?.emergencyId,
+          entityId: sourceItem?.entityId || markerMatch?.entityId,
+          status: sourceItem?.status || markerMatch?.status,
+          category: sourceItem?.category || markerMatch?.category,
+          href: sourceItem?.href || markerMatch?.href,
           stops,
         });
 
@@ -443,6 +494,17 @@ const Page = () => {
       }
     },
     [clearLocationTour, snapshot?.markers, startLocationTour]
+  );
+
+  const handleViewAllSignups = useCallback(
+    (filterKey) => {
+      if (isMapFullscreen) {
+        setMapFullscreen(false);
+      }
+      setIsSignupsOpen(false);
+      router.push(resolveLiveOpsListPath(filterKey));
+    },
+    [isMapFullscreen, router, setMapFullscreen]
   );
 
   const toggleFullscreen = () => {
@@ -558,38 +620,6 @@ const Page = () => {
               >
                 {clock}
               </Typography>
-              <Box
-                sx={{
-                  display: { xs: "none", md: "flex" },
-                  alignItems: "center",
-                  gap: 1,
-                  px: 1.5,
-                  py: 0.75,
-                  borderRadius: "10px",
-                  bgcolor: "neutral.50",
-                  border: "1px solid",
-                  borderColor: "divider",
-                }}
-              >
-                <MagnifyingGlassIcon width={16} style={{ color: "currentColor", opacity: 0.55 }} />
-                <Typography sx={{ color: "text.secondary", fontSize: 12 }}>Search</Typography>
-              </Box>
-              <Box
-                sx={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: "10px",
-                  bgcolor: "neutral.50",
-                  display: { xs: "none", md: "flex" },
-                  alignItems: "center",
-                  justifyContent: "center",
-                  border: "1px solid",
-                  borderColor: "divider",
-                  color: "text.secondary",
-                }}
-              >
-                <BellIcon width={18} />
-              </Box>
               <Button
                 onClick={() => setIsSignupsOpen(true)}
                 aria-label="Open live signups"
@@ -614,57 +644,6 @@ const Page = () => {
                   Live Signups
                 </Box>
               </Button>
-              <Tooltip title="Full screen map">
-                <IconButton
-                  onClick={toggleFullscreen}
-                  sx={{
-                    border: "1px solid",
-                    borderColor: "divider",
-                    borderRadius: "10px",
-                    color: "primary.main",
-                  }}
-                >
-                  <ArrowsPointingOutIcon width={18} />
-                </IconButton>
-              </Tooltip>
-              <ButtonGroup
-                size="small"
-                variant="outlined"
-                sx={{ display: { xs: "none", md: "inline-flex" } }}
-              >
-                <Button
-                  onClick={() => setViewMode("map")}
-                  sx={{
-                    px: 2,
-                    color: viewMode === "map" ? "primary.contrastText" : "text.secondary",
-                    bgcolor: viewMode === "map" ? "primary.main" : "transparent",
-                    borderColor: "divider",
-                    textTransform: "none",
-                    fontWeight: 600,
-                    "&:hover": {
-                      bgcolor: viewMode === "map" ? "primary.dark" : "action.hover",
-                    },
-                  }}
-                >
-                  Map View
-                </Button>
-                {/* <Button
-                  onClick={() => setViewMode("analytics")}
-                  sx={{
-                    px: 2,
-                    color: viewMode === "analytics" ? "primary.contrastText" : "text.secondary",
-                    bgcolor: viewMode === "analytics" ? "primary.main" : "transparent",
-                    borderColor: "divider",
-                    textTransform: "none",
-                    fontWeight: 600,
-                    "&:hover": {
-                      bgcolor: viewMode === "analytics" ? "primary.dark" : "action.hover",
-                    },
-                  }}
-                >
-                  Analytics View
-                </Button> */}
-              </ButtonGroup>
             </Stack>
           </Stack>
         ) : null}
@@ -680,31 +659,30 @@ const Page = () => {
                     <LiveOpsMap
                       center={mapCenter}
                       zoom={snapshot?.region?.zoom ?? 11}
-                      markers={snapshot?.markers ?? []}
+                      markers={filteredMarkers}
                       selectedMarker={selectedMarker}
-                      showTraffic={showTraffic}
                       userLocation={userLocation}
                       fitToMarkers={fitToMarkers}
+                      mapFitKey={mapFitKey}
                       mapZoom={mapZoom}
+                      onFitComplete={handleMapFitComplete}
                       onMarkerSelect={handleMarkerSelect}
                     />
                     <LiveOpsMapOverlays
-                      legend={snapshot?.legend}
+                      legend={filteredLegend}
                       locationSearch={locationSearch}
                       onLocationSearchChange={setLocationSearch}
                       onPlaceSelect={handlePlaceSelect}
                       onCurrentLocation={handleCurrentLocation}
                       locating={locating}
                       region={region}
-                      regionOptions={snapshot?.region?.options ?? [{ key: "dfw", label: "DFW" }]}
+                      regionOptions={snapshot?.region?.options ?? [{ key: "all", label: "All regions" }, { key: "dfw", label: "DFW" }]}
                       onRegionChange={handleRegionChange}
-                      categories={snapshot?.categories ?? []}
-                      selectedCategories={selectedCategories}
-                      onCategoryToggle={handleCategoryToggle}
+                      markerTypes={MARKER_TYPE_FILTERS}
+                      selectedMarkerTypes={selectedMarkerTypes}
+                      onMarkerTypeToggle={handleMarkerTypeToggle}
                       onlineOnly={onlineOnly}
                       onOnlineOnlyChange={setOnlineOnly}
-                      showTraffic={showTraffic}
-                      onShowTrafficChange={setShowTraffic}
                       selectedMarker={selectedMarker}
                       onCloseMarker={() => {
                         clearLocationTour();
@@ -716,27 +694,6 @@ const Page = () => {
                       tourStopIndex={tourStopIndex}
                       tourStopTotal={tourStopTotal}
                     />
-                    {isMapFullscreen ? (
-                      <Tooltip title="Exit full screen">
-                        <IconButton
-                          onClick={toggleFullscreen}
-                          sx={{
-                            position: "absolute",
-                            top: 16,
-                            right: 16,
-                            zIndex: 1200,
-                            bgcolor: "background.paper",
-                            border: "1px solid",
-                            borderColor: "divider",
-                            color: "primary.main",
-                            boxShadow: 2,
-                            "&:hover": { bgcolor: "neutral.50" },
-                          }}
-                        >
-                          <ArrowsPointingInIcon width={20} />
-                        </IconButton>
-                      </Tooltip>
-                    ) : null}
                   </>
                 )}
               </Box>
@@ -756,6 +713,7 @@ const Page = () => {
                     filter={feedFilter}
                     onFilterChange={setFeedFilter}
                     onFeedItemClick={handleFeedItemClick}
+                    onViewAllSignups={handleViewAllSignups}
                   />
                 </Box>
               ) : null}
@@ -785,6 +743,7 @@ const Page = () => {
                   setIsSignupsOpen(false);
                   handleFeedItemClick(item);
                 }}
+                onViewAllSignups={handleViewAllSignups}
               />
             </Drawer>
 

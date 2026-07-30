@@ -81,6 +81,7 @@ export default function LiveOpsRightPanel({
   filter,
   onFilterChange,
   onFeedItemClick,
+  onViewAllSignups,
   mobile,
   onClose,
 }) {
@@ -243,6 +244,7 @@ export default function LiveOpsRightPanel({
 
           <Button
             fullWidth
+            onClick={() => onViewAllSignups?.(filter)}
             sx={{
               mt: 2,
               color: "primary.main",
@@ -303,6 +305,7 @@ LiveOpsRightPanel.propTypes = {
   filter: PropTypes.string,
   onFilterChange: PropTypes.func,
   onFeedItemClick: PropTypes.func,
+  onViewAllSignups: PropTypes.func,
   mobile: PropTypes.bool,
   onClose: PropTypes.func,
 };

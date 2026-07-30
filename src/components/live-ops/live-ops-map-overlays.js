@@ -50,13 +50,11 @@ export default function LiveOpsMapOverlays({
   region,
   regionOptions,
   onRegionChange,
-  categories,
-  selectedCategories,
-  onCategoryToggle,
+  markerTypes,
+  selectedMarkerTypes,
+  onMarkerTypeToggle,
   onlineOnly,
   onOnlineOnlyChange,
-  showTraffic,
-  onShowTrafficChange,
   selectedMarker,
   onCloseMarker,
   onLocateRegion,
@@ -138,8 +136,8 @@ export default function LiveOpsMapOverlays({
           onClick={(e) => setFilterAnchor(e.currentTarget)}
           sx={{
             ...glass,
-            width: 40,
-            height: 40,
+            width: 48,
+            height: 48,
             color: "primary.main",
             flexShrink: 0,
             "&:hover": { bgcolor: "primary.alpha8" },
@@ -147,24 +145,6 @@ export default function LiveOpsMapOverlays({
         >
           <FunnelIcon width={20} />
         </IconButton>
-        {!isMapFullscreen ? (
-          <Tooltip title="Full screen map">
-            <IconButton
-              onClick={onToggleFullscreen}
-              sx={{
-                ...glass,
-                display: { xs: "none", sm: "inline-flex" },
-                width: 40,
-                height: 40,
-                color: "primary.main",
-                flexShrink: 0,
-                "&:hover": { bgcolor: "primary.alpha8" },
-              }}
-            >
-              <ArrowsPointingOutIcon width={20} />
-            </IconButton>
-          </Tooltip>
-        ) : null}
       </Stack>
 
       {tourStopIndex && tourStopTotal ? (
@@ -223,21 +203,26 @@ export default function LiveOpsMapOverlays({
           ))}
         </Select>
 
-        <Typography sx={{ color: "text.secondary", fontSize: 11, mb: 0.5 }}>Categories</Typography>
-        <FormGroup sx={{ mb: 1.5, maxHeight: 200, overflow: "auto" }}>
-          {(categories ?? []).map((cat) => (
+        <Typography sx={{ color: "text.secondary", fontSize: 11, mb: 0.5 }}>Map layers</Typography>
+        <FormGroup sx={{ mb: 1.5, maxHeight: 220, overflow: "auto" }}>
+          {(markerTypes ?? []).map((type) => (
             <FormControlLabel
-              key={cat.key}
+              key={type.key}
+              disabled={onlineOnly}
               control={
                 <Checkbox
                   size="small"
-                  checked={selectedCategories.includes(cat.key)}
-                  onChange={() => onCategoryToggle?.(cat.key)}
+                  checked={
+                    onlineOnly
+                      ? type.key === "online_driver"
+                      : (selectedMarkerTypes ?? []).includes(type.key)
+                  }
+                  onChange={() => onMarkerTypeToggle?.(type.key)}
                   sx={{ color: "neutral.400", "&.Mui-checked": { color: "primary.main" } }}
                 />
               }
               label={
-                <Typography sx={{ color: "text.primary", fontSize: 13 }}>{cat.label}</Typography>
+                <Typography sx={{ color: "text.primary", fontSize: 13 }}>{type.label}</Typography>
               }
             />
           ))}
@@ -255,18 +240,6 @@ export default function LiveOpsMapOverlays({
             <Typography sx={{ color: "text.primary", fontSize: 13 }}>
               Available drivers only
             </Typography>
-          }
-        />
-        <FormControlLabel
-          control={
-            <Switch
-              size="small"
-              checked={showTraffic}
-              onChange={(e) => onShowTrafficChange?.(e.target.checked)}
-            />
-          }
-          label={
-            <Typography sx={{ color: "text.primary", fontSize: 13 }}>Show traffic layer</Typography>
           }
         />
       </Popover>
@@ -308,18 +281,6 @@ export default function LiveOpsMapOverlays({
             </Typography>
           ) : null}
           <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-            <Button
-              size="small"
-              variant="contained"
-              sx={{
-                bgcolor: markerBorder,
-                color: "#fff",
-                fontWeight: 700,
-                "&:hover": { bgcolor: markerBorder, opacity: 0.9 },
-              }}
-            >
-              View Details
-            </Button>
             <Button size="small" sx={{ color: "text.secondary" }} onClick={onCloseMarker}>
               Close
             </Button>
@@ -425,13 +386,11 @@ LiveOpsMapOverlays.propTypes = {
   region: PropTypes.string,
   regionOptions: PropTypes.array,
   onRegionChange: PropTypes.func,
-  categories: PropTypes.array,
-  selectedCategories: PropTypes.array,
-  onCategoryToggle: PropTypes.func,
+  markerTypes: PropTypes.array,
+  selectedMarkerTypes: PropTypes.array,
+  onMarkerTypeToggle: PropTypes.func,
   onlineOnly: PropTypes.bool,
   onOnlineOnlyChange: PropTypes.func,
-  showTraffic: PropTypes.bool,
-  onShowTrafficChange: PropTypes.func,
   selectedMarker: PropTypes.object,
   onCloseMarker: PropTypes.func,
   onLocateRegion: PropTypes.func,

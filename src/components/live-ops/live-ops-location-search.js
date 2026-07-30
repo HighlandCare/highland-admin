@@ -14,6 +14,7 @@ import {
 } from "@mui/material";
 import MagnifyingGlassIcon from "@heroicons/react/24/solid/MagnifyingGlassIcon";
 import MapPinIcon from "@heroicons/react/24/solid/MapPinIcon";
+import { toast } from "react-toastify";
 import { parseCoordinateQuery } from "../../utils/googleMaps";
 
 const glass = {
@@ -30,6 +31,18 @@ async function geocodeLatLng(lat, lng) {
   return response.json();
 }
 
+function normalizePredictions(data) {
+  if (!Array.isArray(data?.predictions)) return [];
+  return data.predictions
+    .map((item) => ({
+      description: item.description || item.display_name || "",
+      placeId: item.place_id || item.placeId || "",
+      lat: Number.isFinite(Number(item.lat)) ? Number(item.lat) : undefined,
+      lng: Number.isFinite(Number(item.lng)) ? Number(item.lng) : undefined,
+    }))
+    .filter((item) => item.description);
+}
+
 export default function LiveOpsLocationSearch({
   value,
   onChange,
@@ -41,6 +54,7 @@ export default function LiveOpsLocationSearch({
   const [searching, setSearching] = useState(false);
   const [openSuggestions, setOpenSuggestions] = useState(false);
   const debounceRef = useRef(null);
+  const requestIdRef = useRef(0);
 
   const fetchPredictions = useCallback((input) => {
     const trimmed = input.trim();
@@ -49,23 +63,31 @@ export default function LiveOpsLocationSearch({
       return;
     }
 
+    const requestId = ++requestIdRef.current;
     setSearching(true);
+
     fetch(`/api/maps/autocomplete?input=${encodeURIComponent(trimmed)}`)
-      .then((response) => response.json())
-      .then((data) => {
-        if (data.status === "OK" && Array.isArray(data.predictions)) {
-          setPredictions(
-            data.predictions.map((item) => ({
-              description: item.description,
-              placeId: item.place_id,
-            }))
-          );
-        } else {
-          setPredictions([]);
+      .then(async (response) => {
+        const data = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(data?.error_message || "Search failed");
         }
+        return data;
       })
-      .catch(() => setPredictions([]))
-      .finally(() => setSearching(false));
+      .then((data) => {
+        if (requestId !== requestIdRef.current) return;
+        setPredictions(normalizePredictions(data));
+      })
+      .catch((error) => {
+        if (requestId !== requestIdRef.current) return;
+        setPredictions([]);
+        toast.error(error.message || "Unable to search locations.");
+      })
+      .finally(() => {
+        if (requestId === requestIdRef.current) {
+          setSearching(false);
+        }
+      });
   }, []);
 
   useEffect(() => {
@@ -84,8 +106,12 @@ export default function LiveOpsLocationSearch({
   };
 
   const resolveSelection = async ({ placeId, address, lat, lng }) => {
-    if (lat != null && lng != null) {
-      onPlaceSelect?.({ lat, lng, address: address || value });
+    if (lat != null && lng != null && Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))) {
+      onPlaceSelect?.({
+        lat: Number(lat),
+        lng: Number(lng),
+        address: address || value,
+      });
       setOpenSuggestions(false);
       setPredictions([]);
       return;
@@ -95,34 +121,55 @@ export default function LiveOpsLocationSearch({
       ? `/api/maps/geocode?place_id=${encodeURIComponent(placeId)}`
       : `/api/maps/geocode?address=${encodeURIComponent(address)}`;
 
-    const payload = await fetch(query).then((response) => response.json()).catch(() => null);
+    try {
+      const payload = await fetch(query).then(async (response) => {
+        const data = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(data?.error_message || "Unable to resolve location.");
+        }
+        return data;
+      });
 
-    const result = payload?.results?.[0];
-    const location = result?.geometry?.location;
-    if (!location) return;
+      const result = payload?.results?.[0];
+      const location = result?.geometry?.location;
+      if (!location) {
+        toast.info("No matching location found.");
+        return;
+      }
 
-    onPlaceSelect?.({
-      lat: location.lat,
-      lng: location.lng,
-      address: result.formatted_address || address,
-    });
-    setOpenSuggestions(false);
-    setPredictions([]);
+      onPlaceSelect?.({
+        lat: location.lat,
+        lng: location.lng,
+        address: result.formatted_address || address,
+      });
+      setOpenSuggestions(false);
+      setPredictions([]);
+    } catch (error) {
+      toast.error(error.message || "Unable to resolve location.");
+    }
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     const coords = parseCoordinateQuery(value);
     if (coords) {
-      const payload = await geocodeLatLng(coords.lat, coords.lng).catch(() => null);
-      const result = payload?.results?.[0];
-      onPlaceSelect?.({
-        lat: coords.lat,
-        lng: coords.lng,
-        address: result?.formatted_address || value,
-      });
-      setOpenSuggestions(false);
-      setPredictions([]);
+      try {
+        const payload = await geocodeLatLng(coords.lat, coords.lng);
+        const result = payload?.results?.[0];
+        onPlaceSelect?.({
+          lat: coords.lat,
+          lng: coords.lng,
+          address: result?.formatted_address || value,
+        });
+        setOpenSuggestions(false);
+        setPredictions([]);
+      } catch (error) {
+        onPlaceSelect?.({
+          lat: coords.lat,
+          lng: coords.lng,
+          address: value,
+        });
+      }
       return;
     }
 
@@ -133,11 +180,20 @@ export default function LiveOpsLocationSearch({
 
   const handleSelectPrediction = (prediction) => {
     onChange?.(prediction.description);
-    resolveSelection({ placeId: prediction.placeId, address: prediction.description });
+    resolveSelection({
+      placeId: prediction.placeId,
+      address: prediction.description,
+      lat: prediction.lat,
+      lng: prediction.lng,
+    });
   };
 
   return (
-    <Box component="form" onSubmit={handleSubmit} sx={{ position: "relative", flex: 1 }}>
+    <Box
+      component="form"
+      onSubmit={handleSubmit}
+      sx={{ position: "relative", flex: 1, minWidth: 0, zIndex: 1100 }}
+    >
       <TextField
         fullWidth
         size="small"
@@ -145,6 +201,10 @@ export default function LiveOpsLocationSearch({
         value={value}
         onChange={handleInputChange}
         onFocus={() => setOpenSuggestions(true)}
+        onBlur={() => {
+          // Delay so suggestion clicks still register.
+          setTimeout(() => setOpenSuggestions(false), 150);
+        }}
         autoComplete="off"
         InputProps={{
           startAdornment: (
@@ -173,7 +233,6 @@ export default function LiveOpsLocationSearch({
           sx: {
             ...glass,
             height: 48,
-            
             color: "text.primary",
             fontSize: 14,
             "& fieldset": { border: "none" },
@@ -201,7 +260,7 @@ export default function LiveOpsLocationSearch({
             top: "calc(100% + 8px)",
             left: 0,
             right: 0,
-            zIndex: 1100,
+            zIndex: 1200,
             ...glass,
             maxHeight: 240,
             overflow: "auto",
@@ -210,7 +269,7 @@ export default function LiveOpsLocationSearch({
           <List dense disablePadding>
             {predictions.map((item) => (
               <ListItemButton
-                key={item.placeId}
+                key={item.placeId || item.description}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => handleSelectPrediction(item)}
               >

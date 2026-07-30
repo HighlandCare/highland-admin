@@ -157,6 +157,19 @@ export function markersFromFeed(feed = []) {
       phone: item.phone || "",
       category: item.category,
       timestamp: item.timestamp,
+      authId: item.authId,
+      userId: item.userId,
+      customerId: item.customerId,
+      driverId: item.driverId,
+      chaperoneId: item.chaperoneId,
+      rideId: item.rideId,
+      bookingId: item.bookingId,
+      orderId: item.orderId,
+      disputeId: item.disputeId,
+      emergencyId: item.emergencyId,
+      entityId: item.entityId,
+      status: item.status,
+      href: item.href || item.path || item.detailUrl,
       _fromFeed: true,
     });
   }
@@ -192,12 +205,16 @@ export function mergeLiveOpsSnapshot(prev, incoming) {
     if (!byId.has(m.id)) byId.set(m.id, m);
   });
 
-  // Keep / prefer live socket markers (online cars, etc.)
+  // Prefer live socket coords for markers still present in the HTTP snapshot.
+  // Do not resurrect markers the API no longer returns (region/category filters).
   (prev.markers || []).forEach((m) => {
     if (!m?.id) return;
     const existing = byId.get(m.id);
     if (!existing) {
-      byId.set(m.id, m);
+      // Keep briefly-seen live drivers until the next poll includes them.
+      if (m._fromSocket && m.type === "online_driver") {
+        byId.set(m.id, m);
+      }
       return;
     }
     if (m._fromSocket || m.type === "online_driver") {

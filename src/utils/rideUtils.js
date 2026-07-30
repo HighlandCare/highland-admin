@@ -108,12 +108,27 @@ export const getRideFromResponse = (response) => {
     return null;
   }
 
-  if (response.rideId) {
+  if (response.rideId || response._id) {
     return response;
   }
 
-  if (response.data?.rideId) {
+  if (response.data?.rideId || response.data?._id) {
     return response.data;
+  }
+
+  if (response.data?.ride) {
+    return response.data.ride;
+  }
+
+  if (response.ride) {
+    return response.ride;
+  }
+
+  if (response.data && typeof response.data === "object" && !Array.isArray(response.data)) {
+    const nested = response.data;
+    if (nested.customer || nested.driver || nested.from || nested.destination || nested.status) {
+      return nested;
+    }
   }
 
   return null;
@@ -172,7 +187,13 @@ export const getStoredRideDetail = (rideId) => {
   try {
     const stored = JSON.parse(sessionStorage.getItem("selectedRide"));
 
-    if (stored?.rideId === rideId) {
+    if (
+      stored &&
+      (String(stored.rideId) === String(rideId) ||
+        String(stored._id) === String(rideId) ||
+        String(stored.bookingId) === String(rideId) ||
+        String(stored.orderId) === String(rideId))
+    ) {
       return stored;
     }
   } catch (error) {
@@ -180,4 +201,49 @@ export const getStoredRideDetail = (rideId) => {
   }
 
   return null;
+};
+
+export const storeOrderDetailContext = (payload) => {
+  if (typeof window !== "undefined" && payload) {
+    sessionStorage.setItem("selectedOrderContext", JSON.stringify(payload));
+  }
+};
+
+export const getStoredOrderDetailContext = (id) => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const stored = JSON.parse(sessionStorage.getItem("selectedOrderContext"));
+    if (!stored) return null;
+
+    const candidates = [
+      stored.id,
+      stored.rideId,
+      stored.bookingId,
+      stored.orderId,
+      stored._id,
+      stored.entityId,
+      ...(Array.isArray(stored.candidateIds) ? stored.candidateIds : []),
+    ]
+      .filter(Boolean)
+      .map(String);
+
+    if (!id || candidates.includes(String(id))) {
+      return stored;
+    }
+  } catch (error) {
+    return null;
+  }
+
+  return null;
+};
+
+export const orderMatchesId = (order, id) => {
+  if (!order || id == null) return false;
+  const target = String(id);
+  return [order.rideId, order._id, order.bookingId, order.orderId, order.id]
+    .filter(Boolean)
+    .some((value) => String(value) === target);
 };

@@ -17,12 +17,16 @@ export default function LiveOpsLeafletMap({
   showTraffic,
   userLocation,
   fitToMarkers,
+  mapFitKey = 0,
+  onFitComplete,
   onMarkerSelect,
 }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const tileLayerRef = useRef(null);
   const markerLayerRef = useRef(null);
+  const lastFitKeyRef = useRef(null);
+  const lastCameraRef = useRef("");
   const safeMarkers = useMemo(() => sanitizeLiveOpsMarkers(markers), [markers]);
   const centerLat = center?.lat ?? DEFAULT_MAP_CENTER.lat;
   const centerLng = center?.lng ?? DEFAULT_MAP_CENTER.lng;
@@ -87,33 +91,40 @@ export default function LiveOpsLeafletMap({
     }
   }, [onMarkerSelect, safeMarkers, userLocation]);
 
+  // Fit once per intentional request — not on every live marker update.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || centerLat == null || centerLng == null) return;
+    if (!map || !fitToMarkers || !safeMarkers.length) return;
+    if (lastFitKeyRef.current === mapFitKey) return;
 
-    if (fitToMarkers && safeMarkers.length) {
-      const points = safeMarkers.map((marker) => [marker.lat, marker.lng]);
-      if (userLocation?.lat != null && userLocation?.lng != null) {
-        points.push([userLocation.lat, userLocation.lng]);
-      }
-      map.fitBounds(L.latLngBounds(points), {
-        padding: [48, 48],
-        maxZoom: zoom ?? 12,
-        animate: true,
-      });
+    lastFitKeyRef.current = mapFitKey;
+    const points = safeMarkers.map((marker) => [marker.lat, marker.lng]);
+    if (userLocation?.lat != null && userLocation?.lng != null) {
+      points.push([userLocation.lat, userLocation.lng]);
+    }
+
+    map.fitBounds(L.latLngBounds(points), {
+      padding: [48, 48],
+      maxZoom: zoom ?? 12,
+      animate: true,
+    });
+    onFitComplete?.();
+  }, [fitToMarkers, mapFitKey, onFitComplete, safeMarkers, userLocation, zoom]);
+
+  // Pan/zoom only for explicit search / current-location / tour (mapZoom set).
+  // After a fit, leave the viewport alone so live updates don't re-zoom.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || fitToMarkers || mapZoom == null || centerLat == null || centerLng == null) {
       return;
     }
 
-    map.setView([centerLat, centerLng], mapZoom ?? zoom ?? 11, { animate: true });
-  }, [
-    centerLat,
-    centerLng,
-    fitToMarkers,
-    mapZoom,
-    safeMarkers,
-    userLocation,
-    zoom,
-  ]);
+    const cameraKey = `${centerLat},${centerLng},${mapZoom}`;
+    if (lastCameraRef.current === cameraKey) return;
+    lastCameraRef.current = cameraKey;
+
+    map.setView([centerLat, centerLng], mapZoom, { animate: true });
+  }, [centerLat, centerLng, fitToMarkers, mapZoom]);
 
   return (
     <div
@@ -131,5 +142,7 @@ LiveOpsLeafletMap.propTypes = {
   showTraffic: PropTypes.bool,
   userLocation: PropTypes.object,
   fitToMarkers: PropTypes.bool,
+  mapFitKey: PropTypes.number,
+  onFitComplete: PropTypes.func,
   onMarkerSelect: PropTypes.func,
 };

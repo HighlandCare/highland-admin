@@ -22,6 +22,7 @@ module.exports = {
       "/driver-earnings/index": { page: "/driver-earnings" },
       "/ride-history/index": { page: "/ride-history" },
       "/ride-history/detail/index": { page: "/ride-history/detail" },
+      "/orders/detail/index": { page: "/orders/detail" },
       "/faq/index": { page: "/faq" },
       "/feedback/index": { page: "/feedback" },
       "/policy/index": { page: "/policy" },
