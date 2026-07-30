@@ -89,7 +89,7 @@ export default function LiveOpsMapOverlays({
           ...glass,
           px: 2,
           py: 1,
-          display: "flex",
+          display: { xs: "none", md: "flex" },
           alignItems: "center",
           gap: 1,
         }}
@@ -119,11 +119,12 @@ export default function LiveOpsMapOverlays({
         spacing={1}
         sx={{
           position: "absolute",
-          top: 16,
-          left: "50%",
-          transform: "translateX(-50%)",
+          top: { xs: 8, sm: 16 },
+          left: { xs: 8, sm: "50%" },
+          right: { xs: 8, sm: "auto" },
+          transform: { xs: "none", sm: "translateX(-50%)" },
           zIndex: 1000,
-          width: { xs: "calc(100% - 32px)", md: 420 },
+          width: { xs: "auto", sm: "calc(100% - 32px)", md: 420 },
         }}
       >
         <LiveOpsLocationSearch
@@ -152,6 +153,7 @@ export default function LiveOpsMapOverlays({
               onClick={onToggleFullscreen}
               sx={{
                 ...glass,
+                display: { xs: "none", sm: "inline-flex" },
                 width: 40,
                 height: 40,
                 color: "primary.main",
@@ -169,7 +171,7 @@ export default function LiveOpsMapOverlays({
         <Box
           sx={{
             position: "absolute",
-            top: 72,
+            top: { xs: 56, sm: 72 },
             left: "50%",
             transform: "translateX(-50%)",
             zIndex: 1000,
@@ -273,15 +275,16 @@ export default function LiveOpsMapOverlays({
         <Box
           sx={{
             position: "absolute",
-            top: 72,
-            left: 16,
+            top: { xs: 60, sm: 72 },
+            left: { xs: 8, sm: 16 },
+            right: { xs: 8, sm: "auto" },
             zIndex: 1000,
             ...glass,
             borderColor: markerBorder,
             borderWidth: 2,
             p: 2,
-            minWidth: 260,
-            maxWidth: 320,
+            minWidth: { xs: 0, sm: 260 },
+            maxWidth: { xs: "none", sm: 320 },
           }}
         >
           <Typography sx={{ color: markerBorder, fontSize: 12, fontWeight: 700, mb: 0.5 }}>
@@ -327,21 +330,29 @@ export default function LiveOpsMapOverlays({
       <Box
         sx={{
           position: "absolute",
-          bottom: 20,
-          left: "50%",
-          transform: "translateX(-50%)",
+          bottom: { xs: 12, md: 20 },
+          left: { xs: 8, md: "50%" },
+          right: { xs: 8, md: "auto" },
+          transform: { xs: "none", md: "translateX(-50%)" },
           zIndex: 1000,
           ...glass,
-          px: 2.5,
-          py: 1.25,
+          px: { xs: 1.5, md: 2.5 },
+          py: { xs: 1, md: 1.25 },
           display: "flex",
-          flexWrap: "wrap",
-          gap: 2,
-          justifyContent: "center",
+          flexWrap: { xs: "nowrap", md: "wrap" },
+          overflowX: { xs: "auto", md: "visible" },
+          gap: { xs: 1.5, md: 2 },
+          justifyContent: { xs: "flex-start", md: "center" },
         }}
       >
         {LEGEND_ITEMS.map((item) => (
-          <Stack key={item.key} direction="row" spacing={0.75} alignItems="center">
+          <Stack
+            key={item.key}
+            direction="row"
+            spacing={0.75}
+            alignItems="center"
+            sx={{ flexShrink: 0 }}
+          >
             <Box
               aria-hidden
               sx={{
@@ -364,8 +375,8 @@ export default function LiveOpsMapOverlays({
         spacing={1}
         sx={{
           position: "absolute",
-          bottom: 88,
-          right: 16,
+          bottom: { xs: 72, md: 88 },
+          right: { xs: 8, md: 16 },
           zIndex: 1000,
         }}
       >

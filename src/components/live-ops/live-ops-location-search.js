@@ -172,9 +172,24 @@ export default function LiveOpsLocationSearch({
           ),
           sx: {
             ...glass,
+            height: 48,
+            
             color: "text.primary",
             fontSize: 14,
             "& fieldset": { border: "none" },
+            "& .MuiInputBase-input": {
+              height: "auto",
+              py: 0,
+              lineHeight: "20px",
+            },
+            "& .MuiInputAdornment-root": {
+              height: "100%",
+              alignItems: "center",
+              mt: "0 !important",
+            },
+            "& .MuiInputAdornment-root svg": {
+              display: "block",
+            },
           },
         }}
       />

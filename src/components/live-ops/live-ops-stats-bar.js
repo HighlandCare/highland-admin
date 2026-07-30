@@ -5,9 +5,9 @@ function KpiCard({ label, value, accent, sublabel }) {
   return (
     <Box
       sx={{
-        flex: "1 1 180px",
-        minWidth: 160,
-        p: 2,
+        flex: { xs: "0 0 140px", sm: "0 0 160px", lg: "1 1 180px" },
+        minWidth: { xs: 140, sm: 160 },
+        p: { xs: 1.5, md: 2 },
         borderRadius: "14px",
         bgcolor: "background.paper",
         border: "1px solid",
@@ -26,7 +26,15 @@ function KpiCard({ label, value, accent, sublabel }) {
       >
         {label}
       </Typography>
-      <Typography sx={{ color: accent, fontSize: 24, fontWeight: 800, mt: 0.75, lineHeight: 1 }}>
+      <Typography
+        sx={{
+          color: accent,
+          fontSize: { xs: 20, sm: 24 },
+          fontWeight: 800,
+          mt: 0.75,
+          lineHeight: 1,
+        }}
+      >
         {value}
       </Typography>
       {sublabel ? (
@@ -49,12 +57,14 @@ export default function LiveOpsStatsBar({ stats }) {
   return (
     <Box
       sx={{
-        px: 2,
-        py: 1.5,
+        px: { xs: 1.5, md: 2 },
+        py: { xs: 1, md: 1.5 },
         bgcolor: "background.paper",
         borderTop: "1px solid",
         borderColor: "divider",
         overflowX: "auto",
+        WebkitOverflowScrolling: "touch",
+        flexShrink: 0,
       }}
     >
       <Stack direction="row" spacing={1.5} sx={{ minWidth: "max-content" }}>

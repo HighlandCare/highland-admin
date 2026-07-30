@@ -6,12 +6,14 @@ import {
   Button,
   ButtonGroup,
   Chip,
+  Drawer,
   IconButton,
   Stack,
   Tooltip,
   Typography,
 } from "@mui/material";
 import BellIcon from "@heroicons/react/24/solid/BellIcon";
+import UsersIcon from "@heroicons/react/24/solid/UsersIcon";
 import MagnifyingGlassIcon from "@heroicons/react/24/solid/MagnifyingGlassIcon";
 import ArrowsPointingOutIcon from "@heroicons/react/24/solid/ArrowsPointingOutIcon";
 import ArrowsPointingInIcon from "@heroicons/react/24/solid/ArrowsPointingInIcon";
@@ -119,6 +121,7 @@ const Page = () => {
   const [tourStopIndex, setTourStopIndex] = useState(null);
   const [tourStopTotal, setTourStopTotal] = useState(0);
   const [socketStatus, setSocketStatus] = useState("connecting");
+  const [isSignupsOpen, setIsSignupsOpen] = useState(false);
   const tourTimerRef = useRef(null);
   const refreshTimerRef = useRef(null);
   const socketApiRef = useRef(null);
@@ -486,24 +489,34 @@ const Page = () => {
             alignItems="center"
             justifyContent="space-between"
             sx={{
-              px: 2.5,
-              py: 1.25,
+              px: { xs: 1.5, md: 2.5 },
+              py: { xs: 1, md: 1.25 },
+              gap: 1,
               borderBottom: "1px solid",
               borderColor: "divider",
               bgcolor: "background.paper",
               flexShrink: 0,
             }}
           >
-            <Stack direction="row" spacing={1.5} alignItems="center">
+            <Stack
+              direction="row"
+              spacing={{ xs: 0.75, md: 1.5 }}
+              alignItems="center"
+              sx={{ minWidth: 0 }}
+            >
               <Typography
                 sx={{
                   fontWeight: 800,
-                  fontSize: { xs: 16, md: 20 },
+                  fontSize: { xs: 14, sm: 16, md: 20 },
                   color: "text.primary",
                   letterSpacing: "0.04em",
+                  whiteSpace: "nowrap",
                 }}
               >
-                LIVE OPERATIONS MAP
+                LIVE OPERATIONS
+                <Box component="span" sx={{ display: { xs: "none", sm: "inline" } }}>
+                  {" MAP"}
+                </Box>
               </Typography>
               <Chip
                 size="small"
@@ -530,12 +543,17 @@ const Page = () => {
               />
             </Stack>
 
-            <Stack direction="row" spacing={2} alignItems="center">
+            <Stack
+              direction="row"
+              spacing={{ xs: 0.75, md: 2 }}
+              alignItems="center"
+              sx={{ flexShrink: 0 }}
+            >
               <Typography
                 sx={{
                   color: "text.secondary",
                   fontSize: 13,
-                  display: { xs: "none", md: "block" },
+                  display: { xs: "none", lg: "block" },
                 }}
               >
                 {clock}
@@ -562,7 +580,7 @@ const Page = () => {
                   height: 36,
                   borderRadius: "10px",
                   bgcolor: "neutral.50",
-                  display: "flex",
+                  display: { xs: "none", md: "flex" },
                   alignItems: "center",
                   justifyContent: "center",
                   border: "1px solid",
@@ -572,6 +590,30 @@ const Page = () => {
               >
                 <BellIcon width={18} />
               </Box>
+              <Button
+                onClick={() => setIsSignupsOpen(true)}
+                aria-label="Open live signups"
+                variant="outlined"
+                sx={{
+                  display: { xs: "inline-flex", lg: "none" },
+                  minWidth: 40,
+                  px: { xs: 1, sm: 1.5 },
+                  py: 0.75,
+                  borderColor: "divider",
+                  borderRadius: "10px",
+                  color: "primary.main",
+                  textTransform: "none",
+                  fontWeight: 600,
+                }}
+              >
+                <UsersIcon width={18} />
+                <Box
+                  component="span"
+                  sx={{ display: { xs: "none", sm: "inline" }, ml: 0.75, fontSize: 13 }}
+                >
+                  Live Signups
+                </Box>
+              </Button>
               <Tooltip title="Full screen map">
                 <IconButton
                   onClick={toggleFullscreen}
@@ -585,7 +627,11 @@ const Page = () => {
                   <ArrowsPointingOutIcon width={18} />
                 </IconButton>
               </Tooltip>
-              <ButtonGroup size="small" variant="outlined">
+              <ButtonGroup
+                size="small"
+                variant="outlined"
+                sx={{ display: { xs: "none", md: "inline-flex" } }}
+              >
                 <Button
                   onClick={() => setViewMode("map")}
                   sx={{
@@ -696,15 +742,51 @@ const Page = () => {
               </Box>
 
               {!isMapFullscreen ? (
-                <LiveOpsRightPanel
-                  feed={snapshot?.feed ?? []}
-                  stats={snapshot?.stats}
-                  filter={feedFilter}
-                  onFilterChange={setFeedFilter}
-                  onFeedItemClick={handleFeedItemClick}
-                />
+                <Box
+                  sx={{
+                    display: { xs: "none", lg: "flex" },
+                    height: "100%",
+                    minHeight: 0,
+                    flexShrink: 0,
+                  }}
+                >
+                  <LiveOpsRightPanel
+                    feed={snapshot?.feed ?? []}
+                    stats={snapshot?.stats}
+                    filter={feedFilter}
+                    onFilterChange={setFeedFilter}
+                    onFeedItemClick={handleFeedItemClick}
+                  />
+                </Box>
               ) : null}
             </Box>
+
+            <Drawer
+              anchor="right"
+              open={isSignupsOpen && !isMapFullscreen}
+              onClose={() => setIsSignupsOpen(false)}
+              PaperProps={{
+                sx: {
+                  width: "min(360px, 100vw)",
+                  height: "100%",
+                  maxHeight: "100%",
+                  overflow: "hidden",
+                },
+              }}
+            >
+              <LiveOpsRightPanel
+                mobile
+                onClose={() => setIsSignupsOpen(false)}
+                feed={snapshot?.feed ?? []}
+                stats={snapshot?.stats}
+                filter={feedFilter}
+                onFilterChange={setFeedFilter}
+                onFeedItemClick={(item) => {
+                  setIsSignupsOpen(false);
+                  handleFeedItemClick(item);
+                }}
+              />
+            </Drawer>
 
             {!isMapFullscreen ? <LiveOpsStatsBar stats={snapshot?.stats} /> : null}
           </>
