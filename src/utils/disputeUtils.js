@@ -309,3 +309,48 @@ export const getDisputeFromResponse = (response) => {
 
   return null;
 };
+
+const ADMIN_INSUFFICIENT_WALLET_MESSAGE =
+  "Cannot approve this dispute: the customer's wallet has insufficient balance. Ask them to top up, then try again.";
+
+const extractApiErrorText = (value) => {
+  if (value == null) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(extractApiErrorText).filter(Boolean).join(" ");
+  }
+
+  if (typeof value === "object") {
+    return (
+      extractApiErrorText(value.message) ||
+      extractApiErrorText(value.error) ||
+      extractApiErrorText(value.msg) ||
+      extractApiErrorText(value.exception) ||
+      extractApiErrorText(value.detail) ||
+      extractApiErrorText(value.errors)
+    );
+  }
+
+  return String(value);
+};
+
+export const getDisputeActionErrorMessage = (error) => {
+  const data = error?.response?.data;
+  const cleaned = extractApiErrorText(data?.message || data?.error || data?.msg || data || error?.message)
+    .replace(/"/g, "")
+    .trim();
+
+  const searchable = `${cleaned} ${typeof data === "string" ? data : JSON.stringify(data || {})}`;
+
+  if (/insufficient\s+(funds|balance|amount)|not\s+enough\s+(funds|balance)|wallet.*(low|empty)|balance.*(low|insufficient)/i.test(searchable)) {
+    return ADMIN_INSUFFICIENT_WALLET_MESSAGE;
+  }
+
+  return cleaned || "Unable to update dispute.";
+};

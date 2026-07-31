@@ -554,8 +554,79 @@ const getTransactionDate = (transaction) =>
   transaction?.date ||
   transaction?.transactionDate ||
   transaction?.withdrawnAt ||
+  transaction?.paidAt ||
   transaction?.timestamp ||
   null;
+
+const resolveTransactionFromName = (transaction) => {
+  if (!transaction || typeof transaction !== "object") {
+    return null;
+  }
+
+  const sendBy = transaction.sendBy;
+  const from = transaction.from;
+  const customer = transaction.customer;
+  const user = transaction.user;
+  const payer = transaction.payer || transaction.paidBy;
+
+  const candidates = [
+    typeof sendBy === "string" ? sendBy : null,
+    sendBy?.fullName,
+    sendBy?.name,
+    sendBy?.email,
+    typeof from === "string" ? from : null,
+    from?.fullName,
+    from?.name,
+    from?.email,
+    transaction.fromName,
+    transaction.senderName,
+    transaction.sourceName,
+    transaction.source,
+    transaction.paymentFrom,
+    transaction.transferredFrom,
+    typeof payer === "string" ? payer : null,
+    payer?.fullName,
+    payer?.name,
+    payer?.email,
+    customer?.fullName,
+    customer?.name,
+    customer?.email,
+    user?.fullName,
+    user?.name,
+    user?.email,
+    transaction.bankName,
+    transaction.accountName,
+    transaction.destination,
+    transaction.stripeAccountId ? "Stripe payout" : null,
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate == null || candidate === "") {
+      continue;
+    }
+    const text = String(candidate).trim();
+    if (text && text !== "undefined" && text !== "null") {
+      return text;
+    }
+  }
+
+  return null;
+};
+
+const isWithdrawalLike = (transaction, status) => {
+  const haystack = [
+    status,
+    transaction?.type,
+    transaction?.transactionType,
+    transaction?.category,
+    transaction?.kind,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return /withdraw|payout|debit|transfer|cashout/.test(haystack);
+};
 
 export const normalizeDriverTransactions = (payload) => {
   const sourceLists = [
@@ -570,23 +641,35 @@ export const normalizeDriverTransactions = (payload) => {
     Array.isArray(payload?.data?.transactionHistory) ? payload.data.transactionHistory : null,
     Array.isArray(payload?.data?.withdrawals) ? payload.data.withdrawals : null,
     Array.isArray(payload?.data?.walletHistory) ? payload.data.walletHistory : null,
-  ].filter(Boolean);
+    Array.isArray(payload?.data?.withdrawalHistory) ? payload.data.withdrawalHistory : null,
+  ].filter((list) => Array.isArray(list) && list.length > 0);
 
-  const list = sourceLists[0] || [];
+  const list = sourceLists.length ? sourceLists.flat() : [];
+  const seen = new Set();
 
   return list
     .map((transaction, index) => {
       const amount = toNumberOrNull(
         transaction?.amount ??
           transaction?.total_amount ??
+          transaction?.totalAmount ??
           transaction?.withdrawalAmount ??
           transaction?.withdrawAmount ??
           transaction?.debitAmount ??
+          transaction?.payoutAmount ??
+          transaction?.transferAmount ??
           transaction?.value
       );
 
-      const paidAmount = toNumberOrNull(
-        transaction?.paid_amount ?? transaction?.paidAmount ?? transaction?.driverEarning
+      let paidAmount = toNumberOrNull(
+        transaction?.paid_amount ??
+          transaction?.paidAmount ??
+          transaction?.driverEarning ??
+          transaction?.netAmount ??
+          transaction?.receivedAmount ??
+          transaction?.creditedAmount ??
+          transaction?.payoutAmount ??
+          transaction?.transferAmount
       );
 
       const remainingBalance = toNumberOrNull(
@@ -599,20 +682,30 @@ export const normalizeDriverTransactions = (payload) => {
       );
 
       const date = getTransactionDate(transaction);
-      const status = transaction?.status || transaction?.type || transaction?.transactionType || null;
-      const fromName =
-        transaction?.sendBy?.fullName ||
-        transaction?.sendBy?.email ||
-        transaction?.from?.fullName ||
-        transaction?.senderName ||
-        null;
+      const status =
+        transaction?.status || transaction?.type || transaction?.transactionType || null;
+      let fromName = resolveTransactionFromName(transaction);
+
+      if (paidAmount == null && amount != null && isWithdrawalLike(transaction, status)) {
+        paidAmount = amount;
+      }
+
+      if (!fromName && isWithdrawalLike(transaction, status)) {
+        fromName = "Driver wallet";
+      }
 
       if (amount == null && paidAmount == null && remainingBalance == null && !date) {
         return null;
       }
 
+      const id = String(transaction?._id || transaction?.id || `txn-${index}`);
+      if (seen.has(id)) {
+        return null;
+      }
+      seen.add(id);
+
       return {
-        id: transaction?._id || transaction?.id || `txn-${index}`,
+        id,
         amount,
         paidAmount,
         remainingBalance,
@@ -720,6 +813,26 @@ export const normalizeDriverEarningsByIdResponse = (response) => {
       ? payload.transactions
       : Array.isArray(profile.transactions)
         ? profile.transactions
+        : [],
+    withdrawals: Array.isArray(payload.withdrawals)
+      ? payload.withdrawals
+      : Array.isArray(profile.withdrawals)
+        ? profile.withdrawals
+        : [],
+    walletHistory: Array.isArray(payload.walletHistory)
+      ? payload.walletHistory
+      : Array.isArray(profile.walletHistory)
+        ? profile.walletHistory
+        : [],
+    transactionHistory: Array.isArray(payload.transactionHistory)
+      ? payload.transactionHistory
+      : Array.isArray(profile.transactionHistory)
+        ? profile.transactionHistory
+        : [],
+    withdrawalHistory: Array.isArray(payload.withdrawalHistory)
+      ? payload.withdrawalHistory
+      : Array.isArray(profile.withdrawalHistory)
+        ? profile.withdrawalHistory
         : [],
   };
 };

@@ -28,10 +28,12 @@ const formatStatusLabel = (status) => {
   return value.charAt(0).toUpperCase() + value.slice(1);
 };
 
+const hasValue = (value) => value != null && value !== "";
+
 export const DriverTransactionHistory = ({ transactions = [], loading = false }) => {
-  const showPaidAmount = transactions.some((transaction) => transaction.paidAmount != null);
-  const showFrom = transactions.some((transaction) => transaction.fromName);
-  const showRemaining = transactions.some((transaction) => transaction.remainingBalance != null);
+  const showPaidAmount = transactions.some((transaction) => hasValue(transaction.paidAmount));
+  const showFrom = transactions.some((transaction) => hasValue(transaction.fromName));
+  const showRemaining = transactions.some((transaction) => hasValue(transaction.remainingBalance));
 
   return (
     <Card sx={{ border: "1px solid", borderColor: "neutral.200", boxShadow: "none" }}>
@@ -57,10 +59,10 @@ export const DriverTransactionHistory = ({ transactions = [], loading = false })
                 <TableHead>
                   <TableRow>
                     <TableCell>Amount</TableCell>
-                    {showPaidAmount && <TableCell>Paid Amount</TableCell>}
-                    {showRemaining && <TableCell>Remaining Wallet Balance</TableCell>}
+                    {showPaidAmount ? <TableCell>Paid Amount</TableCell> : null}
+                    {showRemaining ? <TableCell>Remaining Wallet Balance</TableCell> : null}
                     <TableCell>Type</TableCell>
-                    {showFrom && <TableCell>From</TableCell>}
+                    {showFrom ? <TableCell>From</TableCell> : null}
                     <TableCell>Date & Time</TableCell>
                   </TableRow>
                 </TableHead>
@@ -72,33 +74,39 @@ export const DriverTransactionHistory = ({ transactions = [], loading = false })
                           {formatEarningsCurrency(transaction.amount)}
                         </Typography>
                       </TableCell>
-                      {showPaidAmount && (
+                      {showPaidAmount ? (
                         <TableCell>
                           <Typography color="text.secondary" variant="body2">
-                            {formatEarningsCurrency(transaction.paidAmount)}
+                            {hasValue(transaction.paidAmount)
+                              ? formatEarningsCurrency(transaction.paidAmount)
+                              : "—"}
                           </Typography>
                         </TableCell>
-                      )}
-                      {showRemaining && (
+                      ) : null}
+                      {showRemaining ? (
                         <TableCell>
                           <Typography color="text.secondary" variant="body2">
-                            {formatEarningsCurrency(transaction.remainingBalance)}
+                            {hasValue(transaction.remainingBalance)
+                              ? formatEarningsCurrency(transaction.remainingBalance)
+                              : "—"}
                           </Typography>
                         </TableCell>
-                      )}
+                      ) : null}
                       <TableCell>
                         <Typography sx={{ textTransform: "capitalize" }} variant="body2">
                           {formatStatusLabel(transaction.status || transaction.type)}
                         </Typography>
                       </TableCell>
-                      {showFrom && (
+                      {showFrom ? (
                         <TableCell>
-                          <Typography variant="body2">{transaction.fromName || "—"}</Typography>
+                          <Typography variant="body2">
+                            {hasValue(transaction.fromName) ? transaction.fromName : "—"}
+                          </Typography>
                         </TableCell>
-                      )}
+                      ) : null}
                       <TableCell>
                         <Typography variant="body2">
-                          {formatDateTime(transaction.date)}
+                          {transaction.date ? formatDateTime(transaction.date) : "—"}
                         </Typography>
                       </TableCell>
                     </TableRow>

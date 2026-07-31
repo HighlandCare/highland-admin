@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Button,
-  Chip,
   Drawer,
   Stack,
   Typography,
@@ -115,7 +114,6 @@ const Page = () => {
   const [clock, setClock] = useState("");
   const [tourStopIndex, setTourStopIndex] = useState(null);
   const [tourStopTotal, setTourStopTotal] = useState(0);
-  const [socketStatus, setSocketStatus] = useState("connecting");
   const [isSignupsOpen, setIsSignupsOpen] = useState(false);
   const tourTimerRef = useRef(null);
   const refreshTimerRef = useRef(null);
@@ -176,7 +174,6 @@ const Page = () => {
 
     const connection = connectLiveOpsSocket({
       region,
-      onConnectionChange: setSocketStatus,
       onEvent: (eventName, payload) => {
         if (eventName === "live-ops:refresh") {
           scheduleSoftRefresh();
@@ -580,29 +577,6 @@ const Page = () => {
                   {" MAP"}
                 </Box>
               </Typography>
-              <Chip
-                size="small"
-                label={
-                  socketStatus === "connected"
-                    ? "● LIVE"
-                    : socketStatus === "missing_url"
-                      ? "○ SOCKET OFF"
-                      : "○ CONNECTING"
-                }
-                sx={{
-                  bgcolor:
-                    socketStatus === "connected" ? "success.alpha12" : "warning.alpha12",
-                  color: socketStatus === "connected" ? "success.dark" : "warning.dark",
-                  fontWeight: 800,
-                  fontSize: 11,
-                  height: 24,
-                  animation: socketStatus === "connected" ? "pulse 2s infinite" : "none",
-                  "@keyframes pulse": {
-                    "0%, 100%": { opacity: 1 },
-                    "50%": { opacity: 0.55 },
-                  },
-                }}
-              />
             </Stack>
 
             <Stack

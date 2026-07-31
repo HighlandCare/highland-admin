@@ -284,7 +284,7 @@ export default function LiveOpsMap({
           disableDefaultUI: true,
           zoomControl: true,
           zoomControlOptions: {
-            position: window.google.maps.ControlPosition.RIGHT_BOTTOM,
+            position: window.google.maps.ControlPosition.LEFT_BOTTOM,
           },
           gestureHandling: "greedy",
           backgroundColor: "#f8fafb",

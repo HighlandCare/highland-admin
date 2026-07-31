@@ -1,4 +1,5 @@
 import { Action } from "../config/action";
+import { getDisputeActionErrorMessage } from "../utils/disputeUtils";
 
 export const getDisputes = async (page = 1, limit = 20, filters = {}) => {
   try {
@@ -84,7 +85,23 @@ export const approveDispute = async (disputeId, payload = {}) => {
         Authorization: `Bearer ${authToken}`,
       },
     });
-    return response.data;
+
+    const body = response.data;
+    const softFailure =
+      body &&
+      (body.success === false ||
+        body.status === false ||
+        body.status === "error" ||
+        body.error === true);
+
+    if (softFailure) {
+      throw {
+        response: { data: body },
+        message: body?.message || body?.error || "Unable to approve dispute.",
+      };
+    }
+
+    return body;
   } catch (error) {
     if (error.response) {
       console.error("Response Error:", error.response.data);
@@ -93,7 +110,17 @@ export const approveDispute = async (disputeId, payload = {}) => {
     } else {
       console.error("General Error:", error.message);
     }
-    throw error;
+
+    const adminMessage = getDisputeActionErrorMessage(error);
+    const nextError = new Error(adminMessage);
+    nextError.response = {
+      ...(error.response || {}),
+      data: {
+        ...(typeof error.response?.data === "object" ? error.response.data : {}),
+        message: adminMessage,
+      },
+    };
+    throw nextError;
   }
 };
 

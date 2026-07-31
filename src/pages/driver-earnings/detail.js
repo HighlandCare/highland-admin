@@ -17,7 +17,7 @@ import {
 import { Layout as DashboardLayout } from "../../layouts/dashboard/layout";
 import Loader from "../../components/Loader";
 import { DriverTransactionHistory } from "../../components/driver-transaction-history";
-import { getDriverEarningsById } from "../../Services/Auth.service";
+import { getDriverEarningsById, getDriverTransactions } from "../../Services/Auth.service";
 import { formatDate, formatRelativeDate } from "../../utils/dateUtils";
 import { pageContainerSx, pageMainSx, pageTitleSx } from "../../utils/pageLayout";
 import {
@@ -61,32 +61,29 @@ const hasDetailValue = (value) => {
 };
 
 const formatProfileDisplayValue = (field) => {
-  if (!field) {
-    return "—";
+  if (!field || !hasDetailValue(field.value)) {
+    return null;
   }
 
   if (DATE_FIELD_KEYS.has(field.key)) {
     if (field.key === "updatedAt" || field.key === "lastActiveAt" || field.key === "lastActive") {
-      return formatRelativeDate(field.value) || "—";
+      const relative = formatRelativeDate(field.value);
+      return relative === "—" ? null : relative;
     }
-    return formatDate(field.value) || "—";
+    const dated = formatDate(field.value);
+    return dated === "—" ? null : dated;
   }
 
   return field.value;
 };
 
-const DetailItem = ({ label, value, alwaysShow = false }) => {
+const DetailItem = ({ label, value }) => {
   const isEmail = label === "Email" || (typeof value === "string" && value.includes("@"));
-  const hasValue = hasDetailValue(value);
-  const displayValue = !hasValue
-    ? "—"
-    : isEmail && value
-      ? String(value).toLowerCase()
-      : value;
-
-  if (!alwaysShow && !hasValue) {
+  if (!hasDetailValue(value)) {
     return null;
   }
+
+  const displayValue = isEmail ? String(value).toLowerCase() : value;
 
   return (
     <Box>
@@ -94,11 +91,11 @@ const DetailItem = ({ label, value, alwaysShow = false }) => {
         {label}
       </Typography>
       <Typography
-        data-email={isEmail && hasValue ? "true" : undefined}
+        data-email={isEmail ? "true" : undefined}
         fontWeight={600}
         sx={{
           wordBreak: "break-word",
-          ...(isEmail && hasValue ? { textTransform: "lowercase" } : {}),
+          ...(isEmail ? { textTransform: "lowercase" } : {}),
         }}
         variant="body2"
       >
@@ -151,16 +148,51 @@ const Page = () => {
           return;
         }
 
+        let merged = null;
         if (detail) {
-          const merged = mergeEarningsDriverRecords(cached, detail);
+          merged = mergeEarningsDriverRecords(cached, detail);
           setDriver(merged);
-          const nestedTransactions = getTransactionsFromDriverRecord(merged);
-          setTransactions(
-            nestedTransactions.length ? nestedTransactions : normalizeDriverTransactions(response)
-          );
         } else if (!cached) {
           setDriver(null);
-          setTransactions([]);
+        }
+
+        let nextTransactions = merged
+          ? getTransactionsFromDriverRecord(merged)
+          : normalizeDriverTransactions(response);
+
+        try {
+          const transactionsResponse = await getDriverTransactions(id);
+          const apiTransactions = normalizeDriverTransactions(transactionsResponse);
+          if (apiTransactions.length) {
+            const byId = new Map();
+            [...nextTransactions, ...apiTransactions].forEach((txn) => {
+              if (txn?.id) {
+                byId.set(String(txn.id), {
+                  ...(byId.get(String(txn.id)) || {}),
+                  ...txn,
+                  paidAmount:
+                    txn.paidAmount ?? byId.get(String(txn.id))?.paidAmount ?? null,
+                  fromName: txn.fromName || byId.get(String(txn.id))?.fromName || null,
+                  remainingBalance:
+                    txn.remainingBalance ??
+                    byId.get(String(txn.id))?.remainingBalance ??
+                    null,
+                });
+              }
+            });
+            nextTransactions = [...byId.values()].sort(
+              (a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime()
+            );
+          }
+        } catch (transactionsError) {
+          // Keep nested earnings transactions when the dedicated endpoint fails.
+        }
+
+        if (active) {
+          setTransactions(nextTransactions);
+          if (!detail && !cached) {
+            setTransactions([]);
+          }
         }
       } catch (error) {
         console.error("Error loading earnings details:", error);
@@ -196,14 +228,18 @@ const Page = () => {
       return [];
     }
 
-    const fields = getEarningsDriverProfileFields(driver);
+    const fields = getEarningsDriverProfileFields(driver)
+      .map((field) => ({
+        ...field,
+        value: formatProfileDisplayValue(field),
+      }))
+      .filter((field) => hasDetailValue(field.value));
 
-    // Ensure core contact fields always appear, even when empty.
     const required = [
       { key: "fullName", label: "Full Name", value: driver.fullName || driver.name || null },
       { key: "email", label: "Email", value: driverEmail },
       { key: "phone", label: "Phone", value: driverPhone },
-    ];
+    ].filter((field) => hasDetailValue(field.value));
 
     const byLabel = new Map();
     required.forEach((field) => byLabel.set(field.label, field));
@@ -314,23 +350,20 @@ const Page = () => {
                         </Typography>
                         <Stack direction="row" flexWrap="wrap" gap={3} mt={2}>
                           <DetailItem
-                            alwaysShow
                             label="Total Earned"
                             value={formatEarningsCurrency(totalEarned)}
                           />
                           <DetailItem
-                            alwaysShow
                             label="Wallet Balance"
                             value={formatEarningsCurrency(walletBalance)}
                           />
                           <DetailItem
-                            alwaysShow
                             label="Total Withdrawn"
                             value={formatEarningsCurrency(totalWithdrawn)}
                           />
-                          {rideCount != null && (
-                            <DetailItem alwaysShow label="Rides" value={rideCount} />
-                          )}
+                          {rideCount != null ? (
+                            <DetailItem label="Rides" value={rideCount} />
+                          ) : null}
                         </Stack>
                       </Box>
                     </Stack>
@@ -343,10 +376,9 @@ const Page = () => {
                       <Stack spacing={2}>
                         {profileFields.map((field) => (
                           <DetailItem
-                            alwaysShow
                             key={field.label}
                             label={field.label}
-                            value={formatProfileDisplayValue(field)}
+                            value={field.value}
                           />
                         ))}
                       </Stack>
@@ -357,30 +389,25 @@ const Page = () => {
                     <SectionCard title="Earnings Summary">
                       <Stack spacing={2}>
                         <DetailItem
-                          alwaysShow
                           label="Total Earned"
                           value={formatEarningsCurrency(totalEarned)}
                         />
                         <DetailItem
-                          alwaysShow
                           label="Wallet Balance"
                           value={formatEarningsCurrency(walletBalance)}
                         />
                         <DetailItem
-                          alwaysShow
                           label="Total Withdrawn"
                           value={formatEarningsCurrency(totalWithdrawn)}
                         />
-                        {rideCount != null && (
-                          <DetailItem alwaysShow label="Completed Rides" value={rideCount} />
-                        )}
+                        {rideCount != null ? (
+                          <DetailItem label="Completed Rides" value={rideCount} />
+                        ) : null}
                         <DetailItem
-                          alwaysShow
                           label="Joined"
                           value={driver.createdAt ? formatDate(driver.createdAt) : null}
                         />
                         <DetailItem
-                          alwaysShow
                           label="Last Updated"
                           value={
                             driver.updatedAt ? formatRelativeDate(driver.updatedAt) : null

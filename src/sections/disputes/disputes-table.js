@@ -36,7 +36,6 @@ import {
   rejectDispute,
   reviewDispute,
 } from "../../Services/Dispute.service";
-import { formatApiErrorMessage } from "../../Services/Auth.service";
 import { formatRelativeDate } from "../../utils/dateUtils";
 import {
   applyDisputeActionLocally,
@@ -44,6 +43,7 @@ import {
   formatRideCurrency,
   formatRidePaymentStatus,
   formatRideReason,
+  getDisputeActionErrorMessage,
   getDisputeActionId,
   getDisputeDetailId,
   getDisputeStatusMeta,
@@ -216,10 +216,7 @@ export const DisputesTable = (props) => {
       setActionNotes("");
       onRefresh();
     } catch (error) {
-      toast.error(
-        formatApiErrorMessage(error?.response?.data?.message || error?.message) ||
-          "Unable to update dispute."
-      );
+      toast.error(getDisputeActionErrorMessage(error));
     } finally {
       setIsSubmitting(false);
     }

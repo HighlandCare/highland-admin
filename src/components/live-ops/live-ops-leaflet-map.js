@@ -39,7 +39,7 @@ export default function LiveOpsLeafletMap({
       zoomControl: false,
     }).setView([DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng], 11);
 
-    L.control.zoom({ position: "bottomright" }).addTo(map);
+    L.control.zoom({ position: "bottomleft" }).addTo(map);
     tileLayerRef.current = L.tileLayer(DEFAULT_TILE_URL, {
       attribution: TILE_ATTRIBUTION,
     }).addTo(map);
