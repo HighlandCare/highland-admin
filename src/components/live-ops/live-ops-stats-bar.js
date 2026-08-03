@@ -75,7 +75,7 @@ export default function LiveOpsStatsBar({ stats }) {
             minimumFractionDigits: 2,
           })}`}
           accent="#059669"
-          sublabel="Today"
+          sublabel="Paid rides / orders"
         />
         <KpiCard label="Drivers Online" value={s.driversOnline ?? 0} accent="#ca8a04" sublabel="Active now" />
         <KpiCard label="Active Rides" value={s.activeRides ?? 0} accent="#0284c7" />
