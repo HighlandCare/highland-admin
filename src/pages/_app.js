@@ -12,6 +12,7 @@ import { createEmotionCache } from "../utils/create-emotion-cache";
 import "simplebar-react/dist/simplebar.min.css";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import "../styles/google-places.css";
 const clientSideEmotionCache = createEmotionCache();
 
 const App = (props) => {

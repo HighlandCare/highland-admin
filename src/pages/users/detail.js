@@ -30,9 +30,53 @@ import {
 } from "../../utils/userUtils";
 import { ROWS_PER_PAGE } from "../../components/data-table";
 
+const hasDetailValue = (value) => {
+  if (value == null) {
+    return false;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed !== "" && trimmed !== "—" && trimmed.toLowerCase() !== "n/a" && trimmed !== "false";
+  }
+
+  return true;
+};
+
+const pickFirstValue = (...values) => {
+  for (const value of values) {
+    if (hasDetailValue(value)) {
+      return value;
+    }
+  }
+  return null;
+};
+
+const formatOptionalDate = (value) => {
+  if (!hasDetailValue(value)) {
+    return null;
+  }
+
+  const formatted = formatDate(value);
+  return formatted === "—" ? null : formatted;
+};
+
+const formatOptionalRelativeDate = (value) => {
+  if (!hasDetailValue(value)) {
+    return null;
+  }
+
+  const formatted = formatRelativeDate(value);
+  return formatted === "—" ? null : formatted;
+};
+
 const DetailItem = ({ label, value }) => {
+  if (!hasDetailValue(value)) {
+    return null;
+  }
+
   const isEmail = label === "Email" || (typeof value === "string" && value.includes("@"));
-  const displayValue = isEmail && value ? String(value).toLowerCase() : value;
+  const displayValue = isEmail ? String(value).toLowerCase() : value;
 
   return (
     <Box>
@@ -45,7 +89,7 @@ const DetailItem = ({ label, value }) => {
         sx={{ wordBreak: "break-word", ...(isEmail ? { textTransform: "lowercase" } : {}) }}
         variant="body2"
       >
-        {displayValue || "—"}
+        {displayValue}
       </Typography>
     </Box>
   );
@@ -101,8 +145,27 @@ const Page = () => {
   }, [id]);
 
   const accountMeta = user ? getUserAccountStatusMeta(user) : null;
-  const profile = user?.user || {};
+  const profile = user?.user && typeof user.user === "object" ? user.user : {};
   const profileImage = user ? getUserProfileImage(user) : null;
+
+  const fullName = pickFirstValue(profile.fullName, profile.name, user?.fullName, user?.name);
+  const email = pickFirstValue(profile.email, user?.email);
+  const phone = pickFirstValue(profile.phone, profile.phoneNumber, user?.phone, user?.phoneNumber);
+  const gender = pickFirstValue(profile.gender, user?.gender);
+  const dateOfBirth = formatOptionalDate(
+    pickFirstValue(profile.dob, profile.dateOfBirth, user?.dob, user?.dateOfBirth)
+  );
+  const userType = pickFirstValue(profile.userType, user?.userType, profile.role, user?.role);
+  const deviceType = pickFirstValue(profile.deviceType, user?.deviceType, profile.platform, user?.platform);
+  const createdAt = formatOptionalDate(
+    pickFirstValue(profile.createdAt, user?.createdAt)
+  );
+  const lastUpdated = formatOptionalRelativeDate(
+    pickFirstValue(profile.updatedAt, user?.updatedAt)
+  );
+  const joinedRelative = formatOptionalRelativeDate(
+    pickFirstValue(profile.createdAt, user?.createdAt)
+  );
 
   return (
     <>
@@ -189,21 +252,21 @@ const Page = () => {
                         </Typography>
                         <Typography
                           color="text.secondary"
-                          data-email="true"
-                          sx={{ mt: 0.5, textTransform: "lowercase" }}
+                          data-email={email ? "true" : undefined}
+                          sx={{
+                            mt: 0.5,
+                            ...(email ? { textTransform: "lowercase" } : {}),
+                          }}
                           variant="body1"
                         >
-                          {profile.email ? profile.email.toLowerCase() : "No email linked"}
+                          {email ? email.toLowerCase() : "No email linked"}
                         </Typography>
                         <Stack alignItems="center" direction="row" flexWrap="wrap" gap={2} mt={2}>
                           {accountMeta && (
                             <StatusBadge color={accountMeta.color} label={accountMeta.label} />
                           )}
-                          <DetailItem label="Phone" value={profile.phone} />
-                          <DetailItem
-                            label="Joined"
-                            value={formatRelativeDate(profile.createdAt || user.createdAt)}
-                          />
+                          <DetailItem label="Phone" value={phone} />
+                          <DetailItem label="Joined" value={joinedRelative} />
                         </Stack>
                       </Box>
                     </Stack>
@@ -214,11 +277,11 @@ const Page = () => {
                   <Grid item md={6} xs={12}>
                     <SectionCard title="Personal Information">
                       <Stack spacing={2}>
-                        <DetailItem label="Full Name" value={profile.fullName} />
-                        <DetailItem label="Email" value={profile.email} />
-                        <DetailItem label="Phone" value={profile.phone} />
-                        <DetailItem label="Gender" value={profile.gender} />
-                        <DetailItem label="Date of Birth" value={profile.dob || profile.dateOfBirth} />
+                        <DetailItem label="Full Name" value={fullName} />
+                        <DetailItem label="Email" value={email} />
+                        <DetailItem label="Phone" value={phone} />
+                        <DetailItem label="Gender" value={gender} />
+                        <DetailItem label="Date of Birth" value={dateOfBirth} />
                       </Stack>
                     </SectionCard>
                   </Grid>
@@ -226,15 +289,35 @@ const Page = () => {
                   <Grid item md={6} xs={12}>
                     <SectionCard title="Location & Address">
                       <Stack spacing={2}>
-                        <DetailItem label="Address" value={profile.address} />
-                        <DetailItem label="City" value={profile.city} />
-                        <DetailItem label="State" value={profile.state} />
-                        <DetailItem label="Zip Code" value={profile.zipCode || profile.zip} />
+                        <DetailItem
+                          label="Address"
+                          value={pickFirstValue(profile.address, user?.address)}
+                        />
+                        <DetailItem label="City" value={pickFirstValue(profile.city, user?.city)} />
+                        <DetailItem
+                          label="State"
+                          value={pickFirstValue(profile.state, user?.state)}
+                        />
+                        <DetailItem
+                          label="Zip Code"
+                          value={pickFirstValue(
+                            profile.zipCode,
+                            profile.zip,
+                            user?.zipCode,
+                            user?.zip
+                          )}
+                        />
                         <DetailItem
                           label="Location"
-                          value={[profile.city, profile.state, profile.zipCode || profile.zip]
-                            .filter(Boolean)
-                            .join(", ")}
+                          value={
+                            [
+                              pickFirstValue(profile.city, user?.city),
+                              pickFirstValue(profile.state, user?.state),
+                              pickFirstValue(profile.zipCode, profile.zip, user?.zipCode, user?.zip),
+                            ]
+                              .filter(Boolean)
+                              .join(", ") || null
+                          }
                         />
                       </Stack>
                     </SectionCard>
@@ -243,18 +326,9 @@ const Page = () => {
                   <Grid item md={6} xs={12}>
                     <SectionCard title="Account Details">
                       <Stack spacing={2}>
-                        <DetailItem
-                          label="Account Status"
-                          value={accountMeta?.label}
-                        />
-                        <DetailItem
-                          label="Created At"
-                          value={formatDate(profile.createdAt || user.createdAt)}
-                        />
-                        <DetailItem
-                          label="Last Updated"
-                          value={formatRelativeDate(profile.updatedAt || user.updatedAt)}
-                        />
+                        <DetailItem label="Account Status" value={accountMeta?.label} />
+                        <DetailItem label="Created At" value={createdAt} />
+                        <DetailItem label="Last Updated" value={lastUpdated} />
                       </Stack>
                     </SectionCard>
                   </Grid>
@@ -269,11 +343,15 @@ const Page = () => {
                               ? profile.notificationOn
                                 ? "Enabled"
                                 : "Disabled"
-                              : null
+                              : typeof user?.notificationOn === "boolean"
+                                ? user.notificationOn
+                                  ? "Enabled"
+                                  : "Disabled"
+                                : null
                           }
                         />
-                        <DetailItem label="User Type" value={profile.userType || user.userType} />
-                        <DetailItem label="Device Type" value={profile.deviceType || user.deviceType} />
+                        <DetailItem label="User Type" value={userType} />
+                        <DetailItem label="Device Type" value={deviceType} />
                       </Stack>
                     </SectionCard>
                   </Grid>

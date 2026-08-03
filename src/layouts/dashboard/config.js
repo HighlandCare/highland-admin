@@ -1,4 +1,5 @@
 import ChartBarIcon from "@heroicons/react/24/solid/ChartBarIcon";
+import MapIcon from "@heroicons/react/24/solid/MapIcon";
 
 import UsersIcon from "@heroicons/react/24/solid/UsersIcon";
 import ShieldCheckIcon from "@heroicons/react/24/solid/ShieldCheckIcon";
@@ -9,6 +10,7 @@ import Cog6ToothIcon from "@heroicons/react/24/solid/Cog6ToothIcon";
 import QuestionMarkCircleIcon from "@heroicons/react/24/solid/QuestionMarkCircleIcon";
 import CurrencyDollarIcon from "@heroicons/react/24/solid/CurrencyDollarIcon";
 import ClockIcon from "@heroicons/react/24/solid/ClockIcon";
+import ExclamationTriangleIcon from "@heroicons/react/24/solid/ExclamationTriangleIcon";
 import { SvgIcon } from "@mui/material";
 export const items = [
   {
@@ -17,6 +19,15 @@ export const items = [
     icon: (
       <SvgIcon fontSize="small">
         <ChartBarIcon />
+      </SvgIcon>
+    ),
+  },
+  {
+    title: "Live Operations",
+    path: "/live-operations",
+    icon: (
+      <SvgIcon fontSize="small">
+        <MapIcon />
       </SvgIcon>
     ),
   },
@@ -54,6 +65,15 @@ export const items = [
     icon: (
       <SvgIcon fontSize="small">
         <ClockIcon />
+      </SvgIcon>
+    ),
+  },
+  {
+    title: "Disputes",
+    path: "/disputes",
+    icon: (
+      <SvgIcon fontSize="small">
+        <ExclamationTriangleIcon />
       </SvgIcon>
     ),
   },

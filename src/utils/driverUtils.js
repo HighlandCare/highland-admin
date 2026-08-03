@@ -372,9 +372,31 @@ export const removeDriverFromList = (response, targetDriver) => {
 };
 
 export const storeDriverDetail = (driver) => {
-  if (typeof window !== "undefined") {
+  if (typeof window !== "undefined" && driver) {
     sessionStorage.setItem("selectedDriver", JSON.stringify(driver));
   }
+};
+
+export const driverMatchesId = (driver, id) => {
+  if (!driver || id == null || id === "") {
+    return false;
+  }
+
+  const target = String(id);
+  const candidates = [
+    driver._id,
+    driver.id,
+    driver.authId,
+    driver.userId,
+    driver.chaperoneId,
+    driver?.summary?.chaperoneId,
+    getDriverUserId(driver),
+    typeof driver.user === "string" ? driver.user : null,
+  ]
+    .filter((value) => value != null && value !== "")
+    .map(String);
+
+  return candidates.includes(target);
 };
 
 export const getStoredDriverDetail = (id) => {
@@ -384,19 +406,47 @@ export const getStoredDriverDetail = (id) => {
 
   try {
     const stored = JSON.parse(sessionStorage.getItem("selectedDriver"));
-
     if (!stored) {
       return null;
     }
 
-    if (stored._id === id || stored?.summary?.chaperoneId === id) {
-      return stored;
-    }
-
-    return null;
+    return driverMatchesId(stored, id) ? stored : null;
   } catch (error) {
     return null;
   }
+};
+
+export const collectDriverIdCandidates = (...values) => {
+  const unique = [];
+
+  values.flat().forEach((value) => {
+    if (value == null || value === "") return;
+    if (typeof value === "object") {
+      const nested = [
+        value._id,
+        value.id,
+        value.authId,
+        value.userId,
+        value.chaperoneId,
+        value.driverId,
+        value?.summary?.chaperoneId,
+        getDriverUserId(value),
+      ];
+      nested.forEach((entry) => {
+        if (entry == null || entry === "") return;
+        const text = String(entry);
+        if (!unique.includes(text)) unique.push(text);
+      });
+      return;
+    }
+
+    const text = String(value).trim();
+    if (text && text !== "undefined" && text !== "null" && !unique.includes(text)) {
+      unique.push(text);
+    }
+  });
+
+  return unique;
 };
 
 const formatBooleanLabel = (value, trueLabel, falseLabel) => {
@@ -407,24 +457,194 @@ const formatBooleanLabel = (value, trueLabel, falseLabel) => {
   return value ? trueLabel : falseLabel;
 };
 
+const pickFirst = (...values) => {
+  for (const value of values) {
+    if (value == null) continue;
+    if (typeof value === "string" && !value.trim()) continue;
+    return value;
+  }
+  return null;
+};
+
+/** Format GeoJSON / lat-lng location objects for display. */
+export const formatDriverLocationValue = (value) => {
+  if (value == null || value === "") {
+    return null;
+  }
+
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  if (Array.isArray(value) && value.length >= 2) {
+    const [lng, lat] = value;
+    if (Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))) {
+      return `${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)}`;
+    }
+  }
+
+  if (typeof value === "object") {
+    const coords = value.coordinates;
+    if (Array.isArray(coords) && coords.length >= 2) {
+      const [lng, lat] = coords;
+      if (Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))) {
+        return `${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)}`;
+      }
+    }
+
+    const lat = Number(value.lat ?? value.latitude);
+    const lng = Number(value.lng ?? value.lon ?? value.longitude);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+    }
+
+    if (typeof value.address === "string" && value.address.trim()) {
+      return value.address;
+    }
+  }
+
+  return null;
+};
+
+/** Map a flat list/API driver document into the detail-page shape. */
+export const mapFlatDriverToDetail = (driver) => {
+  if (!driver || typeof driver !== "object") {
+    return null;
+  }
+
+  const user = typeof driver.user === "object" && driver.user ? driver.user : {};
+  const stripe =
+    typeof driver.stripe === "object" && driver.stripe ? driver.stripe : {};
+
+  return {
+    summary: {
+      fullName: getDriverDisplayName(driver),
+      email: pickFirst(user.email, driver.email),
+      profileImage: pickFirst(user.image, driver.profileImage, driver.image),
+      isApproved: driver.isApproved,
+      isOnline: pickFirst(driver.isOnline, user.isOnline),
+      isBlocked: pickFirst(driver.isBlocked, user.isBlocked),
+      rideStatus: pickFirst(driver.rideStatus, driver.status),
+      rating: pickFirst(driver.rating, user.rating),
+      walletBalance: pickFirst(driver.walletBalance, driver.wallet?.balance),
+      stripeStatus: pickFirst(driver.stripeStatus, stripe.status, stripe.charges_enabled),
+      chaperoneId: pickFirst(driver._id, driver.id, driver.chaperoneId),
+      activeRide: driver.activeRide,
+    },
+    personalInformation: {
+      fullName: pickFirst(user.fullName, getDriverDisplayName(driver)),
+      email: pickFirst(user.email, driver.email),
+      phone: pickFirst(user.phone, driver.phone, driver.phoneNumber),
+      dob: pickFirst(user.dob, driver.dob),
+      address: (() => {
+        const raw = pickFirst(user.address, driver.address);
+        if (typeof raw === "string") return raw;
+        return formatDriverLocationValue(raw);
+      })(),
+      location: formatDriverLocationValue(pickFirst(user.location, driver.location)),
+      city: (() => {
+        const raw = pickFirst(user.city, driver.city);
+        return typeof raw === "string" || typeof raw === "number" ? raw : null;
+      })(),
+      state: (() => {
+        const raw = pickFirst(user.state, driver.state);
+        return typeof raw === "string" || typeof raw === "number" ? raw : null;
+      })(),
+      zipCode: (() => {
+        const raw = pickFirst(user.zipCode, user.zip, driver.zipCode, driver.zip);
+        return typeof raw === "string" || typeof raw === "number" ? raw : null;
+      })(),
+      personaStatus: getDriverPersonaStatus(driver),
+      isVerified: pickFirst(user.isVerified, driver.isVerified),
+      isBlocked: pickFirst(driver.isBlocked, user.isBlocked),
+      joinedAt: pickFirst(driver.createdAt, user.createdAt),
+      lastActiveAt: pickFirst(driver.lastActiveAt, driver.updatedAt, user.updatedAt),
+    },
+    vehicleAndLicense: {
+      vehicleName: pickFirst(driver.vehicleName, driver.vehicle, driver.carName),
+      vehicleNumber: pickFirst(driver.vehicleNo, driver.vehicleNumber, driver.licencePlate),
+      experience: driver.experience,
+      licenseNumber: pickFirst(driver.licenceNumber, driver.licenseNumber),
+      licenseExpiry: pickFirst(driver.licenceExpiry, driver.licenseExpiry),
+      hourlyFare: pickFirst(driver.hourlyFare, driver.fare),
+    },
+    walletAndPayments: {
+      walletBalance: pickFirst(driver.walletBalance, driver.wallet?.balance),
+      totalEarned: pickFirst(driver.totalEarned, driver.wallet?.totalEarned),
+      totalWithdrawn: pickFirst(driver.totalWithdrawn, driver.wallet?.totalWithdrawn),
+      completedRides: pickFirst(driver.completedRides, driver.totalRides),
+      stripeStatus: pickFirst(driver.stripeStatus, stripe.status),
+      stripeBusinessName: pickFirst(
+        driver.stripeBusinessName,
+        stripe.business_name,
+        stripe.businessName
+      ),
+    },
+    mediaAndDocuments: {
+      profilePhoto: pickFirst(user.image, driver.profileImage, driver.image),
+      idCard: driver.idCard,
+      drivingLicense: pickFirst(
+        driver.drivingLicense,
+        driver.licenceImage,
+        driver.licenseImage
+      ),
+    },
+    transactionHistory: Array.isArray(driver.transactionHistory)
+      ? driver.transactionHistory
+      : [],
+    _id: pickFirst(driver._id, driver.id),
+    authId: pickFirst(driver.authId, getDriverUserId(driver)),
+  };
+};
+
 export const normalizeChaperoneDetailResponse = (response) => {
-  const payload = response?.data ?? response;
+  let payload = response?.data ?? response;
 
   if (!payload || typeof payload !== "object") {
     return null;
   }
 
+  // Unwrap common API envelopes.
+  if (payload.chaperone && typeof payload.chaperone === "object") {
+    payload = payload.chaperone;
+  } else if (payload.driver && typeof payload.driver === "object") {
+    payload = payload.driver;
+  } else if (payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)) {
+    if (
+      payload.data.summary ||
+      payload.data.personalInformation ||
+      payload.data._id ||
+      payload.data.user
+    ) {
+      payload = payload.data;
+    }
+  }
+
   if (payload.summary || payload.personalInformation || payload.vehicleAndLicense) {
+    const personal = payload.personalInformation || {};
     return {
       summary: payload.summary || {},
-      personalInformation: payload.personalInformation || {},
+      personalInformation: {
+        ...personal,
+        address:
+          typeof personal.address === "string"
+            ? personal.address
+            : formatDriverLocationValue(personal.address),
+        location: formatDriverLocationValue(personal.location),
+      },
       vehicleAndLicense: payload.vehicleAndLicense || {},
       walletAndPayments: payload.walletAndPayments || {},
       mediaAndDocuments: payload.mediaAndDocuments || {},
       transactionHistory: Array.isArray(payload.transactionHistory)
         ? payload.transactionHistory
         : [],
+      _id: payload._id || payload.summary?.chaperoneId,
+      authId: payload.authId,
     };
+  }
+
+  if (payload._id || payload.user || payload.vehicleNo || payload.authId || payload.vehicleName) {
+    return mapFlatDriverToDetail(payload);
   }
 
   return null;

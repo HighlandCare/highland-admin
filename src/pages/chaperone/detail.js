@@ -17,9 +17,12 @@ import {
 import { Layout as DashboardLayout } from "../../layouts/dashboard/layout";
 import Loader from "../../components/Loader";
 import { DriverTransactionHistory } from "../../components/driver-transaction-history";
-import { getChaperoneById } from "../../Services/Auth.service";
+import { getChap, getChaperoneById } from "../../Services/Auth.service";
 import { formatDate, formatRelativeDate } from "../../utils/dateUtils";
 import {
+  collectDriverIdCandidates,
+  driverMatchesId,
+  formatDriverLocationValue,
   getChaperoneApprovalLabel,
   getChaperoneBlockedLabel,
   getChaperoneDetailDisplayName,
@@ -28,14 +31,35 @@ import {
   getChaperoneOnlineLabel,
   getChaperoneRideStatusLabel,
   getChaperoneVerifiedLabel,
+  getDriverList,
+  getStoredDriverDetail,
   normalizeChaperoneDetailResponse,
+  storeDriverDetail,
 } from "../../utils/driverUtils";
 import { formatEarningsCurrency, normalizeDriverTransactions } from "../../utils/earningsUtils";
 import { pageContainerSx, pageMainSx, pageTitleSx } from "../../utils/pageLayout";
 
+const formatDetailValue = (value) => {
+  if (value == null || value === "") {
+    return null;
+  }
+
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+
+  const locationText = formatDriverLocationValue(value);
+  if (locationText) {
+    return locationText;
+  }
+
+  return null;
+};
+
 const DetailItem = ({ label, value }) => {
-  const isEmail = label === "Email" || (typeof value === "string" && value.includes("@"));
-  const displayValue = isEmail && value ? String(value).toLowerCase() : value;
+  const safeValue = formatDetailValue(value);
+  const isEmail = label === "Email" || (typeof safeValue === "string" && safeValue.includes("@"));
+  const displayValue = isEmail && safeValue ? String(safeValue).toLowerCase() : safeValue;
 
   if (displayValue == null || displayValue === "") {
     return (
@@ -109,6 +133,36 @@ const formatHourlyFare = (value) => {
   return String(value);
 };
 
+async function fetchDriverByCandidates(candidateIds = []) {
+  const uniqueIds = [...new Set(candidateIds.filter(Boolean).map(String))];
+
+  for (const candidate of uniqueIds) {
+    try {
+      const response = await getChaperoneById(candidate);
+      const normalized = normalizeChaperoneDetailResponse(response);
+      if (normalized) {
+        return normalized;
+      }
+    } catch (error) {
+      // Try the next candidate id.
+    }
+  }
+
+  try {
+    const listResponse = await getChap(1, 100);
+    const match = getDriverList(listResponse).find((driver) =>
+      uniqueIds.some((candidate) => driverMatchesId(driver, candidate))
+    );
+    if (match) {
+      return normalizeChaperoneDetailResponse(match);
+    }
+  } catch (error) {
+    // Fall through.
+  }
+
+  return null;
+}
+
 const Page = () => {
   const router = useRouter();
   const { id } = router.query;
@@ -125,16 +179,31 @@ const Page = () => {
     const loadDriver = async () => {
       setIsLoading(true);
 
-      try {
-        const response = await getChaperoneById(id);
-        const normalized = normalizeChaperoneDetailResponse(response);
+      const cachedRaw = getStoredDriverDetail(id);
+      const cached = normalizeChaperoneDetailResponse(cachedRaw);
 
-        if (active) {
+      if (cached && active) {
+        setDetail(cached);
+      }
+
+      const candidateIds = collectDriverIdCandidates(id, cachedRaw, cached);
+
+      try {
+        const normalized = await fetchDriverByCandidates(candidateIds);
+
+        if (!active) {
+          return;
+        }
+
+        if (normalized) {
           setDetail(normalized);
+          storeDriverDetail(normalized);
+        } else if (!cached) {
+          setDetail(null);
         }
       } catch (error) {
         console.error("Error loading driver details:", error);
-        if (active) {
+        if (active && !cached) {
           setDetail(null);
         }
       } finally {
@@ -251,7 +320,9 @@ const Page = () => {
                           <DetailItem label="Rating" value={summary.rating ?? "—"} />
                           <DetailItem
                             label="Wallet Balance"
-                            value={formatEarningsCurrency(summary.walletBalance ?? wallet.walletBalance)}
+                            value={formatEarningsCurrency(
+                              summary.walletBalance ?? wallet.walletBalance
+                            )}
                           />
                           <DetailItem
                             label="Stripe"
@@ -291,7 +362,9 @@ const Page = () => {
                             label="Persona Status"
                             value={
                               personal.personaStatus
-                                ? String(personal.personaStatus).replace(/^\w/, (c) => c.toUpperCase())
+                                ? String(personal.personaStatus).replace(/^\w/, (c) =>
+                                    c.toUpperCase()
+                                  )
                                 : "—"
                             }
                           />
