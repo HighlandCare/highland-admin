@@ -260,7 +260,7 @@ export const updateDriverPersonaStatus = async (driverId, personaStatus = "appro
 
 export const getFAQ = async () => {
   try {
-    const response = await Action.get(`faq`);
+    const response = await Action.get(`admin/faq`);
     return response.data;
   } catch (error) {
     if (error.response) {
