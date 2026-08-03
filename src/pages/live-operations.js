@@ -26,10 +26,14 @@ import { OverviewRideAnalytics } from "../sections/overview/overview-ride-analyt
 import { OverviewRideStatus } from "../sections/overview/overview-ride-status";
 import { loadDashboardAnalytics } from "../utils/dashboardUtils";
 import { useLiveOpsUi } from "../contexts/live-ops-ui-context";
-import { parseCoordinateQuery } from "../utils/googleMaps";
+import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM, parseCoordinateQuery } from "../utils/googleMaps";
 import {
+  enrichLiveOpsItem,
+  resolveLiveOpsDetailPath,
   resolveLiveOpsListPath,
 } from "../utils/liveOpsNavigation";
+import { storeDisputeDetail } from "../utils/disputeUtils";
+import { storeRideDetail } from "../utils/rideUtils";
 import { filterMarkersNearLocation } from "../hooks/useSmoothLiveOpsMarkers";
 import { toast } from "react-toastify";
 
@@ -104,10 +108,10 @@ const Page = () => {
   const [onlineOnly, setOnlineOnly] = useState(false);
   const [selectedMarker, setSelectedMarker] = useState(null);
   const [locationSearch, setLocationSearch] = useState("");
-  const [mapViewCenter, setMapViewCenter] = useState(null);
-  const [mapZoom, setMapZoom] = useState(null);
+  const [mapViewCenter, setMapViewCenter] = useState(DEFAULT_MAP_CENTER);
+  const [mapZoom, setMapZoom] = useState(DEFAULT_MAP_ZOOM);
   const [userLocation, setUserLocation] = useState(null);
-  const [fitToMarkers, setFitToMarkers] = useState(true);
+  const [fitToMarkers, setFitToMarkers] = useState(false);
   const [mapFitKey, setMapFitKey] = useState(0);
   const [locating, setLocating] = useState(false);
   const [analytics, setAnalytics] = useState(null);
@@ -300,7 +304,7 @@ const Page = () => {
   }, [filteredMarkers, selectedMarker]);
 
   const regionCenter = useMemo(
-    () => snapshot?.region?.center ?? { lat: 32.7767, lng: -96.797 },
+    () => snapshot?.region?.center ?? DEFAULT_MAP_CENTER,
     [snapshot]
   );
 
@@ -310,10 +314,16 @@ const Page = () => {
     (place) => {
       clearLocationTour();
       setMapViewCenter({ lat: place.lat, lng: place.lng });
-      setMapZoom(14);
+      setMapZoom(place.marker ? 15 : 14);
       setFitToMarkers(false);
-      setSelectedMarker(null);
       if (place.address) setLocationSearch(place.address);
+
+      if (place.marker) {
+        setSelectedMarker(place.marker);
+        return;
+      }
+
+      setSelectedMarker(null);
 
       const nearby = filterMarkersNearLocation(snapshot?.markers ?? [], place, 30);
       const onlineNearby = nearby.filter((m) => m.type === "online_driver").length;
@@ -374,27 +384,13 @@ const Page = () => {
 
   const handleLocateRegion = useCallback(() => {
     clearLocationTour();
-    setMapViewCenter(null);
-    setMapZoom(null);
+    setMapViewCenter(DEFAULT_MAP_CENTER);
+    setMapZoom(DEFAULT_MAP_ZOOM);
+    setFitToMarkers(false);
     setUserLocation(null);
-    requestFitToMarkers();
     setSelectedMarker(null);
     setLocationSearch("");
-  }, [clearLocationTour, requestFitToMarkers]);
-
-  const handleRegionChange = useCallback(
-    (nextRegion) => {
-      clearLocationTour();
-      setRegion(nextRegion);
-      setMapViewCenter(null);
-      setMapZoom(null);
-      setUserLocation(null);
-      requestFitToMarkers();
-      setSelectedMarker(null);
-      setLocationSearch("");
-    },
-    [clearLocationTour, requestFitToMarkers]
-  );
+  }, [clearLocationTour]);
 
   const startLocationTour = useCallback(
     (stops, sourceItem) => {
@@ -491,6 +487,45 @@ const Page = () => {
       }
     },
     [clearLocationTour, snapshot?.markers, startLocationTour]
+  );
+
+  const handleViewDetails = useCallback(
+    (marker) => {
+      const enriched = enrichLiveOpsItem(marker, snapshot);
+      const path = resolveLiveOpsDetailPath(enriched);
+      if (!path || path === "#") {
+        return;
+      }
+
+      const detailId = (() => {
+        try {
+          return new URL(path, "http://local").searchParams.get("id");
+        } catch {
+          return null;
+        }
+      })();
+
+      if (path.startsWith("/disputes/")) {
+        storeDisputeDetail({
+          ...enriched,
+          disputeId: detailId || enriched.disputeId || enriched.emergencyId,
+          rideId: enriched.rideId || enriched.bookingId,
+          key: detailId || enriched.disputeId || enriched.emergencyId || enriched.rideId,
+        });
+      } else if (path.startsWith("/ride-history/")) {
+        storeRideDetail({
+          ...enriched,
+          rideId: detailId || enriched.rideId || enriched.bookingId || enriched.orderId,
+          _id: detailId || enriched.rideId || enriched.bookingId || enriched.orderId,
+        });
+      }
+
+      if (isMapFullscreen) {
+        setMapFullscreen(false);
+      }
+      router.push(path);
+    },
+    [isMapFullscreen, router, setMapFullscreen, snapshot]
   );
 
   const handleViewAllSignups = useCallback(
@@ -632,7 +667,7 @@ const Page = () => {
                   <>
                     <LiveOpsMap
                       center={mapCenter}
-                      zoom={snapshot?.region?.zoom ?? 11}
+                      zoom={mapZoom ?? snapshot?.region?.zoom ?? DEFAULT_MAP_ZOOM}
                       markers={filteredMarkers}
                       selectedMarker={selectedMarker}
                       userLocation={userLocation}
@@ -649,9 +684,7 @@ const Page = () => {
                       onPlaceSelect={handlePlaceSelect}
                       onCurrentLocation={handleCurrentLocation}
                       locating={locating}
-                      region={region}
-                      regionOptions={snapshot?.region?.options ?? [{ key: "all", label: "All regions" }, { key: "dfw", label: "DFW" }]}
-                      onRegionChange={handleRegionChange}
+                      mapMarkers={filteredMarkers}
                       markerTypes={MARKER_TYPE_FILTERS}
                       selectedMarkerTypes={selectedMarkerTypes}
                       onMarkerTypeToggle={handleMarkerTypeToggle}
@@ -662,6 +695,7 @@ const Page = () => {
                         clearLocationTour();
                         setSelectedMarker(null);
                       }}
+                      onViewDetails={handleViewDetails}
                       onLocateRegion={handleLocateRegion}
                       isMapFullscreen={isMapFullscreen}
                       onToggleFullscreen={toggleFullscreen}

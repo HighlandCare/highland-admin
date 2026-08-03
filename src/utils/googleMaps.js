@@ -17,7 +17,9 @@ export function getServerGoogleMapsApiKey() {
   );
 }
 
-export const DEFAULT_MAP_CENTER = { lat: 32.7767, lng: -96.797 };
+export const DEFAULT_MAP_CENTER = { lat: 39.8283, lng: -98.5795 };
+/** Continental United States overview */
+export const DEFAULT_MAP_ZOOM = 4;
 
 /** Map only — Places runs through /api/maps/* routes */
 export const GOOGLE_MAP_LIBRARIES = [];

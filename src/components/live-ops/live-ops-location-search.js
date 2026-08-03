@@ -1,5 +1,5 @@
 import PropTypes from "prop-types";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   CircularProgress,
@@ -11,6 +11,7 @@ import {
   Paper,
   TextField,
   Tooltip,
+  Typography,
 } from "@mui/material";
 import MagnifyingGlassIcon from "@heroicons/react/24/solid/MagnifyingGlassIcon";
 import MapPinIcon from "@heroicons/react/24/solid/MapPinIcon";
@@ -39,8 +40,50 @@ function normalizePredictions(data) {
       placeId: item.place_id || item.placeId || "",
       lat: Number.isFinite(Number(item.lat)) ? Number(item.lat) : undefined,
       lng: Number.isFinite(Number(item.lng)) ? Number(item.lng) : undefined,
+      source: item.provider || "places",
     }))
     .filter((item) => item.description);
+}
+
+function markerMatchesQuery(marker, query) {
+  if (!marker || !query) return false;
+  const haystack = [
+    marker.title,
+    marker.subtitle,
+    marker.label,
+    marker.detail,
+    marker.phone,
+    marker.type,
+    marker.address,
+    marker.city,
+    marker.region,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return haystack.includes(query);
+}
+
+function markersToSuggestions(markers, query) {
+  const trimmed = query.trim().toLowerCase();
+  if (trimmed.length < 2) return [];
+
+  return (markers || [])
+    .filter((marker) => Number.isFinite(Number(marker?.lat)) && Number.isFinite(Number(marker?.lng)))
+    .filter((marker) => markerMatchesQuery(marker, trimmed))
+    .slice(0, 8)
+    .map((marker) => ({
+      description:
+        [marker.title, marker.subtitle].filter(Boolean).join(" — ") ||
+        marker.label ||
+        "Map location",
+      placeId: `map-marker-${marker.id}`,
+      lat: Number(marker.lat),
+      lng: Number(marker.lng),
+      source: "map",
+      marker,
+    }));
 }
 
 export default function LiveOpsLocationSearch({
@@ -49,17 +92,38 @@ export default function LiveOpsLocationSearch({
   onPlaceSelect,
   onCurrentLocation,
   locating,
+  mapMarkers,
 }) {
-  const [predictions, setPredictions] = useState([]);
+  const [placePredictions, setPlacePredictions] = useState([]);
   const [searching, setSearching] = useState(false);
   const [openSuggestions, setOpenSuggestions] = useState(false);
   const debounceRef = useRef(null);
   const requestIdRef = useRef(0);
 
+  const mapSuggestions = useMemo(
+    () => markersToSuggestions(mapMarkers, value || ""),
+    [mapMarkers, value]
+  );
+
+  const predictions = useMemo(() => {
+    const placeOnly = placePredictions.filter(
+      (item) =>
+        !mapSuggestions.some(
+          (mapItem) =>
+            mapItem.description.toLowerCase() === item.description.toLowerCase() ||
+            (Number.isFinite(item.lat) &&
+              Number.isFinite(mapItem.lat) &&
+              Math.abs(item.lat - mapItem.lat) < 0.0001 &&
+              Math.abs(item.lng - mapItem.lng) < 0.0001)
+        )
+    );
+    return [...mapSuggestions, ...placeOnly].slice(0, 16);
+  }, [mapSuggestions, placePredictions]);
+
   const fetchPredictions = useCallback((input) => {
     const trimmed = input.trim();
     if (trimmed.length < 2 || parseCoordinateQuery(trimmed)) {
-      setPredictions([]);
+      setPlacePredictions([]);
       return;
     }
 
@@ -76,11 +140,11 @@ export default function LiveOpsLocationSearch({
       })
       .then((data) => {
         if (requestId !== requestIdRef.current) return;
-        setPredictions(normalizePredictions(data));
+        setPlacePredictions(normalizePredictions(data));
       })
       .catch((error) => {
         if (requestId !== requestIdRef.current) return;
-        setPredictions([]);
+        setPlacePredictions([]);
         toast.error(error.message || "Unable to search locations.");
       })
       .finally(() => {
@@ -102,10 +166,22 @@ export default function LiveOpsLocationSearch({
     setOpenSuggestions(true);
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => fetchPredictions(next), 280);
+    debounceRef.current = setTimeout(() => fetchPredictions(next), 250);
   };
 
-  const resolveSelection = async ({ placeId, address, lat, lng }) => {
+  const resolveSelection = async ({ placeId, address, lat, lng, marker }) => {
+    if (marker) {
+      onPlaceSelect?.({
+        lat: Number(marker.lat),
+        lng: Number(marker.lng),
+        address: address || value,
+        marker,
+      });
+      setOpenSuggestions(false);
+      setPlacePredictions([]);
+      return;
+    }
+
     if (lat != null && lng != null && Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))) {
       onPlaceSelect?.({
         lat: Number(lat),
@@ -113,7 +189,7 @@ export default function LiveOpsLocationSearch({
         address: address || value,
       });
       setOpenSuggestions(false);
-      setPredictions([]);
+      setPlacePredictions([]);
       return;
     }
 
@@ -143,7 +219,7 @@ export default function LiveOpsLocationSearch({
         address: result.formatted_address || address,
       });
       setOpenSuggestions(false);
-      setPredictions([]);
+      setPlacePredictions([]);
     } catch (error) {
       toast.error(error.message || "Unable to resolve location.");
     }
@@ -162,7 +238,7 @@ export default function LiveOpsLocationSearch({
           address: result?.formatted_address || value,
         });
         setOpenSuggestions(false);
-        setPredictions([]);
+        setPlacePredictions([]);
       } catch (error) {
         onPlaceSelect?.({
           lat: coords.lat,
@@ -170,6 +246,11 @@ export default function LiveOpsLocationSearch({
           address: value,
         });
       }
+      return;
+    }
+
+    if (predictions.length) {
+      handleSelectPrediction(predictions[0]);
       return;
     }
 
@@ -185,6 +266,7 @@ export default function LiveOpsLocationSearch({
       address: prediction.description,
       lat: prediction.lat,
       lng: prediction.lng,
+      marker: prediction.marker,
     });
   };
 
@@ -197,13 +279,17 @@ export default function LiveOpsLocationSearch({
       <TextField
         fullWidth
         size="small"
-        placeholder="Search location or lat, lng..."
+        placeholder="Search any place worldwide..."
         value={value}
         onChange={handleInputChange}
-        onFocus={() => setOpenSuggestions(true)}
+        onFocus={() => {
+          setOpenSuggestions(true);
+          if (value.trim().length >= 2 && !placePredictions.length) {
+            fetchPredictions(value);
+          }
+        }}
         onBlur={() => {
-          // Delay so suggestion clicks still register.
-          setTimeout(() => setOpenSuggestions(false), 150);
+          setTimeout(() => setOpenSuggestions(false), 180);
         }}
         autoComplete="off"
         InputProps={{
@@ -255,14 +341,15 @@ export default function LiveOpsLocationSearch({
 
       {openSuggestions && predictions.length > 0 ? (
         <Paper
+          elevation={8}
           sx={{
             position: "absolute",
             top: "calc(100% + 8px)",
             left: 0,
             right: 0,
-            zIndex: 1200,
+            zIndex: 1400,
             ...glass,
-            maxHeight: 240,
+            maxHeight: 360,
             overflow: "auto",
           }}
         >
@@ -275,11 +362,18 @@ export default function LiveOpsLocationSearch({
               >
                 <ListItemText
                   primary={item.description}
+                  secondary={item.source === "map" ? "On live map" : "Place suggestion"}
                   primaryTypographyProps={{ fontSize: 13, color: "text.primary" }}
+                  secondaryTypographyProps={{ fontSize: 11, color: "text.secondary" }}
                 />
               </ListItemButton>
             ))}
           </List>
+          {searching ? (
+            <Typography sx={{ px: 2, py: 1, fontSize: 11, color: "text.secondary" }}>
+              Searching more places…
+            </Typography>
+          ) : null}
         </Paper>
       ) : null}
     </Box>
@@ -292,4 +386,5 @@ LiveOpsLocationSearch.propTypes = {
   onPlaceSelect: PropTypes.func,
   onCurrentLocation: PropTypes.func,
   locating: PropTypes.bool,
+  mapMarkers: PropTypes.array,
 };

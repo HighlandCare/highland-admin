@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import PropTypes from "prop-types";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { DEFAULT_MAP_CENTER, sanitizeLiveOpsMarkers } from "../../utils/googleMaps";
+import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM, sanitizeLiveOpsMarkers } from "../../utils/googleMaps";
 import { buildLeafletMarkerIcon } from "../../utils/liveOpsMarkerIcons";
 
 const DEFAULT_TILE_URL = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
@@ -37,7 +37,7 @@ export default function LiveOpsLeafletMap({
     const map = L.map(containerRef.current, {
       scrollWheelZoom: true,
       zoomControl: false,
-    }).setView([DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng], 11);
+    }).setView([DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng], DEFAULT_MAP_ZOOM);
 
     L.control.zoom({ position: "bottomleft" }).addTo(map);
     tileLayerRef.current = L.tileLayer(DEFAULT_TILE_URL, {

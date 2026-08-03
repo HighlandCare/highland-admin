@@ -5,6 +5,7 @@ import { GoogleMap, Marker, TrafficLayer, useJsApiLoader } from "@react-google-m
 import { Box, Stack, Typography } from "@mui/material";
 import {
   DEFAULT_MAP_CENTER,
+  DEFAULT_MAP_ZOOM,
   getGoogleMapsApiKey,
   getMapsSetupHelp,
   GOOGLE_MAP_LIBRARIES,
@@ -274,7 +275,7 @@ export default function LiveOpsMap({
       <GoogleMap
         mapContainerStyle={{ width: "100%", height: "100%" }}
         center={mapCenter}
-        zoom={zoom ?? 11}
+        zoom={zoom ?? DEFAULT_MAP_ZOOM}
         onLoad={(map) => {
           mapRef.current = map;
           onMapReady?.(true);

@@ -5,6 +5,7 @@ import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import { CssBaseline } from "@mui/material";
 import { ThemeProvider } from "@mui/material/styles";
 
+import AuthGuard from "../components/auth-guard";
 import { useNProgress } from "../hooks/use-nprogress";
 import { createTheme } from "../theme";
 
@@ -45,7 +46,7 @@ const App = (props) => {
             draggable
             theme="light"
           />
-          {getLayout(<Component {...pageProps} />)}
+          <AuthGuard>{getLayout(<Component {...pageProps} />)}</AuthGuard>
         </ThemeProvider>
       </LocalizationProvider>
     </CacheProvider>

@@ -18,6 +18,7 @@ import {
 import { Scrollbar } from "../../components/scrollbar";
 import { items } from "./config";
 import { SideNavItem } from "./side-nav-item";
+import { clearAuthSession } from "../../utils/authSession";
 import { gradients } from "../../theme/colors";
 
 export const SideNav = (props) => {
@@ -27,7 +28,7 @@ export const SideNav = (props) => {
 
   const router = useRouter();
   const handleSignOut = useCallback(() => {
-    localStorage.clear();
+    clearAuthSession();
     onClose?.();
     router.push("/auth/login");
   }, [onClose, router]);

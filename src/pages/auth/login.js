@@ -1,12 +1,13 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Head from "next/head";
 import NextLink from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter } from "next/router";
 import { useFormik } from "formik";
 import * as Yup from "yup";
 import { toast } from "react-toastify";
 import { adminLogin, formatApiErrorMessage } from "../../Services/Auth.service";
 import Loader from "../../components/Loader";
+import { clearAuthSession } from "../../utils/authSession";
 import {
   Alert,
   Box,
@@ -24,9 +25,18 @@ import { Layout as AuthLayout } from "../../layouts/auth/layout";
 
 const Page = () => {
   const router = useRouter();
-  // const auth = useAuth();
   const [method, setMethod] = useState("email");
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!router.isReady) {
+      return;
+    }
+
+    if (router.query.reason === "expired") {
+      toast.info("Your session has expired. Please log in again.");
+    }
+  }, [router.isReady, router.query.reason]);
 
   const getDeviceToken = () => {
     const storageKey = "deviceToken";
@@ -41,6 +51,14 @@ const Page = () => {
     }
 
     return deviceToken;
+  };
+
+  const getPostLoginPath = () => {
+    const next = typeof router.query.next === "string" ? router.query.next : "";
+    if (next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/auth/login")) {
+      return next;
+    }
+    return "/";
   };
 
   const handleLogin = async (email, password, setSubmitError) => {
@@ -64,22 +82,18 @@ const Page = () => {
         localStorage.setItem("user", JSON.stringify(user));
         localStorage.setItem("token", JSON.stringify(token));
         toast.success(response.message || "Logged in successfully");
-        return router.push("/");
+        return router.replace(getPostLoginPath());
       }
 
       // Failed login (e.g. blocked account) — clear any stale session
-      localStorage.removeItem("isLogin");
-      localStorage.removeItem("user");
-      localStorage.removeItem("token");
+      clearAuthSession();
 
       const errorMessage =
         formatApiErrorMessage(response?.message) || "Invalid email or password.";
       setSubmitError?.(errorMessage);
       toast.error(errorMessage);
     } catch (err) {
-      localStorage.removeItem("isLogin");
-      localStorage.removeItem("user");
-      localStorage.removeItem("token");
+      clearAuthSession();
 
       const errorMessage = err.message || "Unable to sign in. Please try again.";
       setSubmitError?.(errorMessage);

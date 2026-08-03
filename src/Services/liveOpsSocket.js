@@ -247,7 +247,7 @@ function emptySnapshot() {
     feed: [],
     stats: {},
     legend: recountLegend([]),
-    region: { key: "all", center: { lat: 24.86, lng: 67.0 }, zoom: 11 },
+    region: { key: "all", center: { lat: 39.8283, lng: -98.5795 }, zoom: 4 },
   };
 }
 

@@ -7,9 +7,7 @@ import {
   FormControlLabel,
   FormGroup,
   IconButton,
-  MenuItem,
   Popover,
-  Select,
   Stack,
   Switch,
   Tooltip,
@@ -47,9 +45,7 @@ export default function LiveOpsMapOverlays({
   onPlaceSelect,
   onCurrentLocation,
   locating,
-  region,
-  regionOptions,
-  onRegionChange,
+  mapMarkers,
   markerTypes,
   selectedMarkerTypes,
   onMarkerTypeToggle,
@@ -57,6 +53,7 @@ export default function LiveOpsMapOverlays({
   onOnlineOnlyChange,
   selectedMarker,
   onCloseMarker,
+  onViewDetails,
   onLocateRegion,
   isMapFullscreen,
   onToggleFullscreen,
@@ -131,6 +128,7 @@ export default function LiveOpsMapOverlays({
           onPlaceSelect={onPlaceSelect}
           onCurrentLocation={onCurrentLocation}
           locating={locating}
+          mapMarkers={mapMarkers}
         />
         <IconButton
           onClick={(e) => setFilterAnchor(e.currentTarget)}
@@ -182,26 +180,6 @@ export default function LiveOpsMapOverlays({
         }}
       >
         <Typography sx={{ color: "text.primary", fontWeight: 700, mb: 1.5 }}>Filters</Typography>
-
-        <Typography sx={{ color: "text.secondary", fontSize: 11, mb: 0.5 }}>Region</Typography>
-        <Select
-          fullWidth
-          size="small"
-          value={region}
-          onChange={(e) => onRegionChange?.(e.target.value)}
-          sx={{
-            mb: 2,
-            color: "text.primary",
-            bgcolor: "background.default",
-            ".MuiOutlinedInput-notchedOutline": { borderColor: "divider" },
-          }}
-        >
-          {(regionOptions ?? []).map((opt) => (
-            <MenuItem key={opt.key} value={opt.key}>
-              {opt.label}
-            </MenuItem>
-          ))}
-        </Select>
 
         <Typography sx={{ color: "text.secondary", fontSize: 11, mb: 0.5 }}>Map layers</Typography>
         <FormGroup sx={{ mb: 1.5, maxHeight: 220, overflow: "auto" }}>
@@ -267,7 +245,9 @@ export default function LiveOpsMapOverlays({
                 ? "Food Order"
                 : selectedMarker.type === "ride_request"
                   ? "Ride Request"
-                  : "Customer"}
+                  : selectedMarker.type === "emergency" || selectedMarker.type === "dispute"
+                    ? "Dispute"
+                    : "Customer"}
           </Typography>
           <Typography sx={{ color: "text.primary", fontWeight: 700, fontSize: 16 }}>
             {selectedMarker.title}
@@ -281,7 +261,35 @@ export default function LiveOpsMapOverlays({
             </Typography>
           ) : null}
           <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-            <Button size="small" sx={{ color: "text.secondary" }} onClick={onCloseMarker}>
+            <Button
+              size="small"
+              variant="contained"
+              onClick={() => onViewDetails?.(selectedMarker)}
+              sx={{
+                bgcolor: markerBorder,
+                color: "#fff",
+                fontWeight: 700,
+                "&:hover": { bgcolor: markerBorder, opacity: 0.9 },
+              }}
+            >
+              View Details
+            </Button>
+            <Button
+              size="small"
+              variant="contained"
+              color="error"
+              onClick={onCloseMarker}
+              sx={{
+                bgcolor: "#dc2626 !important",
+                color: "#fff !important",
+                fontWeight: 700,
+                boxShadow: "none",
+                "&:hover": {
+                  bgcolor: "#b91c1c !important",
+                  boxShadow: "none",
+                },
+              }}
+            >
               Close
             </Button>
           </Stack>
@@ -341,7 +349,7 @@ export default function LiveOpsMapOverlays({
           zIndex: 1000,
         }}
       >
-        <Tooltip title="Reset map to selected region">
+        <Tooltip title="Reset map to United States view">
           <IconButton
             onClick={onLocateRegion}
             sx={{
@@ -383,9 +391,7 @@ LiveOpsMapOverlays.propTypes = {
   onPlaceSelect: PropTypes.func,
   onCurrentLocation: PropTypes.func,
   locating: PropTypes.bool,
-  region: PropTypes.string,
-  regionOptions: PropTypes.array,
-  onRegionChange: PropTypes.func,
+  mapMarkers: PropTypes.array,
   markerTypes: PropTypes.array,
   selectedMarkerTypes: PropTypes.array,
   onMarkerTypeToggle: PropTypes.func,
@@ -393,6 +399,7 @@ LiveOpsMapOverlays.propTypes = {
   onOnlineOnlyChange: PropTypes.func,
   selectedMarker: PropTypes.object,
   onCloseMarker: PropTypes.func,
+  onViewDetails: PropTypes.func,
   onLocateRegion: PropTypes.func,
   isMapFullscreen: PropTypes.bool,
   onToggleFullscreen: PropTypes.func,
