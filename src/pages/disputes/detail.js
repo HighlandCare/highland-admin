@@ -260,12 +260,14 @@ const Page = () => {
 
       try {
         let nextRow = cached;
+        let disputeLoaded = false;
 
-        if (cached?.disputeId || (!cached?.rideId && id)) {
+        if (cached?.disputeId || id) {
           try {
             const disputeResponse = await getDisputeById(cached?.disputeId || id);
             const disputeRow = getDisputeFromResponse(disputeResponse);
             if (disputeRow) {
+              disputeLoaded = true;
               nextRow = {
                 ...(cached || {}),
                 ...disputeRow,
@@ -284,7 +286,7 @@ const Page = () => {
           }
         }
 
-        const rideId = nextRow?.rideId || cached?.rideId;
+        const rideId = nextRow?.rideId || cached?.rideId || (!disputeLoaded ? id : null);
         if (rideId) {
           try {
             const rideResponse = await getRideById(rideId);

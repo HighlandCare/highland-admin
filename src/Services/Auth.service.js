@@ -21,6 +21,27 @@ export const getUsers = async (page, limit = 10) => {
   }
 };
 
+export const getUserById = async (userId) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const response = await Action.get(`admin/users/${encodeURIComponent(userId)}`, {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
 export const getChap = async (page, limit = 10) => {
   try {
     const authToken = JSON.parse(localStorage.getItem("token"));
@@ -260,7 +281,7 @@ export const updateDriverPersonaStatus = async (driverId, personaStatus = "appro
 
 export const getFAQ = async () => {
   try {
-    const response = await Action.get(`faq`);
+    const response = await Action.get(`admin/faq`);
     return response.data;
   } catch (error) {
     if (error.response) {

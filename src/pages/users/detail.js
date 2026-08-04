@@ -17,18 +17,17 @@ import {
 import { Layout as DashboardLayout } from "../../layouts/dashboard/layout";
 import Loader from "../../components/Loader";
 import { StatusBadge } from "../../components/table-cells";
-import { getUsers } from "../../Services/Auth.service";
+import { getUserById } from "../../Services/Auth.service";
 import { formatDate, formatRelativeDate } from "../../utils/dateUtils";
-import { getListFromResponse } from "../../utils/listUtils";
 import { pageContainerSx, pageMainSx, pageTitleSx } from "../../utils/pageLayout";
 import {
-  getCustomerAuthId,
   getStoredUserDetail,
   getUserAccountStatusMeta,
   getUserDisplayName,
+  getUserFromResponse,
   getUserProfileImage,
+  storeUserDetail,
 } from "../../utils/userUtils";
-import { ROWS_PER_PAGE } from "../../components/data-table";
 
 const hasDetailValue = (value) => {
   if (value == null) {
@@ -117,31 +116,47 @@ const Page = () => {
       return;
     }
 
+    let active = true;
+
     const loadUser = async () => {
       setIsLoading(true);
 
       const cached = getStoredUserDetail(id);
-      if (cached) {
+      if (cached && active) {
         setUser(cached);
-        setIsLoading(false);
-        return;
       }
 
       try {
-        const response = await getUsers(1, ROWS_PER_PAGE);
-        const found = getListFromResponse(response).find(
-          (item) => item._id === id || getCustomerAuthId(item) === id
-        );
-        setUser(found || null);
+        const response = await getUserById(id);
+        const profile = getUserFromResponse(response);
+
+        if (!active) {
+          return;
+        }
+
+        if (profile) {
+          setUser(profile);
+          storeUserDetail(profile);
+        } else if (!cached) {
+          setUser(null);
+        }
       } catch (error) {
         console.error("Error loading user details:", error);
-        setUser(null);
+        if (active && !cached) {
+          setUser(null);
+        }
       } finally {
-        setIsLoading(false);
+        if (active) {
+          setIsLoading(false);
+        }
       }
     };
 
     loadUser();
+
+    return () => {
+      active = false;
+    };
   }, [id]);
 
   const accountMeta = user ? getUserAccountStatusMeta(user) : null;
@@ -327,6 +342,9 @@ const Page = () => {
                     <SectionCard title="Account Details">
                       <Stack spacing={2}>
                         <DetailItem label="Account Status" value={accountMeta?.label} />
+                        {profile?.isGuest || user?.user?.isGuest ? (
+                          <DetailItem label="Account Type" value="Guest session" />
+                        ) : null}
                         <DetailItem label="Created At" value={createdAt} />
                         <DetailItem label="Last Updated" value={lastUpdated} />
                       </Stack>
