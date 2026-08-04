@@ -66,7 +66,6 @@ async function nominatimGeocode({ placeId, address, latlng }) {
   url.searchParams.set("format", "json");
   url.searchParams.set("q", query);
   url.searchParams.set("limit", "1");
-  url.searchParams.set("countrycodes", "us");
 
   const response = await fetch(url.toString(), { headers: NOMINATIM_HEADERS });
   if (!response.ok) {

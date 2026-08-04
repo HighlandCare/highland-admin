@@ -1,5 +1,8 @@
 const ID_PREFIXES = [
   "driver-online-",
+  "ride-urgent-",
+  "food-urgent-",
+  "driver-signup-",
   "customer_signup-",
   "driver_signup-",
   "ride_request-",
@@ -15,6 +18,27 @@ const ID_PREFIXES = [
   "order-",
   "signup-",
 ];
+
+function resolveRideDetailPath(rideId) {
+  return rideId ? `/orders/detail?id=${encodeURIComponent(rideId)}` : "/ride-history";
+}
+
+function resolveDisputeDetailPath(item) {
+  const disputeId = firstNonEmpty(item.disputeId, item.emergencyId);
+  if (disputeId) {
+    return `/disputes/detail?id=${encodeURIComponent(disputeId)}`;
+  }
+
+  const markerId = String(item.id || "");
+  if (markerId.startsWith("dispute-")) {
+    const stripped = stripKnownPrefix(markerId);
+    if (stripped) {
+      return `/disputes/detail?id=${encodeURIComponent(stripped)}`;
+    }
+  }
+
+  return null;
+}
 
 function firstNonEmpty(...values) {
   for (const value of values) {
@@ -174,20 +198,66 @@ export function resolveLiveOpsDetailPath(item) {
     return id ? `/users/detail?id=${encodeURIComponent(id)}` : "/users";
   }
 
+  if (type === "food_order") {
+    const orderId = firstNonEmpty(
+      item.orderId,
+      String(item.id || "").startsWith("food-urgent-") ||
+        String(item.id || "").startsWith("food-")
+        ? stripKnownPrefix(item.id)
+        : null,
+      item.category === "food" ? id : null
+    );
+    return orderId ? resolveRideDetailPath(orderId) : "/ride-history";
+  }
+
   if (type === "driver_signup" || type === "online_driver" || type === "driver") {
     return id ? `/chaperone/detail?id=${encodeURIComponent(id)}` : "/chaperone";
   }
 
   if (isDisputeLike(item)) {
-    return id ? `/disputes/detail?id=${encodeURIComponent(id)}` : "/disputes";
+    const disputePath = resolveDisputeDetailPath(item);
+    if (disputePath) return disputePath;
+
+    const status = String(item.status || "").toLowerCase();
+    const markerId = String(item.id || "");
+    const rideId = firstNonEmpty(
+      item.rideId,
+      item.bookingId,
+      markerId.startsWith("ride-urgent-") || markerId.startsWith("ride-")
+        ? stripKnownPrefix(markerId)
+        : null,
+      status === "disputed" ? id : null
+    );
+    const orderId = firstNonEmpty(
+      item.orderId,
+      markerId.startsWith("food-urgent-") || markerId.startsWith("food-")
+        ? stripKnownPrefix(markerId)
+        : null
+    );
+
+    if (orderId) {
+      return resolveRideDetailPath(orderId);
+    }
+
+    if (status === "cancelled" || status === "rejected") {
+      return resolveRideDetailPath(rideId || id);
+    }
+
+    if (status === "disputed") {
+      return rideId
+        ? `/disputes/detail?id=${encodeURIComponent(rideId)}`
+        : "/disputes";
+    }
+
+    return resolveRideDetailPath(rideId || id);
   }
 
   if (isOrderLike(item) || type === "ride_request" || type === "food_order" || type === "chaperoneride") {
-    return id ? `/orders/detail?id=${encodeURIComponent(id)}` : "/ride-history";
+    return id ? resolveRideDetailPath(id) : "/ride-history";
   }
 
   if (id) {
-    return `/orders/detail?id=${encodeURIComponent(id)}`;
+    return resolveRideDetailPath(id);
   }
 
   return null;

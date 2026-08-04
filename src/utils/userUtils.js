@@ -290,3 +290,23 @@ export const getStoredUserDetail = (id) => {
     return null;
   }
 };
+
+export const getUserFromResponse = (response) => {
+  if (!response) {
+    return null;
+  }
+
+  if (response.user || response.medicalCard !== undefined) {
+    return response;
+  }
+
+  if (response.data?.user || response.data?.medicalCard !== undefined) {
+    return response.data;
+  }
+
+  if (response.data && typeof response.data === "object" && !Array.isArray(response.data)) {
+    return response.data;
+  }
+
+  return null;
+};

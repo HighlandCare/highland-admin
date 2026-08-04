@@ -1,5 +1,6 @@
 import PropTypes from "prop-types";
 import { useState } from "react";
+import { useRouter } from "next/router";
 import {
   Box,
   Button,
@@ -19,8 +20,10 @@ import FunnelIcon from "@heroicons/react/24/solid/FunnelIcon";
 import MapPinIcon from "@heroicons/react/24/solid/MapPinIcon";
 import ArrowsPointingOutIcon from "@heroicons/react/24/solid/ArrowsPointingOutIcon";
 import ArrowsPointingInIcon from "@heroicons/react/24/solid/ArrowsPointingInIcon";
+import { toast } from "react-toastify";
 import LiveOpsLocationSearch from "./live-ops-location-search";
 import { buildLegendIconSvg } from "../../utils/liveOpsMarkerIcons";
+import { resolveLiveOpsDetailPath } from "../../utils/liveOpsNavigation";
 
 const LEGEND_ITEMS = [
   { key: "customer_signup", label: "Customers", color: "#22c55e" },
@@ -63,7 +66,18 @@ export default function LiveOpsMapOverlays({
   tourStopIndex,
   tourStopTotal,
 }) {
+  const router = useRouter();
   const [filterAnchor, setFilterAnchor] = useState(null);
+
+  const detailPath = selectedMarker ? resolveLiveOpsDetailPath(selectedMarker) : null;
+
+  const handleViewDetails = () => {
+    if (!detailPath) {
+      toast.info("No detail page available for this marker.");
+      return;
+    }
+    router.push(detailPath);
+  };
 
   const markerBorder =
     selectedMarker?.color === "yellow"
@@ -267,7 +281,9 @@ export default function LiveOpsMapOverlays({
                 ? "Food Order"
                 : selectedMarker.type === "ride_request"
                   ? "Ride Request"
-                  : "Customer"}
+                  : selectedMarker.type === "emergency"
+                    ? "Urgent"
+                    : "Customer"}
           </Typography>
           <Typography sx={{ color: "text.primary", fontWeight: 700, fontSize: 16 }}>
             {selectedMarker.title}
@@ -281,8 +297,23 @@ export default function LiveOpsMapOverlays({
             </Typography>
           ) : null}
           <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-            <Button size="small" sx={{ color: "text.secondary" }} onClick={onCloseMarker}>
+            <Button
+              size="small"
+              variant="outlined"
+              sx={{ color: "text.secondary", flex: 1 }}
+              onClick={onCloseMarker}
+            >
               Close
+            </Button>
+            <Button
+              size="small"
+              variant="contained"
+              color="primary"
+              sx={{ flex: 1 }}
+              disabled={!detailPath}
+              onClick={handleViewDetails}
+            >
+              View Details
             </Button>
           </Stack>
         </Box>

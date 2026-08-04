@@ -22,8 +22,7 @@ async function nominatimAutocomplete(input) {
   url.searchParams.set("format", "json");
   url.searchParams.set("q", input);
   url.searchParams.set("addressdetails", "1");
-  url.searchParams.set("limit", "6");
-  url.searchParams.set("countrycodes", "us");
+  url.searchParams.set("limit", "8");
 
   const response = await fetch(url.toString(), { headers: NOMINATIM_HEADERS });
   if (!response.ok) {
@@ -50,14 +49,18 @@ export default async function handler(req, res) {
       const url = new URL("https://maps.googleapis.com/maps/api/place/autocomplete/json");
       url.searchParams.set("input", input);
       url.searchParams.set("language", "en");
-      url.searchParams.set("components", "country:us");
       url.searchParams.set("key", apiKey);
 
       const response = await fetch(url.toString());
       const data = await response.json();
 
-      if (data.status === "OK" || data.status === "ZERO_RESULTS") {
+      if (data.status === "OK" && Array.isArray(data.predictions) && data.predictions.length > 0) {
         return res.status(200).json(data);
+      }
+      if (data.status === "OK" || data.status === "ZERO_RESULTS") {
+        // Fall through to Nominatim when Google has no matches.
+      } else {
+        console.error("Google autocomplete status:", data.status, data.error_message);
       }
     } catch (error) {
       // Fall through to Nominatim.
