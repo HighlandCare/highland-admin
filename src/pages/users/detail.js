@@ -131,7 +131,20 @@ const Page = () => {
     pickFirstValue(profile.dob, profile.dateOfBirth, user?.dob, user?.dateOfBirth)
   );
   const userType = pickFirstValue(profile.userType, user?.userType, profile.role, user?.role);
-  const deviceType = pickFirstValue(profile.deviceType, user?.deviceType, profile.platform, user?.platform);
+  const deviceType = pickFirstValue(
+    profile.deviceType,
+    user?.deviceType,
+    profile.platform,
+    user?.platform,
+    user?.user?.deviceType,
+    profile.user?.deviceType,
+    Array.isArray(user?.user?.devices)
+      ? user.user.devices.find((d) => d?.deviceType)?.deviceType
+      : null,
+    Array.isArray(profile.user?.devices)
+      ? profile.user.devices.find((d) => d?.deviceType)?.deviceType
+      : null
+  );
   const createdAt = formatOptionalDate(pickFirstValue(profile.createdAt, user?.createdAt));
   const lastUpdated = formatOptionalRelativeDate(pickFirstValue(profile.updatedAt, user?.updatedAt));
   const joinedRelative = formatOptionalRelativeDate(pickFirstValue(profile.createdAt, user?.createdAt));
@@ -189,11 +202,11 @@ const Page = () => {
                   <DetailSection noBorder title="Personal Information">
                     <DetailFieldGrid
                       fields={[
-                        { label: "Full Name", value: fullName },
-                        { label: "Email", value: email },
-                        { label: "Phone", value: phone },
-                        { label: "Gender", value: gender },
-                        { label: "Date of Birth", value: dateOfBirth },
+                        { label: "Full Name", value: fullName, hideEmpty: true },
+                        { label: "Email", value: email, hideEmpty: true },
+                        { label: "Phone", value: phone, hideEmpty: true },
+                        { label: "Gender", value: gender, hideEmpty: true },
+                        { label: "Date of Birth", value: dateOfBirth, hideEmpty: true },
                       ]}
                     />
                   </DetailSection>
@@ -201,9 +214,9 @@ const Page = () => {
                   <DetailSection title="Location & Address">
                     <DetailFieldGrid
                       fields={[
-                        { label: "Address", value: pickFirstValue(profile.address, user?.address) },
-                        { label: "City", value: pickFirstValue(profile.city, user?.city) },
-                        { label: "State", value: pickFirstValue(profile.state, user?.state) },
+                        { label: "Address", value: pickFirstValue(profile.address, user?.address), hideEmpty: true },
+                        { label: "City", value: pickFirstValue(profile.city, user?.city), hideEmpty: true },
+                        { label: "State", value: pickFirstValue(profile.state, user?.state), hideEmpty: true },
                         {
                           label: "Zip Code",
                           value: pickFirstValue(
@@ -212,6 +225,7 @@ const Page = () => {
                             user?.zipCode,
                             user?.zip
                           ),
+                          hideEmpty: true,
                         },
                         {
                           label: "Location",
@@ -223,6 +237,7 @@ const Page = () => {
                             ]
                               .filter(Boolean)
                               .join(", ") || null,
+                          hideEmpty: true,
                         },
                       ]}
                     />
@@ -231,14 +246,14 @@ const Page = () => {
                   <DetailSection title="Account Details">
                     <DetailFieldGrid
                       fields={[
-                        { label: "Account Status", value: accountMeta?.label },
+                        { label: "Account Status", value: accountMeta?.label, hideEmpty: true },
                         {
                           label: "Account Type",
                           value: profile?.isGuest || user?.user?.isGuest ? "Guest session" : null,
                           hideEmpty: true,
                         },
-                        { label: "Created At", value: createdAt },
-                        { label: "Last Updated", value: lastUpdated },
+                        { label: "Created At", value: createdAt, hideEmpty: true },
+                        { label: "Last Updated", value: lastUpdated, hideEmpty: true },
                       ]}
                     />
                   </DetailSection>
@@ -246,9 +261,9 @@ const Page = () => {
                   <DetailSection title="Preferences">
                     <DetailFieldGrid
                       fields={[
-                        { label: "Notifications", value: notificationValue },
-                        { label: "User Type", value: userType },
-                        { label: "Device Type", value: deviceType },
+                        { label: "Notifications", value: notificationValue, hideEmpty: true },
+                        { label: "User Type", value: userType, hideEmpty: true },
+                        { label: "Device Type", value: deviceType, hideEmpty: true },
                       ]}
                     />
                   </DetailSection>

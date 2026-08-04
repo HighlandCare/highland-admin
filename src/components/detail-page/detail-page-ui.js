@@ -64,7 +64,9 @@ export function DetailStat({ label, value }) {
         border: "1px solid",
         borderColor: alpha(brand.primary, 0.12),
         borderRadius: 2,
-        minWidth: { xs: "100%", sm: 140 },
+        minWidth: { xs: 120, sm: 140 },
+        maxWidth: { xs: "100%", sm: 220 },
+        flex: { xs: "1 1 140px", sm: "0 1 auto" },
         px: 2,
         py: 1.25,
       }}

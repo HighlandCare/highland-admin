@@ -3,7 +3,7 @@ import PropTypes from "prop-types";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM, sanitizeLiveOpsMarkers } from "../../utils/googleMaps";
-import { buildLeafletMarkerIcon } from "../../utils/liveOpsMarkerIcons";
+import { buildLeafletMarkerIcon, spreadOverlappingMarkers } from "../../utils/liveOpsMarkerIcons";
 
 const DEFAULT_TILE_URL = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
 const TRAFFIC_TILE_URL = "https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png";
@@ -27,7 +27,10 @@ export default function LiveOpsLeafletMap({
   const markerLayerRef = useRef(null);
   const lastFitKeyRef = useRef(null);
   const lastCameraRef = useRef("");
-  const safeMarkers = useMemo(() => sanitizeLiveOpsMarkers(markers), [markers]);
+  const safeMarkers = useMemo(
+    () => spreadOverlappingMarkers(sanitizeLiveOpsMarkers(markers)),
+    [markers]
+  );
   const centerLat = center?.lat ?? DEFAULT_MAP_CENTER.lat;
   const centerLng = center?.lng ?? DEFAULT_MAP_CENTER.lng;
 

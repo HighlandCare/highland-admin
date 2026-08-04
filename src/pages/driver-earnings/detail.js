@@ -179,6 +179,11 @@ const Page = () => {
   const driverEmail = driver ? getEarningsDriverEmail(driver) : null;
   const driverPhone = driver ? getEarningsDriverPhone(driver) : null;
   const driverName = driver ? getEarningsDriverName(driver) : null;
+  const lastUpdatedValue = driver?.updatedAt
+    ? formatRelativeDate(driver.updatedAt)
+    : transactions[0]?.date
+      ? formatRelativeDate(transactions[0].date)
+      : null;
 
   const profileFields = useMemo(() => {
     if (!driver) {
@@ -267,7 +272,8 @@ const Page = () => {
                           },
                           {
                             label: "Last Updated",
-                            value: driver.updatedAt ? formatRelativeDate(driver.updatedAt) : null,
+                            value: lastUpdatedValue === "—" ? null : lastUpdatedValue,
+                            hideEmpty: true,
                           },
                         ]}
                       />

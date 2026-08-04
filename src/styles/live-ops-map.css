@@ -1,0 +1,40 @@
+/* Leaflet custom SVG markers — remove default white tile behind divIcon */
+.leaflet-div-icon.live-ops-leaflet-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.live-ops-marker-wrap {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  line-height: 0;
+  pointer-events: none;
+}
+
+.live-ops-marker-wrap svg {
+  display: block;
+  height: auto;
+  max-width: none;
+  width: 100%;
+}
+
+.live-ops-legend-icon {
+  display: block;
+  flex-shrink: 0;
+  height: 16px;
+  width: 16px;
+}
+
+/* Google Maps HTML overlay markers */
+.live-ops-html-marker {
+  display: block;
+  line-height: 0;
+  pointer-events: auto;
+}
+
+.live-ops-html-marker svg {
+  display: block;
+  height: 100%;
+  width: 100%;
+}

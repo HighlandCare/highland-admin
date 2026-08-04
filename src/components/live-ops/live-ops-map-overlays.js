@@ -20,8 +20,8 @@ import ArrowsPointingOutIcon from "@heroicons/react/24/solid/ArrowsPointingOutIc
 import ArrowsPointingInIcon from "@heroicons/react/24/solid/ArrowsPointingInIcon";
 import { toast } from "react-toastify";
 import LiveOpsLocationSearch from "./live-ops-location-search";
-import { buildLegendIconSvg } from "../../utils/liveOpsMarkerIcons";
-import { resolveLiveOpsDetailPath } from "../../utils/liveOpsNavigation";
+import { buildLegendIconDataUrl } from "../../utils/liveOpsMarkerIcons";
+import { enrichLiveOpsItem, resolveLiveOpsDetailPath } from "../../utils/liveOpsNavigation";
 
 const LEGEND_ITEMS = [
   { key: "customer_signup", label: "Customers", color: "#22c55e" },
@@ -62,11 +62,13 @@ export default function LiveOpsMapOverlays({
   onToggleFullscreen,
   tourStopIndex,
   tourStopTotal,
+  snapshot = null,
 }) {
   const router = useRouter();
   const [filterAnchor, setFilterAnchor] = useState(null);
 
-  const detailPath = selectedMarker ? resolveLiveOpsDetailPath(selectedMarker) : null;
+  const enrichedMarker = selectedMarker ? enrichLiveOpsItem(selectedMarker, snapshot) : null;
+  const detailPath = enrichedMarker ? resolveLiveOpsDetailPath(enrichedMarker) : null;
 
   const handleViewDetails = () => {
     if (!detailPath) {
@@ -332,15 +334,11 @@ export default function LiveOpsMapOverlays({
             sx={{ flexShrink: 0 }}
           >
             <Box
+              alt=""
               aria-hidden
-              sx={{
-                width: 16,
-                height: 16,
-                lineHeight: 0,
-                flexShrink: 0,
-                "& svg": { display: "block" },
-              }}
-              dangerouslySetInnerHTML={{ __html: buildLegendIconSvg(item.key, 16) }}
+              className="live-ops-legend-icon"
+              component="img"
+              src={buildLegendIconDataUrl(item.key, 16)}
             />
             <Typography sx={{ color: "text.secondary", fontSize: 12 }}>
               {item.label}: {legend?.[item.key] ?? 0}
@@ -414,4 +412,5 @@ LiveOpsMapOverlays.propTypes = {
   onToggleFullscreen: PropTypes.func,
   tourStopIndex: PropTypes.number,
   tourStopTotal: PropTypes.number,
+  snapshot: PropTypes.object,
 };

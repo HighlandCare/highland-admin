@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import dynamic from "next/dynamic";
-import { GoogleMap, Marker, TrafficLayer, useJsApiLoader } from "@react-google-maps/api";
+import { GoogleMap, TrafficLayer, useJsApiLoader } from "@react-google-maps/api";
 import { Box, Stack, Typography } from "@mui/material";
 import {
   DEFAULT_MAP_CENTER,
@@ -12,15 +12,13 @@ import {
   LIVE_OPS_MAP_STYLES,
   sanitizeLiveOpsMarkers,
 } from "../../utils/googleMaps";
-import { buildGoogleMapsMarkerIcon } from "../../utils/liveOpsMarkerIcons";
+import { spreadOverlappingMarkers } from "../../utils/liveOpsMarkerIcons";
 import { useSmoothLiveOpsMarkers } from "../../hooks/useSmoothLiveOpsMarkers";
+import LiveOpsHtmlMarker from "./live-ops-html-marker";
 
 const LiveOpsLeafletMap = dynamic(() => import("./live-ops-leaflet-map"), {
   ssr: false,
 });
-function buildMarkerIcon(marker) {
-  return buildGoogleMapsMarkerIcon(marker?.type, marker?.color);
-}
 
 function FallbackNotice({ details }) {
   return (
@@ -53,64 +51,6 @@ FallbackNotice.propTypes = {
   details: PropTypes.arrayOf(PropTypes.string).isRequired,
 };
 
-function MapsErrorPanel({ title, details, onUseFallback }) {
-  return (
-    <Box
-      sx={{
-        position: "absolute",
-        inset: 0,
-        zIndex: 1200,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        bgcolor: "rgba(248, 249, 250, 0.92)",
-        px: 3,
-      }}
-    >
-      <Box
-        sx={{
-          maxWidth: 520,
-          p: 3,
-          borderRadius: "16px",
-          bgcolor: "background.paper",
-          border: "1px solid",
-          borderColor: "error.light",
-        }}
-      >
-        <Typography sx={{ color: "error.main", fontWeight: 800, fontSize: 20, mb: 1 }}>
-          {title}
-        </Typography>
-        <Stack spacing={1}>
-          {details.map((line) => (
-            <Typography key={line} sx={{ color: "text.secondary", fontSize: 13 }}>
-              • {line}
-            </Typography>
-          ))}
-        </Stack>
-        {onUseFallback ? (
-          <Typography
-            onClick={onUseFallback}
-            sx={{
-              color: "primary.main",
-              fontSize: 13,
-              fontWeight: 700,
-              mt: 2,
-              cursor: "pointer",
-              "&:hover": { textDecoration: "underline" },
-            }}
-          >
-            Continue with fallback map instead
-          </Typography>
-        ) : null}
-      </Box>
-    </Box>
-  );
-}
-MapsErrorPanel.propTypes = {
-  title: PropTypes.string.isRequired,
-  details: PropTypes.arrayOf(PropTypes.string).isRequired,
-  onUseFallback: PropTypes.func,
-};
 export default function LiveOpsMap({
   center,
   zoom,
@@ -130,9 +70,11 @@ export default function LiveOpsMap({
   const lastCameraRef = useRef("");
   const [authFailed, setAuthFailed] = useState(false);
   const [useFallback, setUseFallback] = useState(false);
+  const [mapInstance, setMapInstance] = useState(null);
   const apiKey = getGoogleMapsApiKey();
+
   const mergedMarkers = useMemo(() => {
-    const base = sanitizeLiveOpsMarkers(markers);
+    const base = spreadOverlappingMarkers(sanitizeLiveOpsMarkers(markers));
     const selectedLat = Number(selectedMarker?.lat);
     const selectedLng = Number(selectedMarker?.lng);
     if (
@@ -143,16 +85,24 @@ export default function LiveOpsMap({
       return base;
     }
 
+    // Keep the spread position if this marker was already placed, otherwise use raw coords.
+    const existing = base.find((marker) => marker.id === selectedMarker.id);
     const withoutDup = base.filter((marker) => marker.id !== selectedMarker.id);
+
     return [
       ...withoutDup,
       {
         ...selectedMarker,
-        lat: selectedLat,
-        lng: selectedLng,
-        type: selectedMarker.type || "driver_signup",
-        color: selectedMarker.color || "yellow",
-        title: selectedMarker.title || selectedMarker.label || "Selected",
+        ...(existing || {}),
+        lat: existing?.lat ?? selectedLat,
+        lng: existing?.lng ?? selectedLng,
+        type: selectedMarker.type || existing?.type || "driver_signup",
+        color: selectedMarker.color || existing?.color || "yellow",
+        title:
+          selectedMarker.title ||
+          selectedMarker.label ||
+          existing?.title ||
+          "Selected",
       },
     ];
   }, [markers, selectedMarker]);
@@ -278,6 +228,7 @@ export default function LiveOpsMap({
         zoom={zoom ?? DEFAULT_MAP_ZOOM}
         onLoad={(map) => {
           mapRef.current = map;
+          setMapInstance(map);
           onMapReady?.(true);
         }}
         options={{
@@ -294,23 +245,28 @@ export default function LiveOpsMap({
       >
         {showTraffic ? <TrafficLayer /> : null}
 
-        {safeMarkers.map((marker) => (
-          <Marker
-            key={marker.id}
-            position={{ lat: marker.lat, lng: marker.lng }}
-            icon={buildMarkerIcon(marker)}
-            onClick={() => onMarkerSelect?.(marker)}
-            title={`${marker.title || ""}${marker.subtitle ? ` — ${marker.subtitle}` : ""}`}
-            zIndex={marker.type === "emergency" ? 500 : marker.type === "online_driver" ? 400 : 200}
-          />
-        ))}
+        {/* Overlay markers need a mounted map; gate on mapInstance */}
+        {mapInstance
+          ? safeMarkers.map((marker) => (
+              <LiveOpsHtmlMarker
+                key={marker.id}
+                lat={marker.lat}
+                lng={marker.lng}
+                type={marker.type}
+                color={marker.color}
+                selected={selectedMarker?.id === marker.id}
+                title={`${marker.title || ""}${marker.subtitle ? ` — ${marker.subtitle}` : ""}`}
+                onClick={() => onMarkerSelect?.(marker)}
+              />
+            ))
+          : null}
 
-        {userLocation?.lat != null && userLocation?.lng != null ? (
-          <Marker
-            position={{ lat: userLocation.lat, lng: userLocation.lng }}
-            icon={buildGoogleMapsMarkerIcon("user_location")}
+        {mapInstance && userLocation?.lat != null && userLocation?.lng != null ? (
+          <LiveOpsHtmlMarker
+            lat={userLocation.lat}
+            lng={userLocation.lng}
+            type="user_location"
             title="Your location"
-            zIndex={999}
           />
         ) : null}
       </GoogleMap>

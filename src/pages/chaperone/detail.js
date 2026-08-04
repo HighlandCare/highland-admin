@@ -58,6 +58,24 @@ const formatDetailValue = (value) => {
   return null;
 };
 
+const formatOptionalDate = (value) => {
+  if (value == null || value === "" || value === "—") {
+    return null;
+  }
+  const formatted = formatDate(value);
+  return formatted === "—" ? null : formatted;
+};
+
+const formatOptionalRelativeDate = (value) => {
+  if (value == null || value === "" || value === "—") {
+    return null;
+  }
+  const formatted = formatRelativeDate(value);
+  return formatted === "—" ? null : formatted;
+};
+
+const field = (label, value) => ({ label, value, hideEmpty: true });
+
 const formatHourlyFare = (value) => {
   if (value == null || value === "") {
     return null;
@@ -266,24 +284,24 @@ const Page = () => {
                     <DetailSection noBorder title="Personal Information">
                       <DetailFieldGrid
                         fields={[
-                          { label: "Full Name", value: personal.fullName },
-                          { label: "Email", value: personal.email },
-                          { label: "Phone", value: personal.phone },
-                          { label: "Date of Birth", value: formatDate(personal.dob) },
-                          { label: "Address", value: personal.address },
-                          { label: "Location", value: formatDetailValue(personal.location) },
-                          { label: "City", value: personal.city },
-                          { label: "State", value: personal.state },
-                          { label: "Zip Code", value: personal.zipCode },
-                          {
-                            label: "Persona Status",
-                            value: personal.personaStatus
+                          field("Full Name", personal.fullName),
+                          field("Email", personal.email),
+                          field("Phone", personal.phone),
+                          field("Date of Birth", formatOptionalDate(personal.dob)),
+                          field("Address", personal.address),
+                          field("Location", formatDetailValue(personal.location)),
+                          field("City", personal.city),
+                          field("State", personal.state),
+                          field("Zip Code", personal.zipCode),
+                          field(
+                            "Persona Status",
+                            personal.personaStatus
                               ? String(personal.personaStatus).replace(/^\w/, (c) => c.toUpperCase())
-                              : null,
-                          },
-                          { label: "Verified", value: getChaperoneVerifiedLabel(detail) },
-                          { label: "Joined", value: formatDate(personal.joinedAt) },
-                          { label: "Last Active", value: formatRelativeDate(personal.lastActiveAt) },
+                              : null
+                          ),
+                          field("Verified", getChaperoneVerifiedLabel(detail)),
+                          field("Joined", formatOptionalDate(personal.joinedAt)),
+                          field("Last Active", formatOptionalRelativeDate(personal.lastActiveAt)),
                         ]}
                       />
                     </DetailSection>
@@ -291,12 +309,12 @@ const Page = () => {
                     <DetailSection title="Vehicle & License">
                       <DetailFieldGrid
                         fields={[
-                          { label: "Vehicle Name", value: vehicle.vehicleName },
-                          { label: "Vehicle Number", value: vehicle.vehicleNumber },
-                          { label: "Experience", value: vehicle.experience },
-                          { label: "License Number", value: vehicle.licenseNumber },
-                          { label: "License Expiry", value: vehicle.licenseExpiry },
-                          { label: "Hourly Fare", value: formatHourlyFare(vehicle.hourlyFare) },
+                          field("Vehicle Name", vehicle.vehicleName),
+                          field("Vehicle Number", vehicle.vehicleNumber),
+                          field("Experience", vehicle.experience),
+                          field("License Number", vehicle.licenseNumber),
+                          field("License Expiry", vehicle.licenseExpiry),
+                          field("Hourly Fare", formatHourlyFare(vehicle.hourlyFare)),
                         ]}
                       />
                     </DetailSection>
@@ -304,12 +322,12 @@ const Page = () => {
                     <DetailSection title="Wallet & Payments">
                       <DetailFieldGrid
                         fields={[
-                          { label: "Wallet Balance", value: formatEarningsCurrency(wallet.walletBalance) },
-                          { label: "Total Earned", value: formatEarningsCurrency(wallet.totalEarned) },
-                          { label: "Total Withdrawn", value: formatEarningsCurrency(wallet.totalWithdrawn) },
-                          { label: "Completed Rides", value: wallet.completedRides ?? null },
-                          { label: "Stripe Connection", value: wallet.stripeStatus || null },
-                          { label: "Stripe Business Name", value: wallet.stripeBusinessName || null },
+                          field("Wallet Balance", formatEarningsCurrency(wallet.walletBalance)),
+                          field("Total Earned", formatEarningsCurrency(wallet.totalEarned)),
+                          field("Total Withdrawn", formatEarningsCurrency(wallet.totalWithdrawn)),
+                          field("Completed Rides", wallet.completedRides ?? null),
+                          field("Stripe Connection", wallet.stripeStatus || null),
+                          field("Stripe Business Name", wallet.stripeBusinessName || null),
                         ]}
                       />
                     </DetailSection>

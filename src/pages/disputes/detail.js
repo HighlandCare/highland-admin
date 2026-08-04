@@ -83,6 +83,8 @@ const formatTimestamp = (value) => {
 
 const getTimingItems = (row) =>
   [
+    { label: "Created", value: formatTimestamp(row?.createdAt) },
+    { label: "Updated", value: formatRelativeDate(row?.updatedAt) },
     { label: "Ride Start", value: formatTimestamp(row?.rideStartTime) },
     { label: "Ride End", value: formatTimestamp(row?.rideEndTime) },
   ].filter((item) => hasDetailValue(item.value));
@@ -375,8 +377,6 @@ const Page = () => {
                         { label: "Payment", value: formatRidePaymentStatus(row.havePaid) },
                         { label: "Distance", value: formatRideField(row.distance) },
                         { label: "Passengers", value: formatRideField(row.numberOfPassenger) },
-                        { label: "Created", value: formatTimestamp(row.createdAt) },
-                        { label: "Updated", value: formatRelativeDate(row.updatedAt) },
                       ]}
                       subtitle={`${getRideDriverName(row)} → ${getRideCustomerName(row)}`}
                       title="Dispute case"

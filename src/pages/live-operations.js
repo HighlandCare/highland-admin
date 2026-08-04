@@ -26,7 +26,7 @@ import { OverviewRideAnalytics } from "../sections/overview/overview-ride-analyt
 import { OverviewRideStatus } from "../sections/overview/overview-ride-status";
 import { loadDashboardAnalytics } from "../utils/dashboardUtils";
 import { useLiveOpsUi } from "../contexts/live-ops-ui-context";
-import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM, parseCoordinateQuery } from "../utils/googleMaps";
+import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM, parseCoordinateQuery, sanitizeLiveOpsMarkers } from "../utils/googleMaps";
 import {
   enrichLiveOpsItem,
   resolveLiveOpsDetailPath,
@@ -122,6 +122,7 @@ const Page = () => {
   const tourTimerRef = useRef(null);
   const refreshTimerRef = useRef(null);
   const socketApiRef = useRef(null);
+  const didInitialFitRef = useRef(false);
 
   const clearLocationTour = useCallback(() => {
     if (tourTimerRef.current) {
@@ -293,8 +294,9 @@ const Page = () => {
       emergency: 0,
     };
     filteredMarkers.forEach((marker) => {
-      if (Object.prototype.hasOwnProperty.call(counts, marker.type)) {
-        counts[marker.type] += 1;
+      const legendKey = marker.type === "dispute" ? "emergency" : marker.type;
+      if (Object.prototype.hasOwnProperty.call(counts, legendKey)) {
+        counts[legendKey] += 1;
       }
     });
     return counts;
@@ -346,40 +348,75 @@ const Page = () => {
   );
 
   const handleCurrentLocation = useCallback(() => {
+    if (typeof window === "undefined" || !window.isSecureContext) {
+      toast.error("Current location requires HTTPS or localhost.");
+      return;
+    }
+
     if (!navigator.geolocation) {
       toast.error("Geolocation is not supported in this browser.");
       return;
     }
 
+    const applyPosition = (position) => {
+      const next = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+      };
+      clearLocationTour();
+      setUserLocation(next);
+      setMapViewCenter(next);
+      setMapZoom(15);
+      setFitToMarkers(false);
+      setSelectedMarker(null);
+      setLocationSearch(`${next.lat.toFixed(5)}, ${next.lng.toFixed(5)}`);
+      setLocating(false);
+      toast.success("Centered map on your current location.");
+    };
+
+    const handleGeoError = (error, triedFallback = false) => {
+      if (!triedFallback && (error.code === 3 || error.code === 2)) {
+        navigator.geolocation.getCurrentPosition(applyPosition, (retryError) => handleGeoError(retryError, true), {
+          enableHighAccuracy: false,
+          maximumAge: 120000,
+          timeout: 12000,
+        });
+        return;
+      }
+
+      setLocating(false);
+      const messages = {
+        1: "Location permission denied. Allow location access in your browser settings.",
+        2: "Location unavailable on this device.",
+        3: "Location request timed out. Try again.",
+      };
+      toast.error(messages[error.code] || error.message || "Unable to get your current location.");
+    };
+
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const next = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        };
-        clearLocationTour();
-        setUserLocation(next);
-        setMapViewCenter(next);
-        setMapZoom(15);
-        setFitToMarkers(false);
-        setSelectedMarker(null);
-        setLocationSearch(`${next.lat.toFixed(5)}, ${next.lng.toFixed(5)}`);
-        setLocating(false);
-        toast.success("Centered map on your current location.");
-      },
-      (error) => {
-        setLocating(false);
-        toast.error(error.message || "Unable to get your current location.");
-      },
-      { enableHighAccuracy: true, timeout: 15000 }
-    );
+    navigator.geolocation.getCurrentPosition(applyPosition, handleGeoError, {
+      enableHighAccuracy: true,
+      maximumAge: 60000,
+      timeout: 15000,
+    });
   }, [clearLocationTour]);
 
   const requestFitToMarkers = useCallback(() => {
     setFitToMarkers(true);
     setMapFitKey((key) => key + 1);
   }, []);
+
+  useEffect(() => {
+    if (didInitialFitRef.current || viewMode !== "map") {
+      return;
+    }
+
+    const validMarkers = sanitizeLiveOpsMarkers(snapshot?.markers);
+    if (validMarkers.length > 0) {
+      didInitialFitRef.current = true;
+      requestFitToMarkers();
+    }
+  }, [requestFitToMarkers, snapshot?.markers, viewMode]);
 
   const handleMapFitComplete = useCallback(() => {
     setFitToMarkers(false);
@@ -723,6 +760,7 @@ const Page = () => {
                       onToggleFullscreen={toggleFullscreen}
                       tourStopIndex={tourStopIndex}
                       tourStopTotal={tourStopTotal}
+                      snapshot={snapshot}
                     />
                   </>
                 )}

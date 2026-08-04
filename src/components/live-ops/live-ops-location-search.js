@@ -259,6 +259,12 @@ export default function LiveOpsLocationSearch({
     }
   };
 
+  const handleCurrentLocationClick = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onCurrentLocation?.();
+  };
+
   const handleSelectPrediction = (prediction) => {
     onChange?.(prediction.description);
     resolveSelection({
@@ -304,13 +310,19 @@ export default function LiveOpsLocationSearch({
               <Tooltip title="Use my current location">
                 <span>
                   <IconButton
+                    aria-label="Use my current location"
                     size="small"
                     type="button"
-                    disabled={locating}
-                    onClick={onCurrentLocation}
+                    disabled={locating || !onCurrentLocation}
+                    onClick={handleCurrentLocationClick}
+                    onMouseDown={(event) => event.preventDefault()}
                     sx={{ color: "primary.main" }}
                   >
-                    <MapPinIcon width={18} />
+                    {locating ? (
+                      <CircularProgress size={16} sx={{ color: "primary.main" }} />
+                    ) : (
+                      <MapPinIcon width={18} />
+                    )}
                   </IconButton>
                 </span>
               </Tooltip>
