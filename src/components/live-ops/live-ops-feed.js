@@ -24,7 +24,6 @@ export default function LiveOpsFeed({ feed, filter, onFilterChange }) {
     { key: "customer_signup", label: "Customers" },
     { key: "driver_signup", label: "Drivers" },
     { key: "ride_request", label: "Rides" },
-    { key: "food_order", label: "Food" },
     { key: "emergency", label: "Urgent" },
   ];
 

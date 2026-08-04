@@ -27,7 +27,6 @@ const LEGEND_ITEMS = [
   { key: "customer_signup", label: "Customers", color: "#22c55e" },
   { key: "driver_signup", label: "Drivers", color: "#eab308" },
   { key: "ride_request", label: "Pending", color: "#3b82f6" },
-  { key: "food_order", label: "Food", color: "#a855f7" },
   { key: "online_driver", label: "Online", color: "#f97316" },
   { key: "emergency", label: "Urgent", color: "#ef4444" },
 ];
@@ -257,15 +256,13 @@ export default function LiveOpsMapOverlays({
           <Typography sx={{ color: markerBorder, fontSize: 12, fontWeight: 700, mb: 0.5 }}>
             {selectedMarker.type === "driver_signup" || selectedMarker.type === "online_driver"
               ? "Driver"
-              : selectedMarker.type === "food_order"
-                ? "Food Order"
-                : selectedMarker.type === "ride_request"
-                  ? "Ride Request"
-                  : selectedMarker.type === "dispute"
-                    ? "Dispute"
-                    : selectedMarker.type === "emergency"
-                      ? "Urgent"
-                      : "Customer"}
+              : selectedMarker.type === "ride_request"
+                ? "Ride Request"
+                : selectedMarker.type === "dispute"
+                  ? "Dispute"
+                  : selectedMarker.type === "emergency"
+                    ? "Urgent"
+                    : "Customer"}
           </Typography>
           <Typography sx={{ color: "text.primary", fontWeight: 700, fontSize: 16 }}>
             {selectedMarker.title}

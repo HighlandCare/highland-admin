@@ -63,12 +63,42 @@ const MARKER_TYPE_FILTERS = [
   { key: "customer_signup", label: "Customers" },
   { key: "driver_signup", label: "Drivers" },
   { key: "ride_request", label: "Pending rides" },
-  { key: "food_order", label: "Food orders" },
   { key: "online_driver", label: "Online drivers" },
   { key: "emergency", label: "Urgent" },
 ];
 
 const DEFAULT_MARKER_TYPES = MARKER_TYPE_FILTERS.map((item) => item.key);
+
+/** Hide food delivery / food order rows from Live Operations. */
+const isFoodLiveOpsItem = (item) => {
+  if (!item) return false;
+  if (item.type === "food_order" || item.category === "food") return true;
+  const id = String(item.id || "");
+  return id.startsWith("food-") || id.startsWith("food-urgent-") || id.startsWith("food_order");
+};
+
+const stripFoodFromSnapshot = (snapshot) => {
+  if (!snapshot) return null;
+
+  const markers = (snapshot.markers ?? []).filter((item) => !isFoodLiveOpsItem(item));
+  const feed = (snapshot.feed ?? []).filter((item) => !isFoodLiveOpsItem(item));
+  const legend = { ...(snapshot.legend || {}) };
+  delete legend.food_order;
+
+  const stats = {
+    ...(snapshot.stats || {}),
+    activeFoodDeliveries: 0,
+    liveBookings: snapshot.stats?.activeRides ?? snapshot.stats?.liveBookings ?? 0,
+  };
+
+  return {
+    ...snapshot,
+    markers,
+    feed,
+    legend,
+    stats,
+  };
+};
 
 function resolveBookingStops(item, markers = []) {
   if (Array.isArray(item?.stops) && item.stops.length) {
@@ -142,7 +172,9 @@ const Page = () => {
       });
 
       if (response?.status && response?.data) {
-        setSnapshot((prev) => mergeLiveOpsSnapshot(prev, response.data));
+        setSnapshot((prev) =>
+          stripFoodFromSnapshot(mergeLiveOpsSnapshot(prev, stripFoodFromSnapshot(response.data)))
+        );
       }
     } catch (error) {
       console.error("Live ops snapshot failed:", error);
@@ -185,8 +217,12 @@ const Page = () => {
           return;
         }
 
+        if (isFoodLiveOpsItem(payload?.marker || payload)) {
+          return;
+        }
+
         setSnapshot((prev) => {
-          const next = applyLiveOpsSocketEvent(prev, eventName, payload);
+          const next = stripFoodFromSnapshot(applyLiveOpsSocketEvent(prev, eventName, payload));
 
           if (
             (eventName === "live-ops:driver.location" ||
@@ -272,7 +308,7 @@ const Page = () => {
   };
 
   const filteredMarkers = useMemo(() => {
-    const markers = snapshot?.markers ?? [];
+    const markers = (snapshot?.markers ?? []).filter((marker) => !isFoodLiveOpsItem(marker));
     return markers.filter((marker) => {
       if (onlineOnly) {
         return marker.type === "online_driver" && marker.available !== false;
@@ -289,7 +325,6 @@ const Page = () => {
       customer_signup: 0,
       driver_signup: 0,
       ride_request: 0,
-      food_order: 0,
       online_driver: 0,
       emergency: 0,
     };
@@ -301,6 +336,20 @@ const Page = () => {
     });
     return counts;
   }, [filteredMarkers]);
+
+  const rideOnlyFeed = useMemo(
+    () => (snapshot?.feed ?? []).filter((item) => !isFoodLiveOpsItem(item)),
+    [snapshot?.feed]
+  );
+
+  const rideOnlyStats = useMemo(() => {
+    const s = snapshot?.stats ?? {};
+    return {
+      ...s,
+      activeFoodDeliveries: 0,
+      liveBookings: s.activeRides ?? 0,
+    };
+  }, [snapshot?.stats]);
 
   useEffect(() => {
     if (!selectedMarker) return;
@@ -776,8 +825,8 @@ const Page = () => {
                   }}
                 >
                   <LiveOpsRightPanel
-                    feed={snapshot?.feed ?? []}
-                    stats={snapshot?.stats}
+                    feed={rideOnlyFeed}
+                    stats={rideOnlyStats}
                     filter={feedFilter}
                     onFilterChange={setFeedFilter}
                     onFeedItemClick={handleFeedItemClick}
@@ -803,8 +852,8 @@ const Page = () => {
               <LiveOpsRightPanel
                 mobile
                 onClose={() => setIsSignupsOpen(false)}
-                feed={snapshot?.feed ?? []}
-                stats={snapshot?.stats}
+                feed={rideOnlyFeed}
+                stats={rideOnlyStats}
                 filter={feedFilter}
                 onFilterChange={setFeedFilter}
                 onFeedItemClick={(item) => {
@@ -815,7 +864,7 @@ const Page = () => {
               />
             </Drawer>
 
-            {!isMapFullscreen ? <LiveOpsStatsBar stats={snapshot?.stats} /> : null}
+            {!isMapFullscreen ? <LiveOpsStatsBar stats={rideOnlyStats} /> : null}
           </>
         ) : (
           <Box sx={{ p: 3, flex: 1, overflow: "auto", bgcolor: "background.default" }}>

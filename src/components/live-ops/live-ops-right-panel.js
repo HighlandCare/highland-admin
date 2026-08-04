@@ -90,7 +90,6 @@ export default function LiveOpsRightPanel({
     { key: "customer_signup", label: "Customers" },
     { key: "driver_signup", label: "Drivers" },
     { key: "ride_request", label: "Bookings" },
-    { key: "food_order", label: "Food" },
   ];
 
   const visibleFeed =
@@ -280,7 +279,7 @@ export default function LiveOpsRightPanel({
             />
             <LiveStatCard
               label="Active Bookings"
-              value={(s.activeRides ?? 0) + (s.activeFoodDeliveries ?? 0)}
+              value={s.activeRides ?? 0}
               sublabel="In progress"
               accent="#0284c7"
             />

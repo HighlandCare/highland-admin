@@ -51,15 +51,15 @@ export const items = [
       </SvgIcon>
     ),
   },
-  {
-    title: "Restaurant Management",
-    path: "/restaurants",
-    icon: (
-      <SvgIcon fontSize="small">
-        <BuildingStorefrontIcon />
-      </SvgIcon>
-    ),
-  },
+  // {
+  //   title: "Restaurant Management",
+  //   path: "/restaurants",
+  //   icon: (
+  //     <SvgIcon fontSize="small">
+  //       <BuildingStorefrontIcon />
+  //     </SvgIcon>
+  //   ),
+  // },
   {
     title: "Driver Earnings",
     path: "/driver-earnings",
