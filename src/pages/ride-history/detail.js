@@ -23,14 +23,18 @@ import {
   formatRidePaymentStatus,
   formatRideReason,
   getRideAdminEarning,
+  getRideCustomer,
   getRideCustomerName,
   getRideDestinationAddress,
+  getRideDriver,
   getRideDriverEarning,
   getRideDriverName,
   getRideFromResponse,
   getRidePickupAddress,
+  getRideScheduledLabel,
   getRideStatusMeta,
   getStoredRideDetail,
+  mergeRideDetailRecords,
   storeRideDetail,
 } from "../../utils/rideUtils";
 
@@ -87,8 +91,9 @@ const Page = () => {
         const rideData = getRideFromResponse(response);
 
         if (rideData) {
-          setRide(rideData);
-          storeRideDetail(rideData);
+          const merged = mergeRideDetailRecords(cached, rideData);
+          setRide(merged);
+          storeRideDetail(merged);
         } else if (!cached) {
           setRide(null);
         }
@@ -107,16 +112,23 @@ const Page = () => {
   }, [id]);
 
   const statusMeta = ride ? getRideStatusMeta(ride.status) : null;
+  const customer = ride ? getRideCustomer(ride) : null;
+  const driver = ride ? getRideDriver(ride) : null;
+  const scheduledLabel = ride ? getRideScheduledLabel(ride) : null;
 
   const scheduleFields = ride
     ? [
-        { label: "Scheduled At", value: formatRideTimestamp(ride.scheduledAt) },
+        {
+          label: "Scheduled At",
+          value: formatRideTimestamp(scheduledLabel) || (hasDetailValue(scheduledLabel) ? scheduledLabel : null),
+          hideEmpty: true,
+        },
         { label: "Pre Date", value: formatRideField(ride.pre_date), hideEmpty: true },
         { label: "Pre Time", value: formatRideField(ride.pre_time), hideEmpty: true },
-        { label: "Ride Start Time", value: formatRideTimestamp(ride.rideStartTime) },
-        { label: "Ride End Time", value: formatRideTimestamp(ride.rideEndTime) },
+        { label: "Ride Start Time", value: formatRideTimestamp(ride.rideStartTime), hideEmpty: true },
+        { label: "Ride End Time", value: formatRideTimestamp(ride.rideEndTime), hideEmpty: true },
         { label: "Created At", value: formatRideTimestamp(ride.createdAt) },
-        { label: "Updated At", value: formatRelativeDate(ride.updatedAt) },
+        { label: "Updated At", value: formatRelativeDate(ride.updatedAt), hideEmpty: true },
         { label: "Cancel Reason", value: formatRideReason(ride.reasonOfCancel), hideEmpty: true },
         { label: "Dispute Reason", value: formatRideReason(ride.reasonOfDispute), hideEmpty: true },
       ].filter((field) => !field.hideEmpty || hasDetailValue(field.value))
@@ -165,19 +177,32 @@ const Page = () => {
                   </DetailSection>
 
                   <DetailSection title="Schedule & Timing">
-                    <DetailFieldGrid fields={scheduleFields.length ? scheduleFields : [{ label: "Created At", value: formatRideTimestamp(ride.createdAt) }]} />
+                    <DetailFieldGrid
+                      fields={
+                        scheduleFields.length
+                          ? scheduleFields
+                          : [{ label: "Created At", value: formatRideTimestamp(ride.createdAt) }]
+                      }
+                    />
                   </DetailSection>
 
                   <DetailSection title="People">
                     <DetailFieldGrid
                       columns={{ sm: 2, lg: 2 }}
                       fields={[
-                        { label: "Customer Name", value: ride.customer?.fullName },
-                        { label: "Customer Email", value: ride.customer?.email },
-                        { label: "Customer Phone", value: ride.customer?.phone },
-                        { label: "Driver Name", value: ride.driver?.fullName || "Unassigned" },
-                        { label: "Driver Email", value: ride.driver?.email },
-                        { label: "Driver Phone", value: ride.driver?.phone },
+                        {
+                          label: "Customer Name",
+                          value: customer?.fullName || customer?.name || null,
+                          hideEmpty: true,
+                        },
+                        { label: "Customer Email", value: customer?.email || null, hideEmpty: true },
+                        { label: "Customer Phone", value: customer?.phone || null, hideEmpty: true },
+                        {
+                          label: "Driver Name",
+                          value: driver?.fullName || driver?.name || "Unassigned",
+                        },
+                        { label: "Driver Email", value: driver?.email || null, hideEmpty: true },
+                        { label: "Driver Phone", value: driver?.phone || null, hideEmpty: true },
                       ]}
                     />
                   </DetailSection>
@@ -189,7 +214,10 @@ const Page = () => {
                         { label: "Pickup Address", value: getRidePickupAddress(ride) },
                         { label: "Pickup Coordinates", value: formatRideCoordinates(ride.from) },
                         { label: "Destination Address", value: getRideDestinationAddress(ride) },
-                        { label: "Destination Coordinates", value: formatRideCoordinates(ride.destination) },
+                        {
+                          label: "Destination Coordinates",
+                          value: formatRideCoordinates(ride.destination),
+                        },
                       ]}
                     />
                   </DetailSection>
@@ -197,11 +225,26 @@ const Page = () => {
                   <DetailSection title="Payment">
                     <DetailFieldGrid
                       fields={[
-                        { label: "Total Amount", value: formatRideCurrency(ride.payment?.totalAmount) },
-                        { label: "Driver Amount", value: formatRideCurrency(getRideDriverEarning(ride)) },
-                        { label: "Admin Commission", value: formatRideCurrency(getRideAdminEarning(ride)) },
-                        { label: "Commission Rate", value: formatRideCommissionRate(ride.payment?.commissionRate) },
-                        { label: "Payment Source", value: formatRideField(ride.payment?.source) },
+                        {
+                          label: "Total Amount",
+                          value: formatRideCurrency(ride.payment?.totalAmount),
+                        },
+                        {
+                          label: "Driver Amount",
+                          value: formatRideCurrency(getRideDriverEarning(ride)),
+                        },
+                        {
+                          label: "Admin Commission",
+                          value: formatRideCurrency(getRideAdminEarning(ride)),
+                        },
+                        {
+                          label: "Commission Rate",
+                          value: formatRideCommissionRate(ride.payment?.commissionRate),
+                        },
+                        {
+                          label: "Payment Source",
+                          value: formatRideField(ride.payment?.source),
+                        },
                       ]}
                     />
                   </DetailSection>

@@ -25,9 +25,93 @@ export const getRideList = (response) => {
   return [];
 };
 
-export const getRideDriverName = (ride) => ride?.driver?.fullName?.trim() || "Unassigned";
+const pickPerson = (...candidates) => {
+  for (const person of candidates) {
+    if (!person || typeof person !== "object") continue;
+    if (
+      person.fullName ||
+      person.name ||
+      person.email ||
+      person.phone ||
+      person.phoneNumber ||
+      person.identifier
+    ) {
+      return person;
+    }
+  }
+  return null;
+};
 
-export const getRideCustomerName = (ride) => ride?.customer?.fullName?.trim() || "—";
+const personDisplayName = (person) => {
+  if (!person || typeof person !== "object") return null;
+  const name = person.fullName?.trim() || person.name?.trim();
+  if (name) return name;
+  if (person.email?.trim()) return person.email.trim();
+  if (person.phone?.trim()) return person.phone.trim();
+  if (person.phoneNumber?.trim()) return person.phoneNumber.trim();
+  if (person.identifier?.trim()) return person.identifier.trim();
+  return null;
+};
+
+export const getRideCustomer = (ride) =>
+  pickPerson(
+    ride?.customer,
+    ride?.creator,
+    ride?.user,
+    typeof ride?.userId === "object" ? ride.userId : null
+  );
+
+export const getRideDriver = (ride) =>
+  pickPerson(
+    ride?.driver,
+    ride?.acceptedBy,
+    typeof ride?.driverId === "object" ? ride.driverId : null
+  );
+
+export const getRideDriverName = (ride) => personDisplayName(getRideDriver(ride)) || "Unassigned";
+
+export const getRideCustomerName = (ride) => personDisplayName(getRideCustomer(ride)) || "—";
+
+/** Prefer scheduledAt; fall back to pre_date + pre_time for booked rides. */
+export const getRideScheduledLabel = (ride) => {
+  if (!ride) return null;
+
+  if (ride.scheduledAt && ride.scheduledAt !== "false") {
+    const date = new Date(ride.scheduledAt);
+    if (!Number.isNaN(date.getTime())) {
+      return ride.scheduledAt;
+    }
+  }
+
+  const preDate = typeof ride.pre_date === "string" ? ride.pre_date.trim() : "";
+  const preTime = typeof ride.pre_time === "string" ? ride.pre_time.trim() : "";
+  if (preDate || preTime) {
+    return [preDate, preTime].filter(Boolean).join(" ");
+  }
+
+  return null;
+};
+
+export const mergeRideDetailRecords = (cached, incoming) => {
+  if (!incoming) return cached || null;
+  if (!cached) return incoming;
+
+  const customer = pickPerson(incoming.customer, cached.customer, incoming.creator, cached.creator);
+  const driver = pickPerson(incoming.driver, cached.driver, incoming.acceptedBy, cached.acceptedBy);
+
+  return {
+    ...cached,
+    ...incoming,
+    customer: customer || incoming.customer || cached.customer || null,
+    driver: driver || incoming.driver || cached.driver || null,
+    from: incoming.from || cached.from || null,
+    destination: incoming.destination || cached.destination || null,
+    payment: incoming.payment || cached.payment || null,
+    scheduledAt: incoming.scheduledAt ?? cached.scheduledAt ?? null,
+    pre_date: incoming.pre_date ?? cached.pre_date ?? null,
+    pre_time: incoming.pre_time ?? cached.pre_time ?? null,
+  };
+};
 
 export const getRideDestinationAddress = (ride) => ride?.destination?.address || "—";
 
@@ -170,27 +254,41 @@ export const getRideFromResponse = (response) => {
     return null;
   }
 
-  if (response.rideId || response._id) {
+  const looksLikeRide = (value) =>
+    Boolean(
+      value &&
+        typeof value === "object" &&
+        !Array.isArray(value) &&
+        (value.rideId ||
+          value._id ||
+          value.orderId ||
+          value.customer ||
+          value.driver ||
+          value.creator ||
+          value.from ||
+          value.destination ||
+          value.status ||
+          value.recordType)
+    );
+
+  if (looksLikeRide(response) && (response.rideId || response._id || response.customer || response.creator)) {
     return response;
   }
 
-  if (response.data?.rideId || response.data?._id) {
+  if (looksLikeRide(response.data)) {
+    // Unwrap { success, data: ride } and { data: { data: ride } }
+    if (looksLikeRide(response.data.data)) {
+      return response.data.data;
+    }
     return response.data;
   }
 
-  if (response.data?.ride) {
+  if (looksLikeRide(response.data?.ride)) {
     return response.data.ride;
   }
 
-  if (response.ride) {
+  if (looksLikeRide(response.ride)) {
     return response.ride;
-  }
-
-  if (response.data && typeof response.data === "object" && !Array.isArray(response.data)) {
-    const nested = response.data;
-    if (nested.customer || nested.driver || nested.from || nested.destination || nested.status) {
-      return nested;
-    }
   }
 
   return null;

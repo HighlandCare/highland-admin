@@ -225,7 +225,7 @@ export const RideHistoryTable = (props) => {
           ))}
         </Select>
       </FormControl>
-      <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 150 } }}>
+      {/* <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 150 } }}>
         <Select
           displayEmpty
           onChange={handlePaymentFilterChange}
@@ -238,7 +238,7 @@ export const RideHistoryTable = (props) => {
             </MenuItem>
           ))}
         </Select>
-      </FormControl>
+      </FormControl> */}
     </Stack>
   );
 
@@ -269,7 +269,7 @@ export const RideHistoryTable = (props) => {
             <TableCell sx={{ width: { xs: "10%", md: "9%" } }}>Status</TableCell>
             <TableCell sx={{ width: { xs: "12%", md: "11%" } }}>Date</TableCell>
             <TableCell sx={{ width: { xs: "14%", md: "11%" } }}>Driver</TableCell>
-            <TableCell sx={{ width: { xs: "14%", md: "11%" } }}>Client</TableCell>
+            <TableCell sx={{ width: { xs: "14%", md: "11%" } }}>User</TableCell>
             <TableCell sx={{ width: { xs: "20%", md: "22%" } }}>Route / Destination</TableCell>
             <TableCell sx={{ width: { xs: "10%", md: "9%" } }}>Driver Earning</TableCell>
             <TableCell sx={{ width: { xs: "10%", md: "9%" } }}>Admin Earning</TableCell>
@@ -308,7 +308,7 @@ export const RideHistoryTable = (props) => {
                 >
                   <TableCell>
                     <Stack spacing={0.5}>
-                      <Chip
+                      {/* <Chip
                         label={typeMeta.label}
                         size="small"
                         sx={{
@@ -317,7 +317,7 @@ export const RideHistoryTable = (props) => {
                           fontWeight: 700,
                           width: "fit-content",
                         }}
-                      />
+                      /> */}
                       <Typography color="text.secondary" variant="caption">
                         {referenceLabel}
                       </Typography>

@@ -32,7 +32,10 @@ const Page = () => {
     const fetchRideHistory = async () => {
       try {
         setIsLoading(true);
-        const response = await getRideHistory(page, RIDE_HISTORY_LIMIT, filters);
+        const response = await getRideHistory(page, RIDE_HISTORY_LIMIT, {
+          ...filters,
+          type: "ride",
+        });
         if (active) {
           setRideHistory(response);
         }

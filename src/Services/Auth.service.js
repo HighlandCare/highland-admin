@@ -214,6 +214,10 @@ export const getRideHistory = async (page, limit = 20, filters = {}) => {
       params.set("search", filters.search.trim());
     }
 
+    if (filters.type) {
+      params.set("type", filters.type);
+    }
+
     const response = await Action.get(`admin/ride-history?${params.toString()}`, {
       headers: {
         Authorization: `Bearer ${authToken}`,
