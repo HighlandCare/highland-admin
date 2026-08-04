@@ -1,25 +1,20 @@
 import { useEffect, useState } from "react";
 import Head from "next/head";
-import NextLink from "next/link";
 import { useRouter } from "next/router";
-import ArrowLeftIcon from "@heroicons/react/24/outline/ArrowLeftIcon";
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Container,
-  Grid,
-  Stack,
-  SvgIcon,
-  Typography,
-} from "@mui/material";
+import { Box, Container } from "@mui/material";
 import { Layout as DashboardLayout } from "../../layouts/dashboard/layout";
-import Loader from "../../components/Loader";
 import { StatusBadge } from "../../components/table-cells";
+import {
+  DetailFieldGrid,
+  DetailHero,
+  DetailPageFrame,
+  DetailPageState,
+  DetailPanel,
+  DetailSection,
+} from "../../components/detail-page/detail-page-ui";
 import { getRideById } from "../../Services/Auth.service";
 import { formatDate, formatRelativeDate } from "../../utils/dateUtils";
-import { pageContainerSx, pageMainSx, pageTitleSx } from "../../utils/pageLayout";
+import { pageContainerSx, pageMainSx } from "../../utils/pageLayout";
 import {
   formatRideCommissionRate,
   formatRideCoordinates,
@@ -52,50 +47,20 @@ const hasDetailValue = (value) => {
   return true;
 };
 
-const DetailItem = ({ label, value }) => {
-  const isEmail = label === "Email" || (typeof value === "string" && value.includes("@"));
-  const displayValue = isEmail && value ? String(value).toLowerCase() : value;
-
-  return (
-    <Box>
-      <Typography color="text.secondary" variant="caption">
-        {label}
-      </Typography>
-      <Typography
-        data-email={isEmail ? "true" : undefined}
-        fontWeight={600}
-        sx={{ wordBreak: "break-word", ...(isEmail ? { textTransform: "lowercase" } : {}) }}
-        variant="body2"
-      >
-        {displayValue || "—"}
-      </Typography>
-    </Box>
-  );
-};
-
-const SectionCard = ({ children, title }) => (
-  <Card sx={{ border: "1px solid", borderColor: "neutral.200", boxShadow: "none", height: "100%" }}>
-    <CardContent>
-      <Typography sx={{ mb: 2 }} variant="h6">
-        {title}
-      </Typography>
-      {children}
-    </CardContent>
-  </Card>
-);
-
 const formatRideTimestamp = (value) => {
   if (!value || value === "false") {
-    return "—";
+    return null;
   }
 
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
-    return formatRideField(value);
+    const formatted = formatRideField(value);
+    return formatted === "—" ? null : formatted;
   }
 
-  return formatDate(value);
+  const formatted = formatDate(value);
+  return formatted === "—" ? null : formatted;
 };
 
 const Page = () => {
@@ -143,18 +108,18 @@ const Page = () => {
 
   const statusMeta = ride ? getRideStatusMeta(ride.status) : null;
 
-  const scheduleItems = ride
+  const scheduleFields = ride
     ? [
         { label: "Scheduled At", value: formatRideTimestamp(ride.scheduledAt) },
-        { label: "Pre Date", value: formatRideField(ride.pre_date) },
-        { label: "Pre Time", value: formatRideField(ride.pre_time) },
+        { label: "Pre Date", value: formatRideField(ride.pre_date), hideEmpty: true },
+        { label: "Pre Time", value: formatRideField(ride.pre_time), hideEmpty: true },
         { label: "Ride Start Time", value: formatRideTimestamp(ride.rideStartTime) },
         { label: "Ride End Time", value: formatRideTimestamp(ride.rideEndTime) },
         { label: "Created At", value: formatRideTimestamp(ride.createdAt) },
         { label: "Updated At", value: formatRelativeDate(ride.updatedAt) },
-        { label: "Cancel Reason", value: formatRideReason(ride.reasonOfCancel) },
-        { label: "Dispute Reason", value: formatRideReason(ride.reasonOfDispute) },
-      ].filter((item) => hasDetailValue(item.value))
+        { label: "Cancel Reason", value: formatRideReason(ride.reasonOfCancel), hideEmpty: true },
+        { label: "Dispute Reason", value: formatRideReason(ride.reasonOfDispute), hideEmpty: true },
+      ].filter((field) => !field.hideEmpty || hasDetailValue(field.value))
     : [];
 
   return (
@@ -165,156 +130,85 @@ const Page = () => {
 
       <Box component="main" sx={pageMainSx}>
         <Container maxWidth="xl" sx={pageContainerSx}>
-          <Stack spacing={3}>
-            <Button
-              component={NextLink}
-              href="/ride-history"
-              startIcon={
-                <SvgIcon fontSize="small">
-                  <ArrowLeftIcon />
-                </SvgIcon>
-              }
-              sx={{ alignSelf: "flex-start", textTransform: "capitalize" }}
+          <DetailPageFrame backHref="/ride-history" backLabel="Back to Ride History">
+            <DetailPageState
+              loading={isLoading}
+              notFoundMessage="The selected ride could not be loaded."
+              notFoundTitle={!isLoading && !ride ? "Ride not found" : undefined}
             >
-              Back to Ride History
-            </Button>
+              {ride ? (
+                <DetailPanel>
+                  <DetailHero
+                    badge={
+                      statusMeta ? (
+                        <StatusBadge color={statusMeta.color} label={statusMeta.label} />
+                      ) : null
+                    }
+                    stats={[
+                      { label: "Estimated Fare", value: formatRideCurrency(ride.estFare) },
+                      { label: "Admin Earned", value: formatRideCurrency(ride.adminEarned) },
+                      { label: "Payment", value: formatRidePaymentStatus(ride.havePaid) },
+                      { label: "Distance", value: formatRideField(ride.distance) },
+                    ]}
+                    subtitle={`${getRideDriverName(ride)} → ${getRideCustomerName(ride)}`}
+                    title="Ride Details"
+                  />
 
-            {isLoading ? (
-              <Loader page />
-            ) : !ride ? (
-              <Card sx={{ border: "1px solid", borderColor: "neutral.200", boxShadow: "none" }}>
-                <CardContent sx={{ py: 8, textAlign: "center" }}>
-                  <Typography variant="h6">Ride not found</Typography>
-                  <Typography color="text.secondary" sx={{ mt: 1 }} variant="body2">
-                    The selected ride could not be loaded.
-                  </Typography>
-                </CardContent>
-              </Card>
-            ) : (
-              <>
-                <Card sx={{ border: "1px solid", borderColor: "neutral.200", boxShadow: "none" }}>
-                  <CardContent>
-                    <Stack
-                      alignItems={{ xs: "flex-start", md: "center" }}
-                      direction={{ xs: "column", md: "row" }}
-                      justifyContent="space-between"
-                      spacing={2}
-                    >
-                      <Box>
-                        <Typography sx={pageTitleSx} variant="h4">
-                          Ride Details
-                        </Typography>
-                        <Typography color="text.secondary" sx={{ mt: 0.5 }} variant="body1">
-                          {getRideDriverName(ride)} → {getRideCustomerName(ride)}
-                        </Typography>
-                      </Box>
-                      {statusMeta && <StatusBadge color={statusMeta.color} label={statusMeta.label} />}
-                    </Stack>
-                  </CardContent>
-                </Card>
+                  <DetailSection noBorder title="Overview">
+                    <DetailFieldGrid
+                      fields={[
+                        { label: "Type", value: formatRideField(ride.type) },
+                        { label: "Status", value: formatRideField(ride.status) },
+                        { label: "Passengers", value: formatRideField(ride.numberOfPassenger) },
+                      ]}
+                    />
+                  </DetailSection>
 
-                <Grid container spacing={3}>
-                  <Grid item md={6} xs={12}>
-                    <SectionCard title="Ride Overview">
-                      <Stack spacing={2}>
-                        <DetailItem label="Type" value={formatRideField(ride.type)} />
-                        <DetailItem label="Status" value={formatRideField(ride.status)} />
-                        <DetailItem label="Distance" value={formatRideField(ride.distance)} />
-                        <DetailItem label="Passengers" value={formatRideField(ride.numberOfPassenger)} />
-                        <DetailItem label="Estimated Fare" value={formatRideCurrency(ride.estFare)} />
-                        <DetailItem label="Admin Earned" value={formatRideCurrency(ride.adminEarned)} />
-                        <DetailItem label="Payment Status" value={formatRidePaymentStatus(ride.havePaid)} />
-                      </Stack>
-                    </SectionCard>
-                  </Grid>
+                  <DetailSection title="Schedule & Timing">
+                    <DetailFieldGrid fields={scheduleFields.length ? scheduleFields : [{ label: "Created At", value: formatRideTimestamp(ride.createdAt) }]} />
+                  </DetailSection>
 
-                  {scheduleItems.length > 0 && (
-                    <Grid item md={6} xs={12}>
-                      <SectionCard title="Schedule & Timing">
-                        <Stack spacing={2}>
-                          {scheduleItems.map((item) => (
-                            <DetailItem key={item.label} label={item.label} value={item.value} />
-                          ))}
-                        </Stack>
-                      </SectionCard>
-                    </Grid>
-                  )}
+                  <DetailSection title="People">
+                    <DetailFieldGrid
+                      columns={{ sm: 2, lg: 2 }}
+                      fields={[
+                        { label: "Customer Name", value: ride.customer?.fullName },
+                        { label: "Customer Email", value: ride.customer?.email },
+                        { label: "Customer Phone", value: ride.customer?.phone },
+                        { label: "Driver Name", value: ride.driver?.fullName || "Unassigned" },
+                        { label: "Driver Email", value: ride.driver?.email },
+                        { label: "Driver Phone", value: ride.driver?.phone },
+                      ]}
+                    />
+                  </DetailSection>
 
-                  <Grid item md={6} xs={12}>
-                    <SectionCard title="Customer">
-                      <Stack spacing={2}>
-                        <DetailItem label="Full Name" value={ride.customer?.fullName} />
-                        <DetailItem label="Email" value={ride.customer?.email} />
-                        <DetailItem label="Phone" value={ride.customer?.phone} />
-                      </Stack>
-                    </SectionCard>
-                  </Grid>
+                  <DetailSection title="Route">
+                    <DetailFieldGrid
+                      columns={{ sm: 2, lg: 2 }}
+                      fields={[
+                        { label: "Pickup Address", value: getRidePickupAddress(ride) },
+                        { label: "Pickup Coordinates", value: formatRideCoordinates(ride.from) },
+                        { label: "Destination Address", value: getRideDestinationAddress(ride) },
+                        { label: "Destination Coordinates", value: formatRideCoordinates(ride.destination) },
+                      ]}
+                    />
+                  </DetailSection>
 
-                  <Grid item md={6} xs={12}>
-                    <SectionCard title="Driver">
-                      {ride.driver ? (
-                        <Stack spacing={2}>
-                          <DetailItem label="Full Name" value={ride.driver.fullName} />
-                          <DetailItem label="Email" value={ride.driver.email} />
-                          <DetailItem label="Phone" value={ride.driver.phone} />
-                        </Stack>
-                      ) : (
-                        <Typography color="text.secondary" variant="body2">
-                          Unassigned
-                        </Typography>
-                      )}
-                    </SectionCard>
-                  </Grid>
-
-                  <Grid item md={6} xs={12}>
-                    <SectionCard title="Pickup Location">
-                      <Stack spacing={2}>
-                        <DetailItem label="Address" value={getRidePickupAddress(ride)} />
-                        <DetailItem label="Coordinates" value={formatRideCoordinates(ride.from)} />
-                      </Stack>
-                    </SectionCard>
-                  </Grid>
-
-                  <Grid item md={6} xs={12}>
-                    <SectionCard title="Destination">
-                      <Stack spacing={2}>
-                        <DetailItem label="Address" value={getRideDestinationAddress(ride)} />
-                        <DetailItem label="Coordinates" value={formatRideCoordinates(ride.destination)} />
-                      </Stack>
-                    </SectionCard>
-                  </Grid>
-
-                  <Grid item xs={12}>
-                    <SectionCard title="Payment">
-                      <Grid container spacing={2}>
-                        <Grid item md={4} sm={6} xs={12}>
-                          <DetailItem label="Total Amount" value={formatRideCurrency(ride.payment?.totalAmount)} />
-                        </Grid>
-                        <Grid item md={4} sm={6} xs={12}>
-                          <DetailItem label="Driver Amount" value={formatRideCurrency(getRideDriverEarning(ride))} />
-                        </Grid>
-                        <Grid item md={4} sm={6} xs={12}>
-                          <DetailItem
-                            label="Admin Commission"
-                            value={formatRideCurrency(getRideAdminEarning(ride))}
-                          />
-                        </Grid>
-                        <Grid item md={4} sm={6} xs={12}>
-                          <DetailItem
-                            label="Commission Rate"
-                            value={formatRideCommissionRate(ride.payment?.commissionRate)}
-                          />
-                        </Grid>
-                        <Grid item md={4} sm={6} xs={12}>
-                          <DetailItem label="Payment Source" value={formatRideField(ride.payment?.source)} />
-                        </Grid>
-                      </Grid>
-                    </SectionCard>
-                  </Grid>
-                </Grid>
-              </>
-            )}
-          </Stack>
+                  <DetailSection title="Payment">
+                    <DetailFieldGrid
+                      fields={[
+                        { label: "Total Amount", value: formatRideCurrency(ride.payment?.totalAmount) },
+                        { label: "Driver Amount", value: formatRideCurrency(getRideDriverEarning(ride)) },
+                        { label: "Admin Commission", value: formatRideCurrency(getRideAdminEarning(ride)) },
+                        { label: "Commission Rate", value: formatRideCommissionRate(ride.payment?.commissionRate) },
+                        { label: "Payment Source", value: formatRideField(ride.payment?.source) },
+                      ]}
+                    />
+                  </DetailSection>
+                </DetailPanel>
+              ) : null}
+            </DetailPageState>
+          </DetailPageFrame>
         </Container>
       </Box>
     </>

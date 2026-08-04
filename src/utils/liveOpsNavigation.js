@@ -20,8 +20,12 @@ const ID_PREFIXES = [
   "signup-",
 ];
 
-function resolveRideDetailPath(rideId) {
-  return rideId ? `/orders/detail?id=${encodeURIComponent(rideId)}` : "/ride-history";
+function resolveFoodOrderDetailPath(orderId) {
+  return orderId ? `/orders/detail?id=${encodeURIComponent(orderId)}` : "/ride-history";
+}
+
+function resolveTransportRideDetailPath(rideId) {
+  return rideId ? `/ride-history/detail?id=${encodeURIComponent(rideId)}` : "/ride-history";
 }
 
 function resolveDisputeDetailPath(item) {
@@ -279,7 +283,7 @@ export function resolveLiveOpsDetailPath(item) {
         : null,
       id
     );
-    return orderId ? resolveRideDetailPath(orderId) : "/ride-history";
+    return orderId ? resolveFoodOrderDetailPath(orderId) : "/ride-history";
   }
 
   if (type === "driver_signup" || type === "online_driver" || type === "driver") {
@@ -308,11 +312,14 @@ export function resolveLiveOpsDetailPath(item) {
     );
 
     if (orderId) {
-      return resolveRideDetailPath(orderId);
+      return resolveFoodOrderDetailPath(orderId);
     }
 
     if (status === "cancelled" || status === "rejected") {
-      return resolveRideDetailPath(rideId || id);
+      if (orderId) {
+        return resolveFoodOrderDetailPath(orderId);
+      }
+      return resolveTransportRideDetailPath(rideId || id);
     }
 
     if (status === "disputed") {
@@ -323,7 +330,7 @@ export function resolveLiveOpsDetailPath(item) {
       return "/disputes";
     }
 
-    return resolveRideDetailPath(rideId || id);
+    return resolveTransportRideDetailPath(rideId || id);
   }
 
   if (
@@ -335,11 +342,17 @@ export function resolveLiveOpsDetailPath(item) {
     type === "order"
   ) {
     const rideId = resolveRideDetailId(item) || id;
-    return rideId ? resolveRideDetailPath(rideId) : "/ride-history";
+    if (type === "food_order") {
+      return rideId ? resolveFoodOrderDetailPath(rideId) : "/ride-history";
+    }
+    return rideId ? resolveTransportRideDetailPath(rideId) : "/ride-history";
   }
 
   if (id) {
-    return resolveRideDetailPath(id);
+    if (type === "food_order" || item.category === "food") {
+      return resolveFoodOrderDetailPath(id);
+    }
+    return resolveTransportRideDetailPath(id);
   }
 
   return "#";

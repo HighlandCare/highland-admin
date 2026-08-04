@@ -33,7 +33,7 @@ import {
   resolveLiveOpsListPath,
 } from "../utils/liveOpsNavigation";
 import { storeDisputeDetail } from "../utils/disputeUtils";
-import { storeRideDetail } from "../utils/rideUtils";
+import { storeOrderDetailContext, storeRideDetail } from "../utils/rideUtils";
 import { filterMarkersNearLocation } from "../hooks/useSmoothLiveOpsMarkers";
 import { toast } from "react-toastify";
 
@@ -276,6 +276,9 @@ const Page = () => {
       if (onlineOnly) {
         return marker.type === "online_driver" && marker.available !== false;
       }
+      if (marker.type === "dispute") {
+        return selectedMarkerTypes.includes("emergency") || selectedMarkerTypes.includes("dispute");
+      }
       return selectedMarkerTypes.includes(marker.type);
     });
   }, [snapshot?.markers, selectedMarkerTypes, onlineOnly]);
@@ -511,6 +514,25 @@ const Page = () => {
           disputeId: detailId || enriched.disputeId || enriched.emergencyId,
           rideId: enriched.rideId || enriched.bookingId,
           key: detailId || enriched.disputeId || enriched.emergencyId || enriched.rideId,
+        });
+      } else if (path.startsWith("/orders/")) {
+        storeOrderDetailContext({
+          ...enriched,
+          orderId: detailId || enriched.orderId || enriched.rideId,
+          rideId: detailId || enriched.orderId || enriched.rideId,
+          id: detailId || enriched.orderId || enriched.rideId,
+          candidateIds: [
+            detailId,
+            enriched.orderId,
+            enriched.rideId,
+            enriched.bookingId,
+          ].filter(Boolean),
+        });
+        storeRideDetail({
+          ...enriched,
+          rideId: detailId || enriched.orderId || enriched.rideId,
+          orderId: detailId || enriched.orderId || enriched.rideId,
+          _id: detailId || enriched.orderId || enriched.rideId,
         });
       } else if (path.startsWith("/ride-history/")) {
         storeRideDetail({

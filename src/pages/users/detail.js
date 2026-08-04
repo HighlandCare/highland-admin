@@ -1,25 +1,21 @@
 import { useEffect, useState } from "react";
 import Head from "next/head";
-import NextLink from "next/link";
 import { useRouter } from "next/router";
-import ArrowLeftIcon from "@heroicons/react/24/outline/ArrowLeftIcon";
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Container,
-  Grid,
-  Stack,
-  SvgIcon,
-  Typography,
-} from "@mui/material";
+import { Box, Container, Stack } from "@mui/material";
 import { Layout as DashboardLayout } from "../../layouts/dashboard/layout";
-import Loader from "../../components/Loader";
 import { StatusBadge } from "../../components/table-cells";
+import {
+  DetailAvatar,
+  DetailFieldGrid,
+  DetailHero,
+  DetailPageFrame,
+  DetailPageState,
+  DetailPanel,
+  DetailSection,
+} from "../../components/detail-page/detail-page-ui";
 import { getUserById } from "../../Services/Auth.service";
 import { formatDate, formatRelativeDate } from "../../utils/dateUtils";
-import { pageContainerSx, pageMainSx, pageTitleSx } from "../../utils/pageLayout";
+import { pageContainerSx, pageMainSx } from "../../utils/pageLayout";
 import {
   getStoredUserDetail,
   getUserAccountStatusMeta,
@@ -68,42 +64,6 @@ const formatOptionalRelativeDate = (value) => {
   const formatted = formatRelativeDate(value);
   return formatted === "—" ? null : formatted;
 };
-
-const DetailItem = ({ label, value }) => {
-  if (!hasDetailValue(value)) {
-    return null;
-  }
-
-  const isEmail = label === "Email" || (typeof value === "string" && value.includes("@"));
-  const displayValue = isEmail ? String(value).toLowerCase() : value;
-
-  return (
-    <Box>
-      <Typography color="text.secondary" variant="caption">
-        {label}
-      </Typography>
-      <Typography
-        data-email={isEmail ? "true" : undefined}
-        fontWeight={600}
-        sx={{ wordBreak: "break-word", ...(isEmail ? { textTransform: "lowercase" } : {}) }}
-        variant="body2"
-      >
-        {displayValue}
-      </Typography>
-    </Box>
-  );
-};
-
-const SectionCard = ({ children, title }) => (
-  <Card sx={{ border: "1px solid", borderColor: "neutral.200", boxShadow: "none", height: "100%" }}>
-    <CardContent>
-      <Typography sx={{ mb: 2 }} variant="h6">
-        {title}
-      </Typography>
-      {children}
-    </CardContent>
-  </Card>
-);
 
 const Page = () => {
   const router = useRouter();
@@ -172,15 +132,20 @@ const Page = () => {
   );
   const userType = pickFirstValue(profile.userType, user?.userType, profile.role, user?.role);
   const deviceType = pickFirstValue(profile.deviceType, user?.deviceType, profile.platform, user?.platform);
-  const createdAt = formatOptionalDate(
-    pickFirstValue(profile.createdAt, user?.createdAt)
-  );
-  const lastUpdated = formatOptionalRelativeDate(
-    pickFirstValue(profile.updatedAt, user?.updatedAt)
-  );
-  const joinedRelative = formatOptionalRelativeDate(
-    pickFirstValue(profile.createdAt, user?.createdAt)
-  );
+  const createdAt = formatOptionalDate(pickFirstValue(profile.createdAt, user?.createdAt));
+  const lastUpdated = formatOptionalRelativeDate(pickFirstValue(profile.updatedAt, user?.updatedAt));
+  const joinedRelative = formatOptionalRelativeDate(pickFirstValue(profile.createdAt, user?.createdAt));
+
+  const notificationValue =
+    typeof profile.notificationOn === "boolean"
+      ? profile.notificationOn
+        ? "Enabled"
+        : "Disabled"
+      : typeof user?.notificationOn === "boolean"
+        ? user.notificationOn
+          ? "Enabled"
+          : "Disabled"
+        : null;
 
   return (
     <>
@@ -192,191 +157,105 @@ const Page = () => {
 
       <Box component="main" sx={pageMainSx}>
         <Container maxWidth="xl" sx={pageContainerSx}>
-          <Stack spacing={3}>
-            <Button
-              component={NextLink}
-              href="/users"
-              startIcon={
-                <SvgIcon fontSize="small">
-                  <ArrowLeftIcon />
-                </SvgIcon>
-              }
-              sx={{ alignSelf: "flex-start", textTransform: "capitalize" }}
+          <DetailPageFrame backHref="/users" backLabel="Back to Users">
+            <DetailPageState
+              loading={isLoading}
+              notFoundMessage="The selected user could not be loaded."
+              notFoundTitle={!isLoading && !user ? "User not found" : undefined}
             >
-              Back to Users
-            </Button>
+              {user ? (
+                <DetailPanel>
+                  <DetailHero
+                    avatar={
+                      <DetailAvatar
+                        alt={getUserDisplayName(user)}
+                        fallback={getUserDisplayName(user)?.charAt(0)?.toUpperCase()}
+                        src={profileImage}
+                      />
+                    }
+                    badge={
+                      accountMeta ? (
+                        <StatusBadge color={accountMeta.color} label={accountMeta.label} />
+                      ) : null
+                    }
+                    stats={[
+                      { label: "Phone", value: phone },
+                      { label: "Joined", value: joinedRelative },
+                    ]}
+                    subtitle={email ? email.toLowerCase() : "No email linked"}
+                    title={getUserDisplayName(user)}
+                  />
 
-            {isLoading ? (
-              <Loader page />
-            ) : !user ? (
-              <Card sx={{ border: "1px solid", borderColor: "neutral.200", boxShadow: "none" }}>
-                <CardContent sx={{ py: 8, textAlign: "center" }}>
-                  <Typography variant="h6">User not found</Typography>
-                  <Typography color="text.secondary" sx={{ mt: 1 }} variant="body2">
-                    The selected user could not be loaded.
-                  </Typography>
-                </CardContent>
-              </Card>
-            ) : (
-              <>
-                <Card sx={{ border: "1px solid", borderColor: "neutral.200", boxShadow: "none" }}>
-                  <CardContent>
-                    <Stack
-                      alignItems={{ xs: "flex-start", md: "center" }}
-                      direction={{ xs: "column", md: "row" }}
-                      spacing={3}
-                    >
-                      {profileImage ? (
-                        <Box
-                          alt={getUserDisplayName(user)}
-                          component="img"
-                          src={profileImage}
-                          sx={{
-                            bgcolor: "neutral.100",
-                            border: "1px solid",
-                            borderColor: "neutral.200",
-                            borderRadius: 3,
-                            height: 120,
-                            objectFit: "cover",
-                            width: 120,
-                          }}
-                        />
-                      ) : (
-                        <Box
-                          sx={{
-                            alignItems: "center",
-                            bgcolor: "neutral.100",
-                            border: "1px solid",
-                            borderColor: "neutral.200",
-                            borderRadius: 3,
-                            color: "neutral.700",
-                            display: "flex",
-                            fontSize: 36,
-                            fontWeight: 700,
-                            height: 120,
-                            justifyContent: "center",
-                            width: 120,
-                          }}
-                        >
-                          {getUserDisplayName(user)?.charAt(0)?.toUpperCase() || "?"}
-                        </Box>
-                      )}
-                      <Box flex={1}>
-                        <Typography sx={pageTitleSx} variant="h4">
-                          {getUserDisplayName(user)}
-                        </Typography>
-                        <Typography
-                          color="text.secondary"
-                          data-email={email ? "true" : undefined}
-                          sx={{
-                            mt: 0.5,
-                            ...(email ? { textTransform: "lowercase" } : {}),
-                          }}
-                          variant="body1"
-                        >
-                          {email ? email.toLowerCase() : "No email linked"}
-                        </Typography>
-                        <Stack alignItems="center" direction="row" flexWrap="wrap" gap={2} mt={2}>
-                          {accountMeta && (
-                            <StatusBadge color={accountMeta.color} label={accountMeta.label} />
-                          )}
-                          <DetailItem label="Phone" value={phone} />
-                          <DetailItem label="Joined" value={joinedRelative} />
-                        </Stack>
-                      </Box>
-                    </Stack>
-                  </CardContent>
-                </Card>
+                  <DetailSection noBorder title="Personal Information">
+                    <DetailFieldGrid
+                      fields={[
+                        { label: "Full Name", value: fullName },
+                        { label: "Email", value: email },
+                        { label: "Phone", value: phone },
+                        { label: "Gender", value: gender },
+                        { label: "Date of Birth", value: dateOfBirth },
+                      ]}
+                    />
+                  </DetailSection>
 
-                <Grid container spacing={3}>
-                  <Grid item md={6} xs={12}>
-                    <SectionCard title="Personal Information">
-                      <Stack spacing={2}>
-                        <DetailItem label="Full Name" value={fullName} />
-                        <DetailItem label="Email" value={email} />
-                        <DetailItem label="Phone" value={phone} />
-                        <DetailItem label="Gender" value={gender} />
-                        <DetailItem label="Date of Birth" value={dateOfBirth} />
-                      </Stack>
-                    </SectionCard>
-                  </Grid>
-
-                  <Grid item md={6} xs={12}>
-                    <SectionCard title="Location & Address">
-                      <Stack spacing={2}>
-                        <DetailItem
-                          label="Address"
-                          value={pickFirstValue(profile.address, user?.address)}
-                        />
-                        <DetailItem label="City" value={pickFirstValue(profile.city, user?.city)} />
-                        <DetailItem
-                          label="State"
-                          value={pickFirstValue(profile.state, user?.state)}
-                        />
-                        <DetailItem
-                          label="Zip Code"
-                          value={pickFirstValue(
+                  <DetailSection title="Location & Address">
+                    <DetailFieldGrid
+                      fields={[
+                        { label: "Address", value: pickFirstValue(profile.address, user?.address) },
+                        { label: "City", value: pickFirstValue(profile.city, user?.city) },
+                        { label: "State", value: pickFirstValue(profile.state, user?.state) },
+                        {
+                          label: "Zip Code",
+                          value: pickFirstValue(
                             profile.zipCode,
                             profile.zip,
                             user?.zipCode,
                             user?.zip
-                          )}
-                        />
-                        <DetailItem
-                          label="Location"
-                          value={
+                          ),
+                        },
+                        {
+                          label: "Location",
+                          value:
                             [
                               pickFirstValue(profile.city, user?.city),
                               pickFirstValue(profile.state, user?.state),
                               pickFirstValue(profile.zipCode, profile.zip, user?.zipCode, user?.zip),
                             ]
                               .filter(Boolean)
-                              .join(", ") || null
-                          }
-                        />
-                      </Stack>
-                    </SectionCard>
-                  </Grid>
+                              .join(", ") || null,
+                        },
+                      ]}
+                    />
+                  </DetailSection>
 
-                  <Grid item md={6} xs={12}>
-                    <SectionCard title="Account Details">
-                      <Stack spacing={2}>
-                        <DetailItem label="Account Status" value={accountMeta?.label} />
-                        {profile?.isGuest || user?.user?.isGuest ? (
-                          <DetailItem label="Account Type" value="Guest session" />
-                        ) : null}
-                        <DetailItem label="Created At" value={createdAt} />
-                        <DetailItem label="Last Updated" value={lastUpdated} />
-                      </Stack>
-                    </SectionCard>
-                  </Grid>
+                  <DetailSection title="Account Details">
+                    <DetailFieldGrid
+                      fields={[
+                        { label: "Account Status", value: accountMeta?.label },
+                        {
+                          label: "Account Type",
+                          value: profile?.isGuest || user?.user?.isGuest ? "Guest session" : null,
+                          hideEmpty: true,
+                        },
+                        { label: "Created At", value: createdAt },
+                        { label: "Last Updated", value: lastUpdated },
+                      ]}
+                    />
+                  </DetailSection>
 
-                  <Grid item md={6} xs={12}>
-                    <SectionCard title="Preferences">
-                      <Stack spacing={2}>
-                        <DetailItem
-                          label="Notifications"
-                          value={
-                            typeof profile.notificationOn === "boolean"
-                              ? profile.notificationOn
-                                ? "Enabled"
-                                : "Disabled"
-                              : typeof user?.notificationOn === "boolean"
-                                ? user.notificationOn
-                                  ? "Enabled"
-                                  : "Disabled"
-                                : null
-                          }
-                        />
-                        <DetailItem label="User Type" value={userType} />
-                        <DetailItem label="Device Type" value={deviceType} />
-                      </Stack>
-                    </SectionCard>
-                  </Grid>
-                </Grid>
-              </>
-            )}
-          </Stack>
+                  <DetailSection title="Preferences">
+                    <DetailFieldGrid
+                      fields={[
+                        { label: "Notifications", value: notificationValue },
+                        { label: "User Type", value: userType },
+                        { label: "Device Type", value: deviceType },
+                      ]}
+                    />
+                  </DetailSection>
+                </DetailPanel>
+              ) : null}
+            </DetailPageState>
+          </DetailPageFrame>
         </Container>
       </Box>
     </>

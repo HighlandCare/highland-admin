@@ -639,7 +639,7 @@ export const normalizeChaperoneDetailResponse = (response) => {
         ? payload.transactionHistory
         : [],
       _id: payload._id || payload.summary?.chaperoneId,
-      authId: payload.authId,
+      authId: payload.authId || payload.summary?.authId || null,
     };
   }
 

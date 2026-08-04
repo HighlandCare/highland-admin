@@ -53,6 +53,56 @@ export const getRideDriverEarning = (ride) =>
 export const getRideAdminEarning = (ride) =>
   ride?.payment?.adminCommission ?? ride?.adminEarned ?? null;
 
+export const isFoodOrderBooking = (item) =>
+  item?.recordType === "food_order" ||
+  item?.type === "food_order" ||
+  item?.category === "food";
+
+export const getBookingTypeMeta = (item) => {
+  if (isFoodOrderBooking(item)) {
+    return {
+      label: "Food Order",
+      color: "#a855f7",
+      bgcolor: "rgba(168, 85, 247, 0.12)",
+    };
+  }
+
+  if (item?.type === "chaperoneride") {
+    return {
+      label: "Chaperone",
+      color: "#0ea5e9",
+      bgcolor: "rgba(14, 165, 233, 0.12)",
+    };
+  }
+
+  return {
+    label: "Ride",
+    color: "#3b82f6",
+    bgcolor: "rgba(59, 130, 246, 0.12)",
+  };
+};
+
+export const getBookingReferenceLabel = (item) => {
+  if (isFoodOrderBooking(item)) {
+    return item?.orderNumber ? `#${item.orderNumber}` : "Food order";
+  }
+
+  return item?.mode === "scheduled" ? "Scheduled ride" : "Ride";
+};
+
+export const getBookingDestinationLabel = (item) => {
+  if (isFoodOrderBooking(item)) {
+    const restaurant = item?.restaurant?.businessName;
+    const delivery = getRideDestinationAddress(item);
+    if (restaurant && delivery !== "—") {
+      return `${restaurant} → ${delivery}`;
+    }
+    return restaurant || delivery;
+  }
+
+  return getRideDestinationAddress(item);
+};
+
 export const getRideStatusMeta = (status) => {
   const normalized = String(status || "").toLowerCase();
 
@@ -67,6 +117,18 @@ export const getRideStatusMeta = (status) => {
       return { color: "warning", label: "Rejected" };
     case "disputed":
       return { color: "error", label: "Disputed" };
+    case "delivered":
+      return { color: "success", label: "Delivered" };
+    case "received":
+    case "accepted":
+    case "preparing":
+    case "ready_for_pickup":
+    case "assigned":
+    case "heading_to_restaurant":
+    case "arrived_at_restaurant":
+    case "picked_up":
+    case "out_for_delivery":
+      return { color: "info", label: status.replace(/_/g, " ") };
     default:
       return { color: "neutral", label: status || "Unknown" };
   }

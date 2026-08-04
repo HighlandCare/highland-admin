@@ -1,33 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
-import NextLink from "next/link";
 import { useRouter } from "next/router";
-import ArrowLeftIcon from "@heroicons/react/24/outline/ArrowLeftIcon";
 import CheckCircleIcon from "@heroicons/react/24/outline/CheckCircleIcon";
-import ClockIcon from "@heroicons/react/24/outline/ClockIcon";
-import CreditCardIcon from "@heroicons/react/24/outline/CreditCardIcon";
 import DocumentTextIcon from "@heroicons/react/24/outline/DocumentTextIcon";
-import MapPinIcon from "@heroicons/react/24/outline/MapPinIcon";
-import UserIcon from "@heroicons/react/24/outline/UserIcon";
 import XCircleIcon from "@heroicons/react/24/outline/XCircleIcon";
 import { toast } from "react-toastify";
-import {
-  Box,
-  Button,
-  Card,
-  CardContent,
-  Container,
-  Divider,
-  Grid,
-  Stack,
-  SvgIcon,
-  TextField,
-  Typography,
-} from "@mui/material";
+import { Box, Button, Container, Stack, SvgIcon, TextField, Typography } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { Layout as DashboardLayout } from "../../layouts/dashboard/layout";
 import Loader from "../../components/Loader";
 import { StatusBadge } from "../../components/table-cells";
+import {
+  DetailHero,
+  DetailPageFrame,
+  DetailPageState,
+  DetailPanel,
+  DetailRowList,
+  DetailSection,
+} from "../../components/detail-page/detail-page-ui";
 import { getRideById } from "../../Services/Auth.service";
 import {
   approveDispute,
@@ -36,7 +26,7 @@ import {
   reviewDispute,
 } from "../../Services/Dispute.service";
 import { formatDateTime, formatRelativeDate } from "../../utils/dateUtils";
-import { pageContainerSx, pageMainSx, pageTitleSx } from "../../utils/pageLayout";
+import { pageContainerSx, pageMainSx } from "../../utils/pageLayout";
 import {
   applyDisputeActionLocally,
   canReviewDispute,
@@ -90,104 +80,6 @@ const formatTimestamp = (value) => {
 
   return formatDateTime(value);
 };
-
-const hasUsableTimestamp = (value) => Boolean(formatTimestamp(value));
-
-const MetaChip = ({ label, value }) => {
-  if (!hasDetailValue(value)) {
-    return null;
-  }
-
-  return (
-    <Box
-      sx={{
-        bgcolor: "background.paper",
-        border: "1px solid",
-        borderColor: "neutral.200",
-        borderRadius: 2,
-        minWidth: 120,
-        px: 1.75,
-        py: 1.25,
-      }}
-    >
-      <Typography color="text.secondary" sx={{ display: "block", mb: 0.25 }} variant="caption">
-        {label}
-      </Typography>
-      <Typography fontWeight={700} sx={{ wordBreak: "break-word" }} variant="body2">
-        {value}
-      </Typography>
-    </Box>
-  );
-};
-
-const DetailRow = ({ label, value }) => {
-  const isEmail = label === "Email" || (typeof value === "string" && value.includes("@"));
-  if (!hasDetailValue(value)) {
-    return null;
-  }
-
-  return (
-    <Stack
-      direction="row"
-      justifyContent="space-between"
-      spacing={2}
-      sx={{
-        borderBottom: "1px solid",
-        borderColor: "neutral.100",
-        py: 1.25,
-        "&:last-child": { borderBottom: "none", pb: 0 },
-        "&:first-of-type": { pt: 0 },
-      }}
-    >
-      <Typography color="text.secondary" sx={{ flexShrink: 0 }} variant="body2">
-        {label}
-      </Typography>
-      <Typography
-        data-email={isEmail ? "true" : undefined}
-        fontWeight={600}
-        sx={{
-          textAlign: "right",
-          wordBreak: "break-word",
-          ...(isEmail ? { textTransform: "lowercase" } : {}),
-        }}
-        variant="body2"
-      >
-        {isEmail ? String(value).toLowerCase() : value}
-      </Typography>
-    </Stack>
-  );
-};
-
-const SectionCard = ({ children, icon: Icon, title }) => (
-  <Card sx={{ border: "1px solid", borderColor: "neutral.200", boxShadow: "none", height: "100%" }}>
-    <CardContent sx={{ p: 2.5, "&:last-child": { pb: 2.5 } }}>
-      <Stack alignItems="center" direction="row" spacing={1} sx={{ mb: 1.5 }}>
-        {Icon ? (
-          <Box
-            sx={{
-              alignItems: "center",
-              bgcolor: alpha(brand.primary, 0.08),
-              borderRadius: 1.5,
-              color: "primary.main",
-              display: "flex",
-              height: 32,
-              justifyContent: "center",
-              width: 32,
-            }}
-          >
-            <SvgIcon fontSize="small">
-              <Icon />
-            </SvgIcon>
-          </Box>
-        ) : null}
-        <Typography fontWeight={700} variant="subtitle1">
-          {title}
-        </Typography>
-      </Stack>
-      {children}
-    </CardContent>
-  </Card>
-);
 
 const getTimingItems = (row) =>
   [
@@ -403,36 +295,26 @@ const Page = () => {
   const showActions = canReviewDispute(row);
   const savedNotes = row ? getDisputeAdminNotes(row) : "";
 
-  const sections = useMemo(() => {
+  const reasonValue = row ? formatRideReason(row.reasonOfDispute) : null;
+
+  const detailSections = useMemo(() => {
     if (!row) {
       return [];
     }
 
     return [
-      { key: "timing", title: "Timing", icon: ClockIcon, items: getTimingItems(row) },
-      { key: "payment", title: "Payment", icon: CreditCardIcon, items: getPaymentItems(row) },
-      {
-        key: "customer",
-        title: "Customer",
-        icon: UserIcon,
-        items: getPersonItems(row.customer),
-      },
-      {
-        key: "driver",
-        title: "Driver",
-        icon: UserIcon,
-        items: getPersonItems(row.driver),
-      },
+      { key: "timing", title: "Timing", items: getTimingItems(row) },
+      { key: "payment", title: "Payment", items: getPaymentItems(row) },
+      { key: "customer", title: "Customer", items: getPersonItems(row.customer) },
+      { key: "driver", title: "Driver", items: getPersonItems(row.driver) },
       {
         key: "pickup",
         title: "Pickup",
-        icon: MapPinIcon,
         items: getLocationItems(getRidePickupAddress(row), formatRideCoordinates(row.from)),
       },
       {
         key: "destination",
         title: "Destination",
-        icon: MapPinIcon,
         items: getLocationItems(
           getRideDestinationAddress(row),
           formatRideCoordinates(row.destination)
@@ -441,15 +323,25 @@ const Page = () => {
     ].filter((section) => section.items.length > 0);
   }, [row]);
 
-  const fareValue = row
-    ? formatRideCurrency(row.payment?.totalAmount ?? row.estFare)
-    : null;
-  const reasonValue = row ? formatRideReason(row.reasonOfDispute) : null;
-  const createdValue = row ? formatTimestamp(row.createdAt) : null;
-  const updatedValue = row ? formatRelativeDate(row.updatedAt) : null;
-  const distanceValue = row ? formatRideField(row.distance) : null;
-  const passengersValue = row ? formatRideField(row.numberOfPassenger) : null;
-  const paymentStatusValue = row ? formatRidePaymentStatus(row.havePaid) : null;
+  const reasonFooter = hasDetailValue(reasonValue) ? (
+    <Box
+      sx={{
+        bgcolor: "background.paper",
+        border: "1px solid",
+        borderColor: "neutral.200",
+        borderRadius: 2,
+        px: 2,
+        py: 1.5,
+      }}
+    >
+      <Typography color="text.secondary" variant="caption">
+        Dispute reason
+      </Typography>
+      <Typography fontWeight={600} sx={{ mt: 0.5 }} variant="body1">
+        {reasonValue}
+      </Typography>
+    </Box>
+  ) : null;
 
   return (
     <>
@@ -459,122 +351,46 @@ const Page = () => {
 
       <Box component="main" sx={pageMainSx}>
         <Container maxWidth="xl" sx={pageContainerSx}>
-          <Stack spacing={2.5}>
-            <Button
-              component={NextLink}
-              href="/disputes"
-              startIcon={
-                <SvgIcon fontSize="small">
-                  <ArrowLeftIcon />
-                </SvgIcon>
-              }
-              sx={{ alignSelf: "flex-start", textTransform: "capitalize" }}
+          <DetailPageFrame backHref="/disputes" backLabel="Back to Disputes">
+            <DetailPageState
+              loading={isLoading}
+              notFoundMessage="The selected dispute could not be loaded."
+              notFoundTitle={!isLoading && !row ? "Dispute not found" : undefined}
             >
-              Back to Disputes
-            </Button>
+              {row ? (
+                <Stack spacing={2.5}>
+                  <DetailPanel>
+                    <DetailHero
+                      badge={
+                        statusMeta ? (
+                          <StatusBadge color={statusMeta.color} label={statusMeta.label} />
+                        ) : null
+                      }
+                      footer={reasonFooter}
+                      stats={[
+                        {
+                          label: "Fare",
+                          value: formatRideCurrency(row.payment?.totalAmount ?? row.estFare),
+                        },
+                        { label: "Payment", value: formatRidePaymentStatus(row.havePaid) },
+                        { label: "Distance", value: formatRideField(row.distance) },
+                        { label: "Passengers", value: formatRideField(row.numberOfPassenger) },
+                        { label: "Created", value: formatTimestamp(row.createdAt) },
+                        { label: "Updated", value: formatRelativeDate(row.updatedAt) },
+                      ]}
+                      subtitle={`${getRideDriverName(row)} → ${getRideCustomerName(row)}`}
+                      title="Dispute case"
+                    />
 
-            {isLoading ? (
-              <Loader page />
-            ) : !row ? (
-              <Card sx={{ border: "1px solid", borderColor: "neutral.200", boxShadow: "none" }}>
-                <CardContent sx={{ py: 8, textAlign: "center" }}>
-                  <Typography variant="h6">Dispute not found</Typography>
-                  <Typography color="text.secondary" sx={{ mt: 1 }} variant="body2">
-                    The selected dispute could not be loaded.
-                  </Typography>
-                </CardContent>
-              </Card>
-            ) : (
-              <>
-                <Card
-                  sx={{
-                    border: "1px solid",
-                    borderColor: "neutral.200",
-                    boxShadow: "none",
-                    overflow: "hidden",
-                  }}
-                >
-                  <Box
-                    sx={{
-                      background: `linear-gradient(135deg, ${alpha(brand.primary, 0.08)} 0%, ${alpha(
-                        brand.secondary,
-                        0.04
-                      )} 100%)`,
-                      borderBottom: "1px solid",
-                      borderColor: "neutral.200",
-                      px: { xs: 2.5, md: 3 },
-                      py: { xs: 2.5, md: 3 },
-                    }}
-                  >
-                    <Stack
-                      alignItems={{ xs: "flex-start", sm: "center" }}
-                      direction={{ xs: "column", sm: "row" }}
-                      justifyContent="space-between"
-                      spacing={2}
+                    <DetailSection
+                      description={
+                        showActions
+                          ? "Add notes, then mark under review, approve, or reject."
+                          : "This dispute is closed. Previous admin notes are shown below."
+                      }
+                      noBorder
+                      title="Admin review"
                     >
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography sx={{ ...pageTitleSx, mb: 0.75 }} variant="h4">
-                          Dispute case
-                        </Typography>
-                        <Typography color="text.secondary" variant="body1">
-                          {getRideDriverName(row)}
-                          <Box component="span" sx={{ color: "text.disabled", mx: 1 }}>
-                            →
-                          </Box>
-                          {getRideCustomerName(row)}
-                        </Typography>
-                      </Box>
-                      {statusMeta ? (
-                        <StatusBadge color={statusMeta.color} label={statusMeta.label} />
-                      ) : null}
-                    </Stack>
-
-                    {hasDetailValue(reasonValue) ? (
-                      <Box
-                        sx={{
-                          bgcolor: "background.paper",
-                          border: "1px solid",
-                          borderColor: "neutral.200",
-                          borderRadius: 2,
-                          mt: 2.5,
-                          px: 2,
-                          py: 1.5,
-                        }}
-                      >
-                        <Typography color="text.secondary" variant="caption">
-                          Dispute reason
-                        </Typography>
-                        <Typography fontWeight={600} sx={{ mt: 0.5 }} variant="body1">
-                          {reasonValue}
-                        </Typography>
-                      </Box>
-                    ) : null}
-
-                    <Stack direction="row" flexWrap="wrap" gap={1.25} sx={{ mt: 2 }}>
-                      <MetaChip label="Fare" value={fareValue} />
-                      <MetaChip label="Payment" value={paymentStatusValue} />
-                      <MetaChip label="Distance" value={distanceValue} />
-                      <MetaChip label="Passengers" value={passengersValue} />
-                      <MetaChip label="Created" value={createdValue} />
-                      <MetaChip label="Updated" value={updatedValue} />
-                    </Stack>
-                  </Box>
-                </Card>
-
-                <Card sx={{ border: "1px solid", borderColor: "neutral.200", boxShadow: "none" }}>
-                  <CardContent sx={{ p: { xs: 2.5, md: 3 }, "&:last-child": { pb: { xs: 2.5, md: 3 } } }}>
-                    <Stack spacing={2}>
-                      <Box>
-                        <Typography fontWeight={700} variant="h6">
-                          Admin review
-                        </Typography>
-                        <Typography color="text.secondary" sx={{ mt: 0.5 }} variant="body2">
-                          {showActions
-                            ? "Add notes, then mark under review, approve, or reject."
-                            : "This dispute is closed. Previous admin notes are shown below."}
-                        </Typography>
-                      </Box>
-
                       {hasDetailValue(savedNotes) ? (
                         <Box
                           sx={{
@@ -582,6 +398,7 @@ const Page = () => {
                             border: "1px solid",
                             borderColor: alpha(brand.primary, 0.16),
                             borderRadius: 2,
+                            mb: 2,
                             px: 2,
                             py: 1.5,
                           }}
@@ -599,7 +416,7 @@ const Page = () => {
                       ) : null}
 
                       {showActions ? (
-                        <>
+                        <Stack spacing={2}>
                           <TextField
                             fullWidth
                             label="Admin notes"
@@ -681,7 +498,7 @@ const Page = () => {
                               )}
                             </Button>
                           </Stack>
-                        </>
+                        </Stack>
                       ) : (
                         !hasDetailValue(savedNotes) && (
                           <Typography color="text.secondary" variant="body2">
@@ -689,31 +506,18 @@ const Page = () => {
                           </Typography>
                         )
                       )}
-                    </Stack>
-                  </CardContent>
-                </Card>
+                    </DetailSection>
 
-                {sections.length ? (
-                  <Grid container spacing={2}>
-                    {sections.map((section) => (
-                      <Grid item key={section.key} md={6} xs={12}>
-                        <SectionCard icon={section.icon} title={section.title}>
-                          <Stack>
-                            {section.items.map((item, index) => (
-                              <Box key={item.label}>
-                                {index > 0 ? <Divider /> : null}
-                                <DetailRow label={item.label} value={item.value} />
-                              </Box>
-                            ))}
-                          </Stack>
-                        </SectionCard>
-                      </Grid>
+                    {detailSections.map((section) => (
+                      <DetailSection key={section.key} title={section.title}>
+                        <DetailRowList items={section.items} />
+                      </DetailSection>
                     ))}
-                  </Grid>
-                ) : null}
-              </>
-            )}
-          </Stack>
+                  </DetailPanel>
+                </Stack>
+              ) : null}
+            </DetailPageState>
+          </DetailPageFrame>
         </Container>
       </Box>
     </>

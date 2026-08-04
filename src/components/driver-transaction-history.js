@@ -1,8 +1,6 @@
 import PropTypes from "prop-types";
 import {
   Box,
-  Card,
-  CardContent,
   Table,
   TableBody,
   TableCell,
@@ -10,6 +8,12 @@ import {
   TableRow,
   Typography,
 } from "@mui/material";
+import {
+  DetailPanel,
+  DetailSection,
+  detailTableHeadSx,
+  detailTableRowSx,
+} from "./detail-page/detail-page-ui";
 import { Scrollbar } from "./scrollbar";
 import Loader from "./Loader";
 import { formatDateTime } from "../utils/dateUtils";
@@ -36,12 +40,8 @@ export const DriverTransactionHistory = ({ transactions = [], loading = false })
   const showRemaining = transactions.some((transaction) => hasValue(transaction.remainingBalance));
 
   return (
-    <Card sx={{ border: "1px solid", borderColor: "neutral.200", boxShadow: "none" }}>
-      <CardContent>
-        <Typography sx={{ mb: 2 }} variant="h6">
-          Transaction History
-        </Typography>
-
+    <DetailPanel>
+      <DetailSection noBorder title="Transaction History">
         {loading ? (
           <Box sx={{ py: 4 }}>
             <Loader minHeight={120} size="md" />
@@ -56,7 +56,7 @@ export const DriverTransactionHistory = ({ transactions = [], loading = false })
           <Scrollbar>
             <Box sx={{ minWidth: 640 }}>
               <Table>
-                <TableHead>
+                <TableHead sx={detailTableHeadSx}>
                   <TableRow>
                     <TableCell>Amount</TableCell>
                     {showPaidAmount ? <TableCell>Paid Amount</TableCell> : null}
@@ -68,7 +68,7 @@ export const DriverTransactionHistory = ({ transactions = [], loading = false })
                 </TableHead>
                 <TableBody>
                   {transactions.map((transaction) => (
-                    <TableRow hover key={transaction.id}>
+                    <TableRow hover key={transaction.id} sx={detailTableRowSx}>
                       <TableCell>
                         <Typography fontWeight={600} variant="body2">
                           {formatEarningsCurrency(transaction.amount)}
@@ -116,8 +116,8 @@ export const DriverTransactionHistory = ({ transactions = [], loading = false })
             </Box>
           </Scrollbar>
         )}
-      </CardContent>
-    </Card>
+      </DetailSection>
+    </DetailPanel>
   );
 };
 

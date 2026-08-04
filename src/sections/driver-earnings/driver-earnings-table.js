@@ -4,6 +4,10 @@ import EyeIcon from "@heroicons/react/24/outline/EyeIcon";
 import { useRouter } from "next/router";
 import { TableBody, TableCell, TableHead, TableRow, Typography } from "@mui/material";
 import {
+  detailTableHeadSx,
+  detailTableRowSx,
+} from "../../components/detail-page/detail-page-ui";
+import {
   DataTable,
   DataTableToolbar,
   filterBySearch,
@@ -114,7 +118,7 @@ export const DriverEarningsTable = (props) => {
         />
       }
     >
-      <TableHead>
+      <TableHead sx={detailTableHeadSx}>
         <TableRow>
           <TableCell>Driver</TableCell>
           <TableCell>E-mail</TableCell>
@@ -136,7 +140,7 @@ export const DriverEarningsTable = (props) => {
           </TableRow>
         ) : (
           rows.map((driver) => (
-            <TableRow hover key={getEarningsDriverId(driver)}>
+            <TableRow hover key={getEarningsDriverId(driver)} sx={detailTableRowSx}>
               <TableCell>
                 <TablePersonCell
                   imageUrl={getEarningsDriverImage(driver) || undefined}

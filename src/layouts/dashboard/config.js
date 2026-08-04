@@ -11,6 +11,7 @@ import QuestionMarkCircleIcon from "@heroicons/react/24/solid/QuestionMarkCircle
 import CurrencyDollarIcon from "@heroicons/react/24/solid/CurrencyDollarIcon";
 import ClockIcon from "@heroicons/react/24/solid/ClockIcon";
 import ExclamationTriangleIcon from "@heroicons/react/24/solid/ExclamationTriangleIcon";
+import BuildingStorefrontIcon from "@heroicons/react/24/solid/BuildingStorefrontIcon";
 import { SvgIcon } from "@mui/material";
 export const items = [
   {
@@ -47,6 +48,15 @@ export const items = [
     icon: (
       <SvgIcon fontSize="small">
         <Cog6ToothIcon />
+      </SvgIcon>
+    ),
+  },
+  {
+    title: "Restaurant Management",
+    path: "/restaurants",
+    icon: (
+      <SvgIcon fontSize="small">
+        <BuildingStorefrontIcon />
       </SvgIcon>
     ),
   },

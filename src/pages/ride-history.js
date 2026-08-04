@@ -66,7 +66,7 @@ const Page = () => {
   return (
     <>
       <Head>
-        <title>Ride History | Highland Care</title>
+        <title>Booking History | Highland Care</title>
       </Head>
 
       <Box component="main" sx={pageMainSx}>
@@ -97,7 +97,7 @@ const Page = () => {
                   onFiltersChange={handleFiltersChange}
                   onPageChange={handlePageChange}
                   page={page}
-                  title="Ride History"
+                  title="Booking History"
                 />
               </Box>
             )}

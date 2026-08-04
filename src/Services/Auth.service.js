@@ -166,7 +166,7 @@ export const getDashboardAnalytics = async ({ latestLimit = 10, year } = {}) => 
 export const getDriverTransactions = async (driverId) => {
   try {
     const authToken = JSON.parse(localStorage.getItem("token"));
-    const response = await Action.get(`admin/driver-transactions/${driverId}`, {
+    const response = await Action.get(`admin/driver-earnings/${driverId}`, {
       headers: {
         Authorization: `Bearer ${authToken}`,
       },
@@ -697,5 +697,40 @@ export const adminLogin = async (payload) => {
     return response.data;
   } catch (error) {
     throw new Error(getLoginErrorMessage(error));
+  }
+};
+
+export const getRestaurants = async (page = 1, limit = 20, filters = {}) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+    if (filters.status) params.set("status", filters.status);
+    if (filters.search?.trim()) params.set("search", filters.search.trim());
+
+    const response = await Action.get(`admin/restaurants?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    return response.data;
+  } catch (error) {
+    console.error("getRestaurants error:", error?.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const updateRestaurantApproval = async (restaurantId, approved) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const response = await Action.patch(
+      `admin/restaurants/${encodeURIComponent(restaurantId)}/approval`,
+      { approved },
+      { headers: { Authorization: `Bearer ${authToken}` } }
+    );
+    return response.data;
+  } catch (error) {
+    console.error("updateRestaurantApproval error:", error?.response?.data || error.message);
+    throw error;
   }
 };

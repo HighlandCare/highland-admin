@@ -3,6 +3,7 @@ import PropTypes from "prop-types";
 import { useRouter } from "next/router";
 import EyeIcon from "@heroicons/react/24/outline/EyeIcon";
 import {
+  Chip,
   FormControl,
   MenuItem,
   Select,
@@ -16,6 +17,10 @@ import {
   Typography,
 } from "@mui/material";
 import {
+  detailTableHeadSx,
+  detailTableRowSx,
+} from "../../components/detail-page/detail-page-ui";
+import {
   DataTable,
   DataTableToolbar,
   getServerPaginationMeta,
@@ -23,16 +28,22 @@ import {
   sortItems,
 } from "../../components/data-table";
 import {
+  StatusBadge,
   TableQuickActions,
 } from "../../components/table-cells";
+import { formatDateTime } from "../../utils/dateUtils";
 import {
   formatRideCurrency,
+  getBookingDestinationLabel,
+  getBookingReferenceLabel,
+  getBookingTypeMeta,
   getRideAdminEarning,
   getRideCustomerName,
-  getRideDestinationAddress,
   getRideDriverEarning,
   getRideDriverName,
   getRideList,
+  getRideStatusMeta,
+  isFoodOrderBooking,
   RIDE_PAYMENT_FILTER_OPTIONS,
   RIDE_STATUS_FILTER_OPTIONS,
   storeRideDetail,
@@ -138,9 +149,13 @@ export const RideHistoryTable = (props) => {
     setSearchInput(value);
   };
 
-  const handleViewRide = (ride) => {
-    storeRideDetail(ride);
-    router.push(`/ride-history/detail?id=${ride.rideId}`);
+  const handleViewBooking = (booking) => {
+    storeRideDetail(booking);
+    if (isFoodOrderBooking(booking)) {
+      router.push(`/orders/detail?id=${booking.orderId || booking.rideId}`);
+      return;
+    }
+    router.push(`/ride-history/detail?id=${booking.rideId}`);
   };
 
   const handleStatusFilterChange = (event) => {
@@ -248,14 +263,17 @@ export const RideHistoryTable = (props) => {
           />
         }
       >
-        <TableHead>
+        <TableHead sx={detailTableHeadSx}>
           <TableRow>
-            <TableCell sx={{ width: { xs: "18%", md: "14%" } }}>Driver</TableCell>
-            <TableCell sx={{ width: { xs: "18%", md: "14%" } }}>Client</TableCell>
-            <TableCell sx={{ width: { xs: "28%", md: "32%" } }}>End Location</TableCell>
-            <TableCell sx={{ width: { xs: "14%", md: "12%" } }}>Driver Earning</TableCell>
-            <TableCell sx={{ width: { xs: "14%", md: "12%" } }}>Admin Earning</TableCell>
-            <TableCell align="right" sx={{ width: { xs: "8%", md: "8%" } }}>
+            <TableCell sx={{ width: { xs: "10%", md: "9%" } }}>Type</TableCell>
+            <TableCell sx={{ width: { xs: "10%", md: "9%" } }}>Status</TableCell>
+            <TableCell sx={{ width: { xs: "12%", md: "11%" } }}>Date</TableCell>
+            <TableCell sx={{ width: { xs: "14%", md: "11%" } }}>Driver</TableCell>
+            <TableCell sx={{ width: { xs: "14%", md: "11%" } }}>Client</TableCell>
+            <TableCell sx={{ width: { xs: "20%", md: "22%" } }}>Route / Destination</TableCell>
+            <TableCell sx={{ width: { xs: "10%", md: "9%" } }}>Driver Earning</TableCell>
+            <TableCell sx={{ width: { xs: "10%", md: "9%" } }}>Admin Earning</TableCell>
+            <TableCell align="right" sx={{ width: { xs: "8%", md: "7%" } }}>
               Actions
             </TableCell>
           </TableRow>
@@ -263,30 +281,65 @@ export const RideHistoryTable = (props) => {
         <TableBody>
           {rows.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={6}>
+              <TableCell colSpan={9}>
                 <Typography color="text.secondary" textAlign="center" variant="body2">
                   No matching results found.
                 </Typography>
               </TableCell>
             </TableRow>
           ) : (
-            rows.map((ride) => {
-              const destination = getRideDestinationAddress(ride);
-              const shortDestination = truncateRideAddress(destination);
+            rows.map((booking) => {
+              const typeMeta = getBookingTypeMeta(booking);
+              const statusMeta = getRideStatusMeta(booking?.status);
+              const destination = getBookingDestinationLabel(booking);
+              const shortDestination = truncateRideAddress(destination, 42);
+              const referenceLabel = getBookingReferenceLabel(booking);
+              const rowBg = isFoodOrderBooking(booking)
+                ? "rgba(168, 85, 247, 0.04)"
+                : booking?.type === "chaperoneride"
+                  ? "rgba(14, 165, 233, 0.04)"
+                  : "inherit";
 
               return (
-                <TableRow hover key={ride.rideId}>
+                <TableRow
+                  hover
+                  key={`${booking.recordType || booking.type}-${booking.rideId}`}
+                  sx={{ ...detailTableRowSx, bgcolor: rowBg }}
+                >
                   <TableCell>
-                    <Tooltip title={getRideDriverName(ride)}>
+                    <Stack spacing={0.5}>
+                      <Chip
+                        label={typeMeta.label}
+                        size="small"
+                        sx={{
+                          bgcolor: typeMeta.bgcolor,
+                          color: typeMeta.color,
+                          fontWeight: 700,
+                          width: "fit-content",
+                        }}
+                      />
+                      <Typography color="text.secondary" variant="caption">
+                        {referenceLabel}
+                      </Typography>
+                    </Stack>
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge color={statusMeta.color} label={statusMeta.label} />
+                  </TableCell>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}>
+                    <Typography variant="body2">{formatDateTime(booking.createdAt)}</Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Tooltip title={getRideDriverName(booking)}>
                       <Typography sx={nameCellSx} variant="body2">
-                        {getRideDriverName(ride)}
+                        {getRideDriverName(booking)}
                       </Typography>
                     </Tooltip>
                   </TableCell>
                   <TableCell>
-                    <Tooltip title={getRideCustomerName(ride)}>
+                    <Tooltip title={getRideCustomerName(booking)}>
                       <Typography sx={nameCellSx} variant="body2">
-                        {getRideCustomerName(ride)}
+                        {getRideCustomerName(booking)}
                       </Typography>
                     </Tooltip>
                   </TableCell>
@@ -296,20 +349,20 @@ export const RideHistoryTable = (props) => {
                         {shortDestination}
                       </Typography>
                     </Tooltip>
-                    {ride?.distance && (
+                    {booking?.distance ? (
                       <Typography color="text.secondary" sx={addressTextSx} variant="caption">
-                        {ride.distance}
+                        {booking.distance}
                       </Typography>
-                    )}
+                    ) : null}
                   </TableCell>
                   <TableCell sx={earningCellSx}>
                     <Typography fontWeight={600} variant="body2">
-                      {formatRideCurrency(getRideDriverEarning(ride))}
+                      {formatRideCurrency(getRideDriverEarning(booking))}
                     </Typography>
                   </TableCell>
                   <TableCell sx={earningCellSx}>
                     <Typography color="text.secondary" variant="body2">
-                      {formatRideCurrency(getRideAdminEarning(ride))}
+                      {formatRideCurrency(getRideAdminEarning(booking))}
                     </Typography>
                   </TableCell>
                   <TableCell align="right">
@@ -317,8 +370,10 @@ export const RideHistoryTable = (props) => {
                       actions={[
                         {
                           icon: EyeIcon,
-                          label: "View ride details",
-                          onClick: () => handleViewRide(ride),
+                          label: isFoodOrderBooking(booking)
+                            ? "View order details"
+                            : "View ride details",
+                          onClick: () => handleViewBooking(booking),
                         },
                       ]}
                     />
