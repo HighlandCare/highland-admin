@@ -98,8 +98,6 @@ export const items = [
     ),
   },
   {
-
-    
     title: "Terms & Condition",
     path: "/terms",
     icon: (
