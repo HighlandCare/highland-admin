@@ -26,6 +26,7 @@ import {
   DetailPageState,
   DetailPanel,
   DetailSection,
+  DetailStat,
   detailTableHeadSx,
   detailTableRowSx,
 } from "../../components/detail-page/detail-page-ui";
@@ -174,47 +175,63 @@ const Page = () => {
                       </Stack>
                     }
                     footer={
-                      !isApproved ? (
+                      <Stack
+                        alignItems={{ xs: "stretch", sm: "center" }}
+                        direction={{ xs: "column", sm: "row" }}
+                        justifyContent="space-between"
+                        spacing={2}
+                        sx={{ width: "100%" }}
+                      >
                         <Stack direction="row" flexWrap="wrap" gap={1.5}>
-                          <Button
-                            color="success"
-                            disabled={isSubmitting}
-                            size="medium"
-                            startIcon={<CheckCircleIcon width={18} />}
-                            variant="contained"
-                            onClick={() => handleApproval(true)}
-                          >
-                            Approve
-                          </Button>
-                          <Button
-                            color="error"
-                            disabled={isSubmitting}
-                            size="medium"
-                            startIcon={<XCircleIcon width={18} />}
-                            variant="outlined"
-                            onClick={() => handleApproval(false)}
-                          >
-                            Decline
-                          </Button>
+                          <DetailStat
+                            label="Orders"
+                            value={
+                              orderCount != null && orderCount !== ""
+                                ? String(orderCount)
+                                : "0"
+                            }
+                          />
+                          <DetailStat
+                            label="Open tickets"
+                            value={
+                              openTicketCount != null && openTicketCount !== ""
+                                ? String(openTicketCount)
+                                : "0"
+                            }
+                          />
                         </Stack>
-                      ) : null
+                        {!isApproved ? (
+                          <Stack
+                            direction="row"
+                            flexWrap="wrap"
+                            gap={1.5}
+                            justifyContent={{ xs: "flex-start", sm: "flex-end" }}
+                            sx={{ ml: { sm: "auto" } }}
+                          >
+                            <Button
+                              color="success"
+                              disabled={isSubmitting}
+                              size="medium"
+                              startIcon={<CheckCircleIcon width={18} />}
+                              variant="contained"
+                              onClick={() => handleApproval(true)}
+                            >
+                              Approve
+                            </Button>
+                            <Button
+                              color="error"
+                              disabled={isSubmitting}
+                              size="medium"
+                              startIcon={<XCircleIcon width={18} />}
+                              variant="outlined"
+                              onClick={() => handleApproval(false)}
+                            >
+                              Decline
+                            </Button>
+                          </Stack>
+                        ) : null}
+                      </Stack>
                     }
-                    stats={[
-                      {
-                        label: "Orders",
-                        value:
-                          orderCount != null && orderCount !== ""
-                            ? String(orderCount)
-                            : "0",
-                      },
-                      {
-                        label: "Open tickets",
-                        value:
-                          openTicketCount != null && openTicketCount !== ""
-                            ? String(openTicketCount)
-                            : "0",
-                      },
-                    ]}
                     subtitle={cuisine || "Restaurant"}
                     title={businessName}
                   />
