@@ -1,11 +1,9 @@
 import { useEffect, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import CheckCircleIcon from "@heroicons/react/24/outline/CheckCircleIcon";
-import XCircleIcon from "@heroicons/react/24/outline/XCircleIcon";
+import EyeIcon from "@heroicons/react/24/outline/EyeIcon";
 import {
   Box,
-  Button,
   Container,
   FormControl,
   MenuItem,
@@ -17,7 +15,6 @@ import {
   TableRow,
   Typography,
 } from "@mui/material";
-import { toast } from "react-toastify";
 import { Layout as DashboardLayout } from "../layouts/dashboard/layout";
 import Loader from "../components/Loader";
 import {
@@ -26,9 +23,14 @@ import {
   getServerPaginationMeta,
   getServerPaginationProps,
 } from "../components/data-table";
-import { StatusBadge } from "../components/table-cells";
-import { getRestaurants, updateRestaurantApproval } from "../Services/Auth.service";
-import { formatDateTime } from "../utils/dateUtils";
+import {
+  StatusBadge,
+  TableEmailCell,
+  TablePersonCell,
+  TablePhoneCell,
+  TableQuickActions,
+} from "../components/table-cells";
+import { getRestaurants } from "../Services/Auth.service";
 import { pageContainerSx, pageMainSx } from "../utils/pageLayout";
 
 const STATUS_OPTIONS = [
@@ -46,11 +48,10 @@ const getRestaurantList = (response) => {
 const Page = () => {
   const router = useRouter();
   const [page, setPage] = useState(1);
-  const [status, setStatus] = useState("pending");
+  const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [items, setItems] = useState({});
-  const [submittingId, setSubmittingId] = useState(null);
 
   useEffect(() => {
     const isLogin = JSON.parse(typeof window !== "undefined" && localStorage.getItem("isLogin"));
@@ -81,18 +82,9 @@ const Page = () => {
   const rows = getRestaurantList(items);
   const paginationMeta = getServerPaginationMeta(items, page, rows.length);
 
-  const handleApproval = async (restaurant, approved) => {
-    try {
-      setSubmittingId(restaurant._id);
-      await updateRestaurantApproval(restaurant._id, approved);
-      toast.success(approved ? "Restaurant approved" : "Restaurant rejected");
-      const response = await getRestaurants(page, 20, { status, search });
-      setItems(response);
-    } catch (error) {
-      toast.error(error?.response?.data?.message || "Unable to update restaurant");
-    } finally {
-      setSubmittingId(null);
-    }
+  const handleOpenDetail = (restaurant) => {
+    if (!restaurant?._id) return;
+    router.push(`/restaurants/detail?id=${restaurant._id}`);
   };
 
   return (
@@ -150,67 +142,72 @@ const Page = () => {
                   <TableRow>
                     <TableCell>Business</TableCell>
                     <TableCell>Owner</TableCell>
-                    <TableCell>Contact</TableCell>
+                    <TableCell>Email</TableCell>
+                    <TableCell>Phone</TableCell>
                     <TableCell>Status</TableCell>
-                    <TableCell>Submitted</TableCell>
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {rows.map((restaurant) => (
-                    <TableRow hover key={restaurant._id}>
-                      <TableCell>
-                        <Typography fontWeight={600}>{restaurant.businessName || "—"}</Typography>
-                        <Typography color="text.secondary" variant="caption">
-                          {restaurant.cuisine || "Restaurant"}
+                  {rows.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6}>
+                        <Typography color="text.secondary" textAlign="center" variant="body2">
+                          No matching results found.
                         </Typography>
-                      </TableCell>
-                      <TableCell>{restaurant.ownerName || "—"}</TableCell>
-                      <TableCell>
-                        <Typography variant="body2">{restaurant.phone || "—"}</Typography>
-                        <Typography color="text.secondary" variant="caption">
-                          {restaurant.email || "—"}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge
-                          color={restaurant.isApproved ? "success" : "warning"}
-                          label={restaurant.isApproved ? "Approved" : "Pending"}
-                        />
-                      </TableCell>
-                      <TableCell>{formatDateTime(restaurant.createdAt)}</TableCell>
-                      <TableCell align="right">
-                        {!restaurant.isApproved ? (
-                          <Stack direction="row" justifyContent="flex-end" spacing={1}>
-                            <Button
-                              color="success"
-                              disabled={submittingId === restaurant._id}
-                              size="small"
-                              startIcon={<CheckCircleIcon width={18} />}
-                              variant="contained"
-                              onClick={() => handleApproval(restaurant, true)}
-                            >
-                              Accept
-                            </Button>
-                            <Button
-                              color="error"
-                              disabled={submittingId === restaurant._id}
-                              size="small"
-                              startIcon={<XCircleIcon width={18} />}
-                              variant="outlined"
-                              onClick={() => handleApproval(restaurant, false)}
-                            >
-                              Reject
-                            </Button>
-                          </Stack>
-                        ) : (
-                          <Typography color="text.secondary" variant="body2">
-                            Approved
-                          </Typography>
-                        )}
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ) : (
+                    rows.map((restaurant) => (
+                      <TableRow hover key={restaurant._id}>
+                        <TableCell>
+                          <TablePersonCell
+                            imageUrl={
+                              restaurant.logo ||
+                              restaurant.logoUrl ||
+                              restaurant.image ||
+                              restaurant.imageUrl ||
+                              undefined
+                            }
+                            name={restaurant.businessName || "—"}
+                            subtitle={restaurant.cuisine || "Restaurant"}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Typography fontWeight={600} variant="body2">
+                            {restaurant.ownerName || restaurant.owner?.fullName || "—"}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <TableEmailCell
+                            email={restaurant.email || restaurant.owner?.email}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <TablePhoneCell
+                            phone={restaurant.phone || restaurant.owner?.phone}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge
+                            color={restaurant.isApproved ? "success" : "warning"}
+                            label={restaurant.isApproved ? "Approved" : "Pending"}
+                          />
+                        </TableCell>
+                        <TableCell align="right">
+                          <TableQuickActions
+                            actions={[
+                              {
+                                icon: EyeIcon,
+                                label: "View Details",
+                                onClick: () => handleOpenDetail(restaurant),
+                              },
+                            ]}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </DataTable>
             )}

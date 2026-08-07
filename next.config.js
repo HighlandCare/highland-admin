@@ -16,13 +16,18 @@ module.exports = {
   exportPathMap: async function (defaultPathMap) {
     return {
       "/users/index": { page: "/users" },
+      "/users/detail/index": { page: "/users/detail" },
       "/about/index": { page: "/about" },
       "/chaperone/index": { page: "/chaperone" },
       "/chaperone/detail/index": { page: "/chaperone/detail" },
+      "/restaurants/index": { page: "/restaurants" },
+      "/restaurants/detail/index": { page: "/restaurants/detail" },
       "/driver-earnings/index": { page: "/driver-earnings" },
       "/ride-history/index": { page: "/ride-history" },
       "/ride-history/detail/index": { page: "/ride-history/detail" },
       "/orders/detail/index": { page: "/orders/detail" },
+      "/disputes/index": { page: "/disputes" },
+      "/disputes/detail/index": { page: "/disputes/detail" },
       "/faq/index": { page: "/faq" },
       "/feedback/index": { page: "/feedback" },
       "/policy/index": { page: "/policy" },

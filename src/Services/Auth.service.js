@@ -724,6 +724,20 @@ export const getRestaurants = async (page = 1, limit = 20, filters = {}) => {
   }
 };
 
+export const getRestaurantById = async (restaurantId) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const response = await Action.get(
+      `admin/restaurants/${encodeURIComponent(restaurantId)}`,
+      { headers: { Authorization: `Bearer ${authToken}` } }
+    );
+    return response.data;
+  } catch (error) {
+    console.error("getRestaurantById error:", error?.response?.data || error.message);
+    throw error;
+  }
+};
+
 export const updateRestaurantApproval = async (restaurantId, approved) => {
   try {
     const authToken = JSON.parse(localStorage.getItem("token"));

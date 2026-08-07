@@ -118,15 +118,37 @@ export function DetailHero({
         {badge}
       </Stack>
 
-      {stats?.length ? (
-        <Stack direction="row" flexWrap="wrap" gap={1.5} sx={{ mt: 2.5 }}>
-          {stats.map((stat) => (
-            <DetailStat key={stat.label} label={stat.label} value={stat.value} />
-          ))}
+      {(stats?.length || footer) ? (
+        <Stack
+          alignItems={{ xs: "stretch", sm: "center" }}
+          direction={{ xs: "column", sm: "row" }}
+          justifyContent="space-between"
+          spacing={2}
+          sx={{ mt: 2.5 }}
+        >
+          {stats?.length ? (
+            <Stack direction="row" flexWrap="wrap" gap={1.5}>
+              {stats.map((stat) => (
+                <DetailStat key={stat.label} label={stat.label} value={stat.value} />
+              ))}
+            </Stack>
+          ) : (
+            <Box />
+          )}
+          {footer ? (
+            <Box
+              sx={{
+                alignSelf: { xs: "stretch", sm: "center" },
+                display: "flex",
+                justifyContent: { xs: "flex-start", sm: "flex-end" },
+                ml: { sm: "auto" },
+              }}
+            >
+              {footer}
+            </Box>
+          ) : null}
         </Stack>
       ) : null}
-
-      {footer ? <Box sx={{ mt: 2.5 }}>{footer}</Box> : null}
     </Box>
   );
 }
