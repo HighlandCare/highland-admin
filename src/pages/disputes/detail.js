@@ -5,7 +5,19 @@ import CheckCircleIcon from "@heroicons/react/24/outline/CheckCircleIcon";
 import DocumentTextIcon from "@heroicons/react/24/outline/DocumentTextIcon";
 import XCircleIcon from "@heroicons/react/24/outline/XCircleIcon";
 import { toast } from "react-toastify";
-import { Box, Button, Container, Stack, SvgIcon, TextField, Typography } from "@mui/material";
+import {
+  Box,
+  Button,
+  Container,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
+  Stack,
+  SvgIcon,
+  TextField,
+  Typography,
+} from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { Layout as DashboardLayout } from "../../layouts/dashboard/layout";
 import Loader from "../../components/Loader";
@@ -22,7 +34,9 @@ import { getRideById } from "../../Services/Auth.service";
 import {
   approveDispute,
   getDisputeById,
+  messageDisputeParties,
   rejectDispute,
+  resolveDispute,
   reviewDispute,
 } from "../../Services/Dispute.service";
 import { formatDateTime, formatRelativeDate } from "../../utils/dateUtils";
@@ -30,6 +44,7 @@ import { pageContainerSx, pageMainSx } from "../../utils/pageLayout";
 import {
   applyDisputeActionLocally,
   canReviewDispute,
+  clampDisputeAmount,
   formatRideCurrency,
   formatRidePaymentStatus,
   formatRideReason,
@@ -37,6 +52,7 @@ import {
   getDisputeActionId,
   getDisputeAdminNotes,
   getDisputeFromResponse,
+  getDisputeSettlementCaps,
   getDisputeStatusMeta,
   getRideCustomerName,
   getRideDestinationAddress,
@@ -131,6 +147,11 @@ const Page = () => {
   const { id } = router.query;
   const [row, setRow] = useState(null);
   const [adminNotes, setAdminNotes] = useState("");
+  const [resolution, setResolution] = useState("pay_driver");
+  const [refundToCustomer, setRefundToCustomer] = useState("");
+  const [payToProvider, setPayToProvider] = useState("");
+  const [partyMessage, setPartyMessage] = useState("");
+  const [messageTo, setMessageTo] = useState("both");
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittingAction, setSubmittingAction] = useState(null);
@@ -171,6 +192,14 @@ const Page = () => {
                 from: disputeRow.from || cached?.from,
                 destination: disputeRow.destination || cached?.destination,
                 payment: disputeRow.payment || cached?.payment,
+                paymentBreakdown:
+                  disputeRow.paymentBreakdown ||
+                  disputeResponse?.data?.paymentBreakdown ||
+                  cached?.paymentBreakdown,
+                amount:
+                  disputeRow.amount ??
+                  disputeResponse?.data?.amount ??
+                  cached?.amount,
                 adminNotes:
                   getDisputeAdminNotes(disputeRow) || getDisputeAdminNotes(cached) || "",
               };
@@ -255,6 +284,19 @@ const Page = () => {
 
       if (action === "review") {
         response = await reviewDispute(actionId, adminNotes.trim());
+      } else if (action === "resolve") {
+        const caps = getDisputeSettlementCaps(row);
+        const refund = Math.min(
+          Number(refundToCustomer) || 0,
+          caps.maxRefundToCustomer
+        );
+        const pay = Math.min(Number(payToProvider) || 0, caps.maxPayToProvider);
+        response = await resolveDispute(actionId, {
+          resolution,
+          adminNotes: adminNotes.trim() || undefined,
+          refundToCustomer: refund,
+          payToProvider: pay,
+        });
       } else if (action === "approve") {
         response = await approveDispute(actionId, {
           adminNotes: adminNotes.trim() || undefined,
@@ -267,24 +309,54 @@ const Page = () => {
 
       const updated = getDisputeFromResponse(response);
       const nextRow = {
-        ...applyDisputeActionLocally(row, action, adminNotes),
+        ...applyDisputeActionLocally(row, action === "resolve" ? "approve" : action, adminNotes),
         ...(updated || {}),
         adminNotes:
           getDisputeAdminNotes(updated) || adminNotes.trim() || getDisputeAdminNotes(row),
         disputeId: row.disputeId || actionId,
         rideId: row.rideId,
+        status: updated?.status || (action === "reject" ? "rejected" : "resolved"),
+        resolution: updated?.resolution || resolution,
       };
 
       storeDisputeDetail(nextRow);
       setRow(nextRow);
-      setAdminNotes(getDisputeAdminNotes(nextRow));
       toast.success(
         action === "review"
-          ? "Dispute marked under review"
-          : action === "approve"
-            ? "Dispute approved"
-            : "Dispute rejected"
+          ? "Marked under review"
+          : action === "reject"
+            ? "Dispute rejected"
+            : "Dispute resolved"
       );
+    } catch (error) {
+      toast.error(getDisputeActionErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+      setSubmittingAction(null);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    const actionId = getDisputeActionId(row);
+    if (!actionId || !partyMessage.trim()) {
+      toast.error("Enter a message to send.");
+      return;
+    }
+    setIsSubmitting(true);
+    setSubmittingAction("message");
+    try {
+      const response = await messageDisputeParties(actionId, {
+        to: messageTo,
+        message: partyMessage.trim(),
+      });
+      const updated = getDisputeFromResponse(response);
+      if (updated) {
+        const nextRow = { ...row, ...updated, disputeId: row.disputeId || actionId };
+        storeDisputeDetail(nextRow);
+        setRow(nextRow);
+      }
+      setPartyMessage("");
+      toast.success("Message sent to parties");
     } catch (error) {
       toast.error(getDisputeActionErrorMessage(error));
     } finally {
@@ -296,6 +368,10 @@ const Page = () => {
   const statusMeta = row ? getDisputeStatusMeta(row.status) : null;
   const showActions = canReviewDispute(row);
   const savedNotes = row ? getDisputeAdminNotes(row) : "";
+  const settlementCaps = useMemo(
+    () => (row ? getDisputeSettlementCaps(row) : null),
+    [row]
+  );
 
   const reasonValue = row ? formatRideReason(row.reasonOfDispute) : null;
 
@@ -305,6 +381,39 @@ const Page = () => {
     }
 
     return [
+      {
+        key: "case",
+        title: "Dispute case",
+        items: [
+          {
+            label: "Type",
+            value: row.disputeType
+              ? String(row.disputeType).replace(/_/g, " ")
+              : null,
+          },
+          {
+            label: "Opened by",
+            value:
+              row.openedByRole === "customer"
+                ? "Customer"
+                : row.openedByRole === "chaperone"
+                  ? "Driver"
+                  : null,
+          },
+          {
+            label: "Priority",
+            value: row.priority || null,
+          },
+          {
+            label: "Evidence files",
+            value: Array.isArray(row.evidence) ? String(row.evidence.length) : null,
+          },
+          {
+            label: "Amount",
+            value: formatRideCurrency(row.amount ?? row.estFare),
+          },
+        ].filter((item) => hasDetailValue(item.value)),
+      },
       { key: "timing", title: "Timing", items: getTimingItems(row) },
       { key: "payment", title: "Payment", items: getPaymentItems(row) },
       { key: "customer", title: "Customer", items: getPersonItems(row.customer) },
@@ -423,9 +532,151 @@ const Page = () => {
                             minRows={3}
                             multiline
                             onChange={(event) => setAdminNotes(event.target.value)}
-                            placeholder="Explain your decision for review, approval, or rejection"
+                            placeholder="Explain your decision for review or ruling"
                             value={adminNotes}
                           />
+                          <FormControl fullWidth>
+                            <InputLabel id="resolution-label">SOW ruling</InputLabel>
+                            <Select
+                              label="SOW ruling"
+                              labelId="resolution-label"
+                              onChange={(e) => {
+                                const next = e.target.value;
+                                setResolution(next);
+                                const caps = getDisputeSettlementCaps(row);
+                                if (next === "pay_driver") {
+                                  setPayToProvider(
+                                    caps.maxPayToProvider
+                                      ? String(caps.maxPayToProvider)
+                                      : ""
+                                  );
+                                  setRefundToCustomer("");
+                                } else if (next === "refund_customer") {
+                                  setRefundToCustomer(
+                                    caps.maxRefundToCustomer
+                                      ? String(caps.maxRefundToCustomer)
+                                      : ""
+                                  );
+                                  setPayToProvider("");
+                                } else if (next === "split") {
+                                  setRefundToCustomer("");
+                                  setPayToProvider("");
+                                } else {
+                                  setRefundToCustomer("");
+                                  setPayToProvider("");
+                                }
+                              }}
+                              value={resolution}
+                            >
+                              <MenuItem value="pay_driver">Pay provider</MenuItem>
+                              <MenuItem value="refund_customer">Refund user</MenuItem>
+                              <MenuItem value="split">Split settlement</MenuItem>
+                              <MenuItem value="no_action">No action / close</MenuItem>
+                            </Select>
+                          </FormControl>
+                          {settlementCaps && resolution !== "no_action" ? (
+                            <Box
+                              sx={{
+                                bgcolor: "neutral.100",
+                                borderRadius: 2,
+                                px: 2,
+                                py: 1.5,
+                              }}
+                            >
+                              <Typography color="text.secondary" variant="caption">
+                                Settlement caps (platform commission deducted)
+                              </Typography>
+                              <Typography sx={{ mt: 0.5 }} variant="body2">
+                                Total fare:{" "}
+                                <strong>
+                                  {formatRideCurrency(settlementCaps.totalAmount)}
+                                </strong>
+                                {" · "}
+                                Admin/platform cut (
+                                {Math.round(
+                                  (settlementCaps.commissionRate || 0) * 100
+                                )}
+                                %):{" "}
+                                <strong>
+                                  {formatRideCurrency(
+                                    settlementCaps.platformCommission
+                                  )}
+                                </strong>
+                                {" · "}
+                                Max to rider:{" "}
+                                <strong>
+                                  {formatRideCurrency(
+                                    settlementCaps.maxPayToProvider
+                                  )}
+                                </strong>
+                                {" · "}
+                                Max refund to customer:{" "}
+                                <strong>
+                                  {formatRideCurrency(
+                                    settlementCaps.maxRefundToCustomer
+                                  )}
+                                </strong>
+                              </Typography>
+                            </Box>
+                          ) : null}
+                          {(resolution === "refund_customer" || resolution === "split") && (
+                            <TextField
+                              fullWidth
+                              helperText={
+                                settlementCaps
+                                  ? `Max ${formatRideCurrency(
+                                      settlementCaps.maxRefundToCustomer
+                                    )} (full disputed fare)`
+                                  : undefined
+                              }
+                              inputProps={{
+                                min: 0,
+                                max: settlementCaps?.maxRefundToCustomer ?? undefined,
+                                step: "0.01",
+                              }}
+                              label="Refund to customer ($)"
+                              onChange={(e) =>
+                                setRefundToCustomer(
+                                  clampDisputeAmount(
+                                    e.target.value,
+                                    settlementCaps?.maxRefundToCustomer
+                                  )
+                                )
+                              }
+                              type="number"
+                              value={refundToCustomer}
+                            />
+                          )}
+                          {(resolution === "pay_driver" || resolution === "split") && (
+                            <TextField
+                              fullWidth
+                              helperText={
+                                settlementCaps
+                                  ? `Max ${formatRideCurrency(
+                                      settlementCaps.maxPayToProvider
+                                    )} after ${Math.round(
+                                      (settlementCaps.commissionRate || 0) * 100
+                                    )}% platform/admin commission`
+                                  : undefined
+                              }
+                              inputProps={{
+                                min: 0,
+                                max: settlementCaps?.maxPayToProvider ?? undefined,
+                                step: "0.01",
+                              }}
+                              label="Pay to provider / rider ($)"
+                              onChange={(e) =>
+                                setPayToProvider(
+                                  clampDisputeAmount(
+                                    e.target.value,
+                                    settlementCaps?.maxPayToProvider
+                                  )
+                                )
+                              }
+                              type="number"
+                              value={payToProvider}
+                            />
+                          )}
                           <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
                             <Button
                               disabled={isSubmitting}
@@ -442,10 +693,6 @@ const Page = () => {
                                 borderColor: "info.main",
                                 color: "info.main",
                                 minHeight: 44,
-                                "&:hover": {
-                                  borderColor: "info.dark",
-                                  bgcolor: alpha("#0288d1", 0.06),
-                                },
                               }}
                               variant="outlined"
                             >
@@ -459,9 +706,9 @@ const Page = () => {
                               color="success"
                               disabled={isSubmitting}
                               fullWidth
-                              onClick={() => handleAction("approve")}
+                              onClick={() => handleAction("resolve")}
                               startIcon={
-                                submittingAction === "approve" ? null : (
+                                submittingAction === "resolve" ? null : (
                                   <SvgIcon fontSize="small">
                                     <CheckCircleIcon />
                                   </SvgIcon>
@@ -470,10 +717,10 @@ const Page = () => {
                               sx={{ minHeight: 44 }}
                               variant="contained"
                             >
-                              {submittingAction === "approve" ? (
+                              {submittingAction === "resolve" ? (
                                 <Loader color="#fff" inline size="xs" />
                               ) : (
-                                "Approve"
+                                "Apply ruling"
                               )}
                             </Button>
                             <Button
@@ -498,6 +745,41 @@ const Page = () => {
                               )}
                             </Button>
                           </Stack>
+                          <Typography color="text.secondary" variant="subtitle2">
+                            Message parties
+                          </Typography>
+                          <FormControl fullWidth>
+                            <InputLabel id="message-to-label">Send to</InputLabel>
+                            <Select
+                              label="Send to"
+                              labelId="message-to-label"
+                              onChange={(e) => setMessageTo(e.target.value)}
+                              value={messageTo}
+                            >
+                              <MenuItem value="both">Customer &amp; driver</MenuItem>
+                              <MenuItem value="customer">Customer only</MenuItem>
+                              <MenuItem value="driver">Driver only</MenuItem>
+                            </Select>
+                          </FormControl>
+                          <TextField
+                            fullWidth
+                            label="Support message"
+                            minRows={2}
+                            multiline
+                            onChange={(e) => setPartyMessage(e.target.value)}
+                            value={partyMessage}
+                          />
+                          <Button
+                            disabled={isSubmitting || !partyMessage.trim()}
+                            onClick={handleSendMessage}
+                            variant="outlined"
+                          >
+                            {submittingAction === "message" ? (
+                              <Loader color="#0288d1" inline size="xs" />
+                            ) : (
+                              "Send message"
+                            )}
+                          </Button>
                         </Stack>
                       ) : (
                         !hasDetailValue(savedNotes) && (

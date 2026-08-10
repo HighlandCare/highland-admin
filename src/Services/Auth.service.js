@@ -688,6 +688,13 @@ export const getLoginErrorMessage = (error) => {
     return formatApiErrorMessage(error.response.data.message);
   }
 
+  // Axios sets no `response` when the browser never reached the API
+  // (wrong base URL, backend down, CORS, connection refused).
+  if (!error?.response) {
+    const base = process.env.NEXT_PUBLIC_BASE_URL || "(missing NEXT_PUBLIC_BASE_URL)";
+    return `Cannot reach API at ${base}. Start cura-main (port 1120) or fix highland-admin/.env, then restart next dev.`;
+  }
+
   if (typeof error?.message === "string" && !error.message.startsWith("Error in adminLogin")) {
     return formatApiErrorMessage(error.message);
   }

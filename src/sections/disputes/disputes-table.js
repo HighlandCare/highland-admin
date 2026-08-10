@@ -248,6 +248,8 @@ export const DisputesTable = (props) => {
           <TableRow>
             <TableCell>Customer</TableCell>
             <TableCell>Driver</TableCell>
+            <TableCell>Type</TableCell>
+            <TableCell>Opened by</TableCell>
             <TableCell>Destination</TableCell>
             <TableCell>Fare</TableCell>
             <TableCell>Payment</TableCell>
@@ -260,7 +262,7 @@ export const DisputesTable = (props) => {
         <TableBody>
           {pageRows.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={9}>
+              <TableCell colSpan={11}>
                 <Typography color="text.secondary" textAlign="center" variant="body2">
                   No matching results found.
                 </Typography>
@@ -321,6 +323,20 @@ export const DisputesTable = (props) => {
                         {getRideDriverName(row)}
                       </Typography>
                     </Tooltip>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2">
+                      {(row.disputeType || "—").toString().replace(/_/g, " ")}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2">
+                      {row.openedByRole === "customer"
+                        ? "Customer"
+                        : row.openedByRole === "chaperone"
+                          ? "Driver"
+                          : "—"}
+                    </Typography>
                   </TableCell>
                   <TableCell sx={addressCellSx}>
                     <Tooltip title={destination}>

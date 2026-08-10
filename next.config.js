@@ -3,15 +3,30 @@ const normalizeBaseUrl = (url) => {
     return "";
   }
 
-  const trimmed = String(url).trim();
+  let trimmed = String(url).trim().replace(/^["']|["']$/g, "");
+
+  // Axios needs a real protocol. "localhost:1120/..." → "Unsupported protocol localhost:"
+  if (trimmed && !/^https?:\/\//i.test(trimmed)) {
+    trimmed = `http://${trimmed}`;
+  }
+
   return trimmed.endsWith("/") ? trimmed : `${trimmed}/`;
 };
 
+// Only use the explicit API base — never fall back to Vercel/Next `URL`
+const apiBaseUrl = normalizeBaseUrl(process.env.NEXT_PUBLIC_BASE_URL);
+
+if (!apiBaseUrl) {
+  console.warn(
+    "[highland-admin] NEXT_PUBLIC_BASE_URL is missing. Set it in .env (e.g. http://127.0.0.1:1120/api/v1)"
+  );
+} else {
+  console.log("[highland-admin] API base URL:", apiBaseUrl);
+}
+
 module.exports = {
   env: {
-    NEXT_PUBLIC_BASE_URL: normalizeBaseUrl(
-      process.env.NEXT_PUBLIC_BASE_URL || process.env.BASE_URL || process.env.URL
-    ),
+    NEXT_PUBLIC_BASE_URL: apiBaseUrl,
   },
   exportPathMap: async function (defaultPathMap) {
     return {

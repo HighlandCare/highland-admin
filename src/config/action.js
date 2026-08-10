@@ -23,10 +23,21 @@ Action.interceptors.response.use(
     return response;
   },
   function (error) {
-    console.log(error.response, "error.response");
     const status = error.response?.status;
     const requestUrl = String(error.config?.url || "");
     const isLoginRequest = /\/login(?:\?|$)/i.test(requestUrl);
+
+    if (!error.response) {
+      console.error(
+        "[API] No response (network/CORS). Check NEXT_PUBLIC_BASE_URL and that cura-main is running.",
+        {
+          baseURL: error.config?.baseURL,
+          url: error.config?.url,
+          code: error.code,
+          message: error.message,
+        }
+      );
+    }
 
     if (status === 401 && !isLoginRequest) {
       redirectToLogin({ reason: "expired" });

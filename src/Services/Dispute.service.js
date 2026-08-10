@@ -12,6 +12,21 @@ export const getDisputes = async (page = 1, limit = 20, filters = {}) => {
     if (filters.status) {
       params.set("status", filters.status);
     }
+    if (filters.disputeType) {
+      params.set("disputeType", filters.disputeType);
+    }
+    if (filters.openedByRole) {
+      params.set("openedByRole", filters.openedByRole);
+    }
+    if (filters.customerId) {
+      params.set("customerId", filters.customerId);
+    }
+    if (filters.driverId) {
+      params.set("driverId", filters.driverId);
+    }
+    if (filters.rideId) {
+      params.set("rideId", filters.rideId);
+    }
 
     const response = await Action.get(`admin/disputes?${params.toString()}`, {
       headers: {
@@ -140,6 +155,61 @@ export const rejectDispute = async (disputeId, payload = {}) => {
       console.error("Request Error:", error.request);
     } else {
       console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
+export const resolveDispute = async (disputeId, payload = {}) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const response = await Action.patch(
+      `admin/disputes/${disputeId}/resolve`,
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      }
+    );
+    const body = response.data;
+    if (body && (body.success === false || body.status === false)) {
+      throw {
+        response: { data: body },
+        message: body?.message || "Unable to resolve dispute.",
+      };
+    }
+    return body;
+  } catch (error) {
+    const adminMessage = getDisputeActionErrorMessage(error);
+    const nextError = new Error(adminMessage);
+    nextError.response = {
+      ...(error.response || {}),
+      data: {
+        ...(typeof error.response?.data === "object" ? error.response.data : {}),
+        message: adminMessage,
+      },
+    };
+    throw nextError;
+  }
+};
+
+export const messageDisputeParties = async (disputeId, payload = {}) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const response = await Action.post(
+      `admin/disputes/${disputeId}/message`,
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
     }
     throw error;
   }
