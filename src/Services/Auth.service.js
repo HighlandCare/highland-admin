@@ -42,6 +42,42 @@ export const getUserById = async (userId) => {
   }
 };
 
+/**
+ * Paginated customer transactions + spend analytics.
+ * @param {string} userId - profile id or auth id
+ * @param {object} params - page, limit, status, serviceCategory, referenceType, from, to
+ */
+export const getUserTransactions = async (userId, params = {}) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") {
+        query.set(key, String(value));
+      }
+    });
+    const qs = query.toString();
+    const response = await Action.get(
+      `admin/users/${encodeURIComponent(userId)}/transactions${qs ? `?${qs}` : ""}`,
+      {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
 export const getChap = async (page, limit = 10) => {
   try {
     const authToken = JSON.parse(localStorage.getItem("token"));
