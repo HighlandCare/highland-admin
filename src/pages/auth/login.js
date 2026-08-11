@@ -1,19 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import Head from "next/head";
-import NextLink from "next/link";
 import { useRouter } from "next/router";
 import { useFormik } from "formik";
 import * as Yup from "yup";
 import { toast } from "react-toastify";
 import { adminLogin, formatApiErrorMessage } from "../../Services/Auth.service";
 import Loader from "../../components/Loader";
-import { clearAuthSession } from "../../utils/authSession";
+import { clearAuthSession, consumeSessionExpiredToast } from "../../utils/authSession";
 import {
   Alert,
   Box,
   Button,
-  FormHelperText,
-  Link,
   Stack,
   Tab,
   Tabs,
@@ -23,20 +20,46 @@ import {
 
 import { Layout as AuthLayout } from "../../layouts/auth/layout";
 
+const SESSION_EXPIRED_TOAST_ID = "session-expired";
+
+// Survives React Strict Mode remounts within the same page load.
+let hasShownSessionExpiredToast = false;
+
 const Page = () => {
   const router = useRouter();
   const [method, setMethod] = useState("email");
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (!router.isReady) {
+    if (!router.isReady || hasShownSessionExpiredToast) {
       return;
     }
 
-    if (router.query.reason === "expired") {
-      toast.info("Your session has expired. Please log in again.");
+    const fromQuery = router.query.reason === "expired";
+    const fromFlag = consumeSessionExpiredToast();
+
+    if (!fromQuery && !fromFlag) {
+      return;
     }
-  }, [router.isReady, router.query.reason]);
+
+    hasShownSessionExpiredToast = true;
+    toast.dismiss();
+    toast.info("Your session has expired. Please log in again.", {
+      toastId: SESSION_EXPIRED_TOAST_ID,
+    });
+
+    if (fromQuery) {
+      const { reason, ...restQuery } = router.query;
+      router.replace(
+        {
+          pathname: "/auth/login",
+          query: restQuery,
+        },
+        undefined,
+        { shallow: true }
+      );
+    }
+  }, [router]);
 
   const getDeviceToken = () => {
     const storageKey = "deviceToken";

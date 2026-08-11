@@ -36,13 +36,11 @@ import {
   rejectDispute,
   reviewDispute,
 } from "../../Services/Dispute.service";
-import { formatRelativeDate } from "../../utils/dateUtils";
 import {
   applyDisputeActionLocally,
   canReviewDispute,
   formatRideCurrency,
   formatRidePaymentStatus,
-  formatRideReason,
   getDisputeActionErrorMessage,
   getDisputeActionId,
   getDisputeDetailId,
@@ -56,16 +54,25 @@ import { truncateRideAddress } from "../../utils/rideUtils";
 
 const disputeSortValue = "newest";
 
+const hideOnSmSx = {
+  display: { xs: "none", md: "table-cell" },
+};
+
+const hideOnXsSx = {
+  display: { xs: "none", sm: "table-cell" },
+};
+
 const nameCellSx = {
   fontWeight: 600,
-  maxWidth: { xs: 100, sm: 140, md: 160 },
+  maxWidth: { xs: 96, sm: 140, md: 160 },
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
 };
 
 const addressCellSx = {
-  maxWidth: { xs: 140, sm: 200, md: 240 },
+  ...hideOnSmSx,
+  maxWidth: { md: 200, lg: 240 },
   minWidth: 0,
 };
 
@@ -229,7 +236,7 @@ export const DisputesTable = (props) => {
     <>
       <DataTable
         empty={isEmpty}
-        minWidth={960}
+        minWidth={640}
         pagination={getClientPaginationProps({
           currentPage: page,
           onPageChange,
@@ -238,7 +245,7 @@ export const DisputesTable = (props) => {
         toolbar={
           <DataTableToolbar
             onSearchChange={handleSearchChange}
-            searchPlaceholder="Search by customer, driver, or reason"
+            searchPlaceholder="Search by customer, driver, or status"
             searchValue={search}
             title={title}
           />
@@ -248,21 +255,19 @@ export const DisputesTable = (props) => {
           <TableRow>
             <TableCell>Customer</TableCell>
             <TableCell>Driver</TableCell>
-            <TableCell>Type</TableCell>
-            <TableCell>Opened by</TableCell>
-            <TableCell>Destination</TableCell>
-            <TableCell>Fare</TableCell>
-            <TableCell>Payment</TableCell>
+            <TableCell sx={hideOnSmSx}>Type</TableCell>
+            <TableCell sx={hideOnSmSx}>Opened by</TableCell>
+            <TableCell sx={addressCellSx}>Destination</TableCell>
+            <TableCell sx={hideOnXsSx}>Fare</TableCell>
+            <TableCell sx={hideOnXsSx}>Payment</TableCell>
             <TableCell>Status</TableCell>
-            <TableCell>Reason</TableCell>
-            <TableCell>Date</TableCell>
             <TableCell align="right">Actions</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
           {pageRows.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={11}>
+              <TableCell colSpan={9}>
                 <Typography color="text.secondary" textAlign="center" variant="body2">
                   No matching results found.
                 </Typography>
@@ -273,8 +278,6 @@ export const DisputesTable = (props) => {
               const destination = getRideDestinationAddress(row);
               const shortDestination = truncateRideAddress(destination);
               const statusMeta = getDisputeStatusMeta(row.status);
-              const reason = formatRideReason(row.reasonOfDispute);
-              const shortReason = truncateRideAddress(reason === "—" ? "" : reason, 42) || "—";
               const canAct = canReviewDispute(row);
 
               const actions = [
@@ -324,12 +327,12 @@ export const DisputesTable = (props) => {
                       </Typography>
                     </Tooltip>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={hideOnSmSx}>
                     <Typography variant="body2">
                       {(row.disputeType || "—").toString().replace(/_/g, " ")}
                     </Typography>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={hideOnSmSx}>
                     <Typography variant="body2">
                       {row.openedByRole === "customer"
                         ? "Customer"
@@ -350,12 +353,12 @@ export const DisputesTable = (props) => {
                       </Typography>
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={hideOnXsSx}>
                     <Typography fontWeight={600} variant="body2">
                       {formatRideCurrency(row.payment?.totalAmount ?? row.estFare)}
                     </Typography>
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={hideOnXsSx}>
                     <Typography
                       color={row.havePaid ? "success.main" : "warning.main"}
                       fontWeight={600}
@@ -366,18 +369,6 @@ export const DisputesTable = (props) => {
                   </TableCell>
                   <TableCell>
                     <StatusBadge color={statusMeta.color} label={statusMeta.label} />
-                  </TableCell>
-                  <TableCell sx={addressCellSx}>
-                    <Tooltip title={reason}>
-                      <Typography color="text.secondary" sx={addressTextSx} variant="body2">
-                        {shortReason}
-                      </Typography>
-                    </Tooltip>
-                  </TableCell>
-                  <TableCell>
-                    <Typography color="text.secondary" variant="body2">
-                      {formatRelativeDate(row.createdAt)}
-                    </Typography>
                   </TableCell>
                   <TableCell align="right">
                     <TableActionsMenu actions={actions} disabled={isSubmitting} />
