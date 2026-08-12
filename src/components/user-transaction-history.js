@@ -45,96 +45,6 @@ const formatStatusLabel = (status) => {
   return value ? value.charAt(0).toUpperCase() + value.slice(1) : "—";
 };
 
-/** Lifetime / overview spend cards (no date filters). */
-export const UserSpendOverview = ({ lifetime = null, loading = false }) => {
-  if (loading && !lifetime) {
-    return (
-      <DetailPanel>
-        <DetailSection noBorder title="Overview spend">
-          <Box sx={{ py: 4 }}>
-            <Loader minHeight={100} size="md" />
-          </Box>
-        </DetailSection>
-      </DetailPanel>
-    );
-  }
-
-  const spent = lifetime || {};
-
-  return (
-    <DetailPanel>
-      <DetailSection noBorder title="Overview spend">
-        <Stack direction="row" flexWrap="wrap" gap={1.5}>
-          <DetailStat
-            label="Lifetime spent"
-            value={formatEarningsCurrency(spent.totalSpent ?? 0)}
-          />
-          <DetailStat
-            label="Rides"
-            value={formatEarningsCurrency(spent.ridesSpent ?? 0)}
-          />
-          <DetailStat
-            label="Food"
-            value={formatEarningsCurrency(spent.foodSpent ?? 0)}
-          />
-          <DetailStat
-            label="Credits / refunds"
-            value={formatEarningsCurrency(spent.totalCredits ?? 0)}
-          />
-          <DetailStat
-            label="All transactions"
-            value={String(spent.transactionCount ?? 0)}
-          />
-        </Stack>
-
-        {Array.isArray(spent.byService) && spent.byService.length > 0 ? (
-          <Box sx={{ mt: 2.5 }}>
-            <Typography color="text.secondary" sx={{ mb: 1 }} variant="caption">
-              Lifetime by service
-            </Typography>
-            <Stack direction="row" flexWrap="wrap" gap={1.5}>
-              {spent.byService.map((row) => (
-                <DetailStat
-                  key={row.category}
-                  label={formatServiceLabel(row.category)}
-                  value={`${formatEarningsCurrency(row.spent)} · ${row.count} txns`}
-                />
-              ))}
-            </Stack>
-          </Box>
-        ) : null}
-
-        {Array.isArray(spent.byStatus) || spent.byStatus ? (
-          <Box sx={{ mt: 2.5 }}>
-            <Typography color="text.secondary" sx={{ mb: 1 }} variant="caption">
-              By type
-            </Typography>
-            <Stack direction="row" flexWrap="wrap" gap={1.5}>
-              <DetailStat
-                label="Debits (spent)"
-                value={`${formatEarningsCurrency(spent.byStatus?.debit?.total ?? 0)} · ${
-                  spent.byStatus?.debit?.count ?? 0
-                }`}
-              />
-              <DetailStat
-                label="Credits"
-                value={`${formatEarningsCurrency(spent.byStatus?.credit?.total ?? 0)} · ${
-                  spent.byStatus?.credit?.count ?? 0
-                }`}
-              />
-            </Stack>
-          </Box>
-        ) : null}
-      </DetailSection>
-    </DetailPanel>
-  );
-};
-
-UserSpendOverview.propTypes = {
-  lifetime: PropTypes.object,
-  loading: PropTypes.bool,
-};
-
 export const UserTransactionHistory = ({
   transactions = [],
   loading = false,
@@ -173,23 +83,6 @@ export const UserTransactionHistory = ({
               value={formatEarningsCurrency(spent.totalCredits ?? 0)}
             />
           </Stack>
-
-          {Array.isArray(spent.byService) && spent.byService.length > 0 ? (
-            <Box sx={{ mt: 2 }}>
-              <Typography color="text.secondary" sx={{ mb: 1 }} variant="caption">
-                By service (current filters)
-              </Typography>
-              <Stack direction="row" flexWrap="wrap" gap={1.5}>
-                {spent.byService.map((row) => (
-                  <DetailStat
-                    key={row.category}
-                    label={formatServiceLabel(row.category)}
-                    value={`${formatEarningsCurrency(row.spent)} · ${row.count}`}
-                  />
-                ))}
-              </Stack>
-            </Box>
-          ) : null}
         </DetailSection>
       </DetailPanel>
 

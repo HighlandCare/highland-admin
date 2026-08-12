@@ -57,11 +57,7 @@ import {
   getStoredDisputeDetail,
   storeDisputeDetail,
 } from "../../utils/disputeUtils";
-import {
-  formatRideCoordinates,
-  formatRideField,
-  getRideFromResponse,
-} from "../../utils/rideUtils";
+import { formatRideField, getRideFromResponse } from "../../utils/rideUtils";
 import { brand } from "../../theme/colors";
 
 const SOW_OPTIONS = [
@@ -110,11 +106,8 @@ const getPersonItems = (person) =>
     { label: "Phone", value: person?.phone },
   ].filter((item) => hasDetailValue(item.value));
 
-const getLocationItems = (address, coordinates) =>
-  [
-    { label: "Address", value: address },
-    { label: "Coordinates", value: coordinates },
-  ].filter((item) => hasDetailValue(item.value));
+const getLocationItems = (address) =>
+  [{ label: "Address", value: address }].filter((item) => hasDetailValue(item.value));
 
 const Page = () => {
   const router = useRouter();
@@ -485,15 +478,12 @@ const Page = () => {
       {
         key: "pickup",
         title: "Pickup",
-        items: getLocationItems(getRidePickupAddress(row), formatRideCoordinates(row.from)),
+        items: getLocationItems(getRidePickupAddress(row)),
       },
       {
         key: "destination",
         title: "Destination",
-        items: getLocationItems(
-          getRideDestinationAddress(row),
-          formatRideCoordinates(row.destination)
-        ),
+        items: getLocationItems(getRideDestinationAddress(row)),
       },
     ];
 

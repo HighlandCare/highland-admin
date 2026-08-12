@@ -17,7 +17,6 @@ import { formatDate, formatRelativeDate } from "../../utils/dateUtils";
 import { pageContainerSx, pageMainSx } from "../../utils/pageLayout";
 import {
   formatRideCommissionRate,
-  formatRideCoordinates,
   formatRideCurrency,
   formatRideField,
   formatRidePaymentStatus,
@@ -171,7 +170,6 @@ const Page = () => {
                       fields={[
                         { label: "Type", value: formatRideField(ride.type) },
                         { label: "Status", value: formatRideField(ride.status) },
-                        { label: "Passengers", value: formatRideField(ride.numberOfPassenger) },
                       ]}
                     />
                   </DetailSection>
@@ -212,12 +210,7 @@ const Page = () => {
                       columns={{ sm: 2, lg: 2 }}
                       fields={[
                         { label: "Pickup Address", value: getRidePickupAddress(ride) },
-                        { label: "Pickup Coordinates", value: formatRideCoordinates(ride.from) },
                         { label: "Destination Address", value: getRideDestinationAddress(ride) },
-                        {
-                          label: "Destination Coordinates",
-                          value: formatRideCoordinates(ride.destination),
-                        },
                       ]}
                     />
                   </DetailSection>

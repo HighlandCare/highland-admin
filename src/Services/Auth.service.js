@@ -199,14 +199,36 @@ export const getDashboardAnalytics = async ({ latestLimit = 10, year } = {}) => 
   }
 };
 
-export const getDriverTransactions = async (driverId) => {
+export const getDriverTransactions = async (driverId, params = {}) => {
   try {
     const authToken = JSON.parse(localStorage.getItem("token"));
-    const response = await Action.get(`admin/driver-earnings/${driverId}`, {
-      headers: {
-        Authorization: `Bearer ${authToken}`,
-      },
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") {
+        query.set(key, String(value));
+      }
     });
+    const qs = query.toString();
+    const headers = { Authorization: `Bearer ${authToken}` };
+
+    try {
+      const response = await Action.get(
+        `admin/driver-earnings/${encodeURIComponent(driverId)}/transactions${
+          qs ? `?${qs}` : ""
+        }`,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      if (error?.response?.status && error.response.status !== 404) {
+        throw error;
+      }
+    }
+
+    const response = await Action.get(
+      `admin/driver-earnings/${encodeURIComponent(driverId)}${qs ? `?${qs}` : ""}`,
+      { headers }
+    );
     return response.data;
   } catch (error) {
     if (error.response) {

@@ -129,10 +129,10 @@ export function createComponents(config) {
           textTransform: "none",
         },
         '[data-email="true"], [data-email="true"] *': {
-          textTransform: "lowercase",
+          textTransform: "lowercase !important",
         },
         'input[type="email"]': {
-          textTransform: "lowercase",
+          textTransform: "lowercase !important",
         },
         '[data-brand="true"]': {
           textTransform: "uppercase",
@@ -259,13 +259,18 @@ export function createComponents(config) {
             backgroundColor: "transparent",
             [`& .${outlinedInputClasses.notchedOutline}`]: {
               borderColor: palette.primary.main,
-              boxShadow: `${palette.primary.main} 0 0 0 2px`,
+              borderWidth: "2px",
             },
           },
-          [`&.${filledInputClasses.error}`]: {
+          [`&.${outlinedInputClasses.error}`]: {
             [`& .${outlinedInputClasses.notchedOutline}`]: {
               borderColor: palette.error.main,
-              boxShadow: `${palette.error.main} 0 0 0 2px`,
+            },
+          },
+          [`&.${outlinedInputClasses.error}.${outlinedInputClasses.focused}`]: {
+            [`& .${outlinedInputClasses.notchedOutline}`]: {
+              borderColor: palette.error.main,
+              borderWidth: "2px",
             },
           },
         },
@@ -276,7 +281,7 @@ export function createComponents(config) {
         },
         notchedOutline: {
           borderColor: palette.neutral[200],
-          transition: muiTheme.transitions.create(["border-color", "box-shadow"]),
+          transition: muiTheme.transitions.create(["border-color", "border-width"]),
         },
       },
     },
@@ -296,8 +301,22 @@ export function createComponents(config) {
               transform: "translate(12px, 6px) scale(0.85)",
             },
             [`&.${inputLabelClasses.outlined}`]: {
+              backgroundColor: palette.background.paper,
+              paddingLeft: 4,
+              paddingRight: 4,
               transform: "translate(14px, -9px) scale(0.85)",
             },
+          },
+        },
+      },
+    },
+    MuiInputLabel: {
+      styleOverrides: {
+        outlined: {
+          [`&.${inputLabelClasses.shrink}`]: {
+            backgroundColor: palette.background.paper,
+            paddingLeft: 4,
+            paddingRight: 4,
           },
         },
       },

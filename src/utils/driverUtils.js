@@ -506,6 +506,20 @@ export const formatDriverLocationValue = (value) => {
   return null;
 };
 
+/** Display ratings with a single decimal place (e.g. 4.786 → "4.8"). */
+export const formatRating = (value) => {
+  if (value == null || value === "" || value === "—") {
+    return null;
+  }
+
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return null;
+  }
+
+  return number.toFixed(1);
+};
+
 /** Map a flat list/API driver document into the detail-page shape. */
 export const mapFlatDriverToDetail = (driver) => {
   if (!driver || typeof driver !== "object") {

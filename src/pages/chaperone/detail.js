@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { Box, Container, Stack, Tab, Tabs, Typography } from "@mui/material";
+import { Box, Container, Stack, Tab, Tabs } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { Layout as DashboardLayout } from "../../layouts/dashboard/layout";
 import { DriverTransactionHistory } from "../../components/driver-transaction-history";
@@ -14,10 +14,8 @@ import {
   DetailPageState,
   DetailPanel,
   DetailSection,
-  DetailStat,
 } from "../../components/detail-page/detail-page-ui";
-import Loader from "../../components/Loader";
-import { getChap, getChaperoneById, getDriverEarningsById } from "../../Services/Auth.service";
+import { getChap, getChaperoneById, getDriverTransactions } from "../../Services/Auth.service";
 import { formatDate, formatRelativeDate } from "../../utils/dateUtils";
 import {
   collectDriverIdCandidates,
@@ -35,19 +33,24 @@ import {
   getStoredDriverDetail,
   normalizeChaperoneDetailResponse,
   storeDriverDetail,
+  formatRating,
 } from "../../utils/driverUtils";
 import {
+  buildDriverTransactionPayload,
   formatEarningsCurrency,
-  getTransactionsFromDriverRecord,
-  normalizeDriverEarningsByIdResponse,
   normalizeDriverTransactions,
 } from "../../utils/earningsUtils";
 import { pageContainerSx, pageMainSx } from "../../utils/pageLayout";
 import { brand } from "../../theme/colors";
 
 const TAB_OVERVIEW = "overview";
-const TAB_EARNINGS = "earnings";
 const TAB_TRANSACTIONS = "transactions";
+
+const emptyTxPayload = {
+  transactions: [],
+  pagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
+  analytics: null,
+};
 
 const tabListSx = {
   borderBottom: "1px solid",
@@ -70,18 +73,6 @@ const tabListSx = {
     },
   },
 };
-
-const SERVICE_LABELS = {
-  transportation: "Rides",
-  food_beverage: "Food",
-  senior_care: "Senior care",
-};
-
-const formatServiceLabel = (category) =>
-  SERVICE_LABELS[category] ||
-  String(category || "Other")
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
 
 const formatDetailValue = (value) => {
   if (value == null || value === "") {
@@ -131,49 +122,6 @@ const formatHourlyFare = (value) => {
   return String(value);
 };
 
-const buildEarningsOverview = (wallet = {}, transactions = []) => {
-  const byService = {};
-  let creditTotal = 0;
-  let creditCount = 0;
-  let debitTotal = 0;
-  let debitCount = 0;
-
-  for (const tx of transactions) {
-    const amount = Number(tx.amount) || 0;
-    const status = String(tx.status || tx.type || "").toLowerCase();
-    const category = tx.serviceCategory || "transportation";
-
-    if (!byService[category]) {
-      byService[category] = { category, earned: 0, withdrawn: 0, count: 0 };
-    }
-    byService[category].count += 1;
-
-    if (status === "debit") {
-      debitTotal += amount;
-      debitCount += 1;
-      byService[category].withdrawn += amount;
-    } else {
-      creditTotal += amount;
-      creditCount += 1;
-      byService[category].earned += amount;
-    }
-  }
-
-  return {
-    walletBalance: wallet.walletBalance,
-    totalEarned: wallet.totalEarned ?? creditTotal,
-    totalWithdrawn: wallet.totalWithdrawn ?? debitTotal,
-    completedRides: wallet.completedRides,
-    stripeStatus: wallet.stripeStatus,
-    creditTotal,
-    creditCount,
-    debitTotal,
-    debitCount,
-    transactionCount: transactions.length,
-    byService: Object.values(byService),
-  };
-};
-
 async function fetchDriverByCandidates(candidateIds = []) {
   const uniqueIds = [...new Set(candidateIds.filter(Boolean).map(String))];
 
@@ -204,44 +152,25 @@ async function fetchDriverByCandidates(candidateIds = []) {
   return null;
 }
 
-async function loadDriverTransactions(detail, fallbackIds = []) {
-  const fromDetail = normalizeDriverTransactions(detail?.transactionHistory || []);
-  if (fromDetail.length > 0) {
-    return fromDetail;
-  }
-
-  const candidateIds = collectDriverIdCandidates(
-    detail?.authId,
-    detail?.summary?.authId,
-    detail?._id,
-    detail?.summary?.chaperoneId,
-    ...fallbackIds
-  );
-
-  for (const candidate of candidateIds) {
-    try {
-      const response = await getDriverEarningsById(candidate);
-      const earnings = normalizeDriverEarningsByIdResponse(response);
-      const txns = getTransactionsFromDriverRecord(earnings || response);
-      if (txns.length > 0) {
-        return txns;
-      }
-    } catch (error) {
-      // Try the next candidate id.
-    }
-  }
-
-  return fromDetail;
-}
-
 const Page = () => {
   const router = useRouter();
   const { id } = router.query;
   const [detail, setDetail] = useState(null);
+  const [allTransactions, setAllTransactions] = useState([]);
   const [transactions, setTransactions] = useState([]);
+  const [pagination, setPagination] = useState(emptyTxPayload.pagination);
+  const [analytics, setAnalytics] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
   const [activeTab, setActiveTab] = useState(TAB_OVERVIEW);
+  const [txFilters, setTxFilters] = useState({
+    status: "",
+    serviceCategory: "",
+    from: "",
+    to: "",
+  });
+  const [txPage, setTxPage] = useState(1);
+  const [txLimit, setTxLimit] = useState(20);
 
   useEffect(() => {
     if (!id) {
@@ -258,7 +187,6 @@ const Page = () => {
 
       if (cached && active) {
         setDetail(cached);
-        setTransactions(normalizeDriverTransactions(cached.transactionHistory || []));
       }
 
       const candidateIds = collectDriverIdCandidates(id, cachedRaw, cached);
@@ -273,25 +201,17 @@ const Page = () => {
         if (normalized) {
           setDetail(normalized);
           storeDriverDetail(normalized);
-          setIsLoadingTransactions(true);
-          const txns = await loadDriverTransactions(normalized, candidateIds);
-          if (active) {
-            setTransactions(txns);
-          }
         } else if (!cached) {
           setDetail(null);
-          setTransactions([]);
         }
       } catch (error) {
         console.error("Error loading driver details:", error);
         if (active && !cached) {
           setDetail(null);
-          setTransactions([]);
         }
       } finally {
         if (active) {
           setIsLoading(false);
-          setIsLoadingTransactions(false);
         }
       }
     };
@@ -302,6 +222,90 @@ const Page = () => {
       active = false;
     };
   }, [id]);
+
+  useEffect(() => {
+    if (!detail) {
+      return;
+    }
+
+    let active = true;
+
+    const loadAllTransactions = async () => {
+      setIsLoadingTransactions(true);
+
+      const candidateIds = collectDriverIdCandidates(
+        detail?.authId,
+        detail?.summary?.authId,
+        detail?._id,
+        detail?.summary?.chaperoneId,
+        id
+      );
+
+      try {
+        let all = [];
+
+        for (const candidate of candidateIds) {
+          try {
+            const response = await getDriverTransactions(candidate);
+            all = normalizeDriverTransactions(response);
+            if (all.length) {
+              break;
+            }
+          } catch (error) {
+            // Try next candidate.
+          }
+        }
+
+        if (!all.length) {
+          all = normalizeDriverTransactions(
+            detail?.transactionHistory || detail?.transactions || []
+          );
+        }
+
+        if (active) {
+          setAllTransactions(all);
+        }
+      } catch (error) {
+        console.error("Error loading driver transactions:", error);
+        if (active) {
+          setAllTransactions(
+            normalizeDriverTransactions(
+              detail?.transactionHistory || detail?.transactions || []
+            )
+          );
+        }
+      } finally {
+        if (active) {
+          setIsLoadingTransactions(false);
+        }
+      }
+    };
+
+    loadAllTransactions();
+
+    return () => {
+      active = false;
+    };
+  }, [detail, id]);
+
+  useEffect(() => {
+    const view = buildDriverTransactionPayload(allTransactions, {
+      page: txPage,
+      limit: txLimit,
+      status: txFilters.status,
+      serviceCategory: txFilters.serviceCategory,
+      from: txFilters.from,
+      to: txFilters.to,
+    });
+    setTransactions(view.transactions);
+    setPagination(view.pagination);
+    setAnalytics(view.analytics);
+  }, [allTransactions, txPage, txLimit, txFilters]);
+
+  const handleFilterChange = (patch) => {
+    setTxFilters((prev) => ({ ...prev, ...patch }));
+    setTxPage(1);
+  };
 
   const summary = detail?.summary || {};
   const personal = detail?.personalInformation || {};
@@ -322,11 +326,6 @@ const Page = () => {
     { label: "ID Card", src: getChaperoneMediaUrl(media.idCard) },
     { label: "Driving License", src: getChaperoneMediaUrl(media.drivingLicense) },
   ];
-
-  const earningsOverview = useMemo(
-    () => buildEarningsOverview(wallet, transactions),
-    [wallet, transactions]
-  );
 
   return (
     <>
@@ -360,16 +359,12 @@ const Page = () => {
                         { label: "Online", value: getChaperoneOnlineLabel(detail) },
                         { label: "Account", value: getChaperoneBlockedLabel(detail) },
                         { label: "Ride Status", value: getChaperoneRideStatusLabel(detail) },
-                        { label: "Rating", value: summary.rating ?? null },
+                        { label: "Rating", value: formatRating(summary.rating) },
                         {
                           label: "Wallet",
                           value: formatEarningsCurrency(
                             summary.walletBalance ?? wallet.walletBalance
                           ),
-                        },
-                        {
-                          label: "Total earned",
-                          value: formatEarningsCurrency(wallet.totalEarned),
                         },
                         {
                           label: "Stripe",
@@ -396,7 +391,6 @@ const Page = () => {
                         onChange={(_, value) => setActiveTab(value)}
                       >
                         <Tab label="Driver overview" value={TAB_OVERVIEW} />
-                        <Tab label="Overview earnings" value={TAB_EARNINGS} />
                         <Tab label="Transactions" value={TAB_TRANSACTIONS} />
                       </Tabs>
                     </Box>
@@ -456,127 +450,19 @@ const Page = () => {
                     ) : null}
                   </DetailPanel>
 
-                  {activeTab === TAB_EARNINGS ? (
-                    <DetailPanel>
-                      <DetailSection noBorder title="Overview earnings">
-                        {isLoadingTransactions && !transactions.length ? (
-                          <Box sx={{ py: 4 }}>
-                            <Loader minHeight={100} size="md" />
-                          </Box>
-                        ) : (
-                          <>
-                            <Stack direction="row" flexWrap="wrap" gap={1.5}>
-                              <DetailStat
-                                label="Wallet balance"
-                                value={formatEarningsCurrency(earningsOverview.walletBalance)}
-                              />
-                              <DetailStat
-                                label="Total earned"
-                                value={formatEarningsCurrency(earningsOverview.totalEarned)}
-                              />
-                              <DetailStat
-                                label="Total withdrawn"
-                                value={formatEarningsCurrency(earningsOverview.totalWithdrawn)}
-                              />
-                              <DetailStat
-                                label="Completed rides"
-                                value={
-                                  earningsOverview.completedRides != null
-                                    ? String(earningsOverview.completedRides)
-                                    : "0"
-                                }
-                              />
-                              <DetailStat
-                                label="Transactions"
-                                value={String(earningsOverview.transactionCount ?? 0)}
-                              />
-                              <DetailStat
-                                label="Stripe"
-                                value={earningsOverview.stripeStatus || "—"}
-                              />
-                            </Stack>
-
-                            <Box sx={{ mt: 2.5 }}>
-                              <Typography
-                                color="text.secondary"
-                                sx={{ mb: 1 }}
-                                variant="caption"
-                              >
-                                By type
-                              </Typography>
-                              <Stack direction="row" flexWrap="wrap" gap={1.5}>
-                                <DetailStat
-                                  label="Credits (earned)"
-                                  value={`${formatEarningsCurrency(
-                                    earningsOverview.creditTotal
-                                  )} · ${earningsOverview.creditCount}`}
-                                />
-                                <DetailStat
-                                  label="Debits (withdrawn)"
-                                  value={`${formatEarningsCurrency(
-                                    earningsOverview.debitTotal
-                                  )} · ${earningsOverview.debitCount}`}
-                                />
-                              </Stack>
-                            </Box>
-
-                            {earningsOverview.byService.length > 0 ? (
-                              <Box sx={{ mt: 2.5 }}>
-                                <Typography
-                                  color="text.secondary"
-                                  sx={{ mb: 1 }}
-                                  variant="caption"
-                                >
-                                  By service
-                                </Typography>
-                                <Stack direction="row" flexWrap="wrap" gap={1.5}>
-                                  {earningsOverview.byService.map((row) => (
-                                    <DetailStat
-                                      key={row.category}
-                                      label={formatServiceLabel(row.category)}
-                                      value={`${formatEarningsCurrency(row.earned)} earned · ${
-                                        row.count
-                                      } txns`}
-                                    />
-                                  ))}
-                                </Stack>
-                              </Box>
-                            ) : null}
-
-                            <Box sx={{ mt: 3 }}>
-                              <DetailFieldGrid
-                                fields={[
-                                  field(
-                                    "Wallet Balance",
-                                    formatEarningsCurrency(wallet.walletBalance)
-                                  ),
-                                  field(
-                                    "Total Earned",
-                                    formatEarningsCurrency(wallet.totalEarned)
-                                  ),
-                                  field(
-                                    "Total Withdrawn",
-                                    formatEarningsCurrency(wallet.totalWithdrawn)
-                                  ),
-                                  field("Completed Rides", wallet.completedRides ?? null),
-                                  field("Stripe Connection", wallet.stripeStatus || null),
-                                  field(
-                                    "Stripe Business Name",
-                                    wallet.stripeBusinessName || null
-                                  ),
-                                ]}
-                              />
-                            </Box>
-                          </>
-                        )}
-                      </DetailSection>
-                    </DetailPanel>
-                  ) : null}
-
                   {activeTab === TAB_TRANSACTIONS ? (
                     <DriverTransactionHistory
+                      analytics={analytics}
+                      filters={txFilters}
                       loading={isLoadingTransactions}
+                      pagination={pagination}
                       transactions={transactions}
+                      onFilterChange={handleFilterChange}
+                      onPageChange={setTxPage}
+                      onRowsPerPageChange={(limit) => {
+                        setTxLimit(limit);
+                        setTxPage(1);
+                      }}
                     />
                   ) : null}
                 </Stack>

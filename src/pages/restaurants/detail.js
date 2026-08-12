@@ -34,7 +34,6 @@ import { getRestaurantById, updateRestaurantApproval } from "../../Services/Auth
 import { pageContainerSx, pageMainSx } from "../../utils/pageLayout";
 import {
   capitalizeRestaurantLabel,
-  formatRestaurantCoordinates,
   formatRestaurantCurrency,
   formatRestaurantDateTime,
   formatRestaurantPercent,
@@ -308,11 +307,6 @@ const Page = () => {
                         {
                           label: "Zip Code",
                           value: restaurant.location?.zipCode,
-                          hideEmpty: true,
-                        },
-                        {
-                          label: "Coordinates",
-                          value: formatRestaurantCoordinates(restaurant),
                           hideEmpty: true,
                         },
                       ]}
