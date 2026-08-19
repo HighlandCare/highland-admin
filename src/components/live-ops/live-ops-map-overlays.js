@@ -1,5 +1,6 @@
 import PropTypes from "prop-types";
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/router";
 import {
   Box,
@@ -22,6 +23,15 @@ import { toast } from "react-toastify";
 import LiveOpsLocationSearch from "./live-ops-location-search";
 import { buildLegendIconDataUrl } from "../../utils/liveOpsMarkerIcons";
 import { enrichLiveOpsItem, resolveLiveOpsDetailPath } from "../../utils/liveOpsNavigation";
+
+const LiveOpsGeoFilter = dynamic(() => import("./live-ops-geo-filter"), {
+  ssr: false,
+  loading: () => (
+    <Typography sx={{ color: "text.secondary", fontSize: 12, mb: 1.5 }}>
+      Loading locations…
+    </Typography>
+  ),
+});
 
 const LEGEND_ITEMS = [
   { key: "customer_signup", label: "Customers", color: "#22c55e" },
@@ -62,9 +72,12 @@ export default function LiveOpsMapOverlays({
   tourStopIndex,
   tourStopTotal,
   snapshot = null,
+  geoFilter,
+  onGeoFilterChange,
 }) {
   const router = useRouter();
   const [filterAnchor, setFilterAnchor] = useState(null);
+  const hasGeoFilter = Boolean(geoFilter?.state || geoFilter?.city);
 
   const enrichedMarker = selectedMarker ? enrichLiveOpsItem(selectedMarker, snapshot) : null;
   const detailPath = enrichedMarker ? resolveLiveOpsDetailPath(enrichedMarker) : null;
@@ -147,12 +160,15 @@ export default function LiveOpsMapOverlays({
         />
         <IconButton
           onClick={(e) => setFilterAnchor(e.currentTarget)}
+          aria-label="Open map filters"
           sx={{
             ...glass,
             width: 48,
             height: 48,
             color: "primary.main",
             flexShrink: 0,
+            bgcolor: hasGeoFilter ? "primary.alpha12" : "rgba(255, 255, 255, 0.94)",
+            borderColor: hasGeoFilter ? "primary.main" : "divider",
             "&:hover": { bgcolor: "primary.alpha8" },
           }}
         >
@@ -189,12 +205,15 @@ export default function LiveOpsMapOverlays({
           sx: {
             ...glass,
             p: 2,
-            width: 300,
+            width: 340,
             mt: 1,
+            overflow: "visible",
           },
         }}
       >
         <Typography sx={{ color: "text.primary", fontWeight: 700, mb: 1.5 }}>Filters</Typography>
+
+        <LiveOpsGeoFilter value={geoFilter} onChange={onGeoFilterChange} />
 
         <Typography sx={{ color: "text.secondary", fontSize: 11, mb: 0.5 }}>Map layers</Typography>
         <FormGroup sx={{ mb: 1.5, maxHeight: 220, overflow: "auto" }}>
@@ -410,4 +429,6 @@ LiveOpsMapOverlays.propTypes = {
   tourStopIndex: PropTypes.number,
   tourStopTotal: PropTypes.number,
   snapshot: PropTypes.object,
+  geoFilter: PropTypes.object,
+  onGeoFilterChange: PropTypes.func,
 };

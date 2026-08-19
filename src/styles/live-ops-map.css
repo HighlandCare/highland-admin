@@ -38,3 +38,34 @@
   height: 100%;
   width: 100%;
 }
+
+.live-ops-leaflet-marker .live-ops-cluster-marker,
+.live-ops-cluster-marker {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  pointer-events: auto;
+  position: relative;
+}
+
+.live-ops-cluster-pulse {
+  animation: liveOpsClusterPulse 1.8s ease-out infinite;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  inset: -5px;
+  pointer-events: none;
+  position: absolute;
+}
+
+@keyframes liveOpsClusterPulse {
+  0% {
+    opacity: 0.55;
+    transform: scale(0.92);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.35);
+  }
+}

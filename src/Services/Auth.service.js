@@ -316,6 +316,123 @@ export const getRideById = async (rideId) => {
   }
 };
 
+/**
+ * Multi-destination ride traceability: the consolidated audit (stops, timing,
+ * pricing, payment, adjustments) and the raw event log behind it.
+ */
+export const getRideAudit = async (rideId) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+
+    const response = await Action.get(`admin/rides/${rideId}/audit`, {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
+export const getRideEvents = async (rideId, page = 1, limit = 100) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+
+    const response = await Action.get(
+      `admin/rides/${rideId}/events?${params.toString()}`,
+      {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
+export const getRideAdjustments = async (page = 1, limit = 20, filters = {}) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+      status: filters.status || "pending_review",
+    });
+
+    if (filters.type) {
+      params.set("type", filters.type);
+    }
+
+    const response = await Action.get(`admin/ride-adjustments?${params.toString()}`, {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
+/**
+ * Records an operator decision on a waiting deviation. Deliberately non-financial:
+ * the customer paid the amount authorized before the ride and this does not
+ * charge or refund anything.
+ */
+export const reviewRideAdjustment = async (adjustmentId, status, reviewNotes = "") => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+
+    const response = await Action.post(
+      `admin/ride-adjustments/${adjustmentId}/review`,
+      { status, reviewNotes },
+      {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
 export const updateDriverPersonaStatus = async (driverId, personaStatus = "approved") => {
   try {
     const authToken = JSON.parse(localStorage.getItem("token"));

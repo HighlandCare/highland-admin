@@ -72,10 +72,10 @@ function resolveColor(type, colorKey) {
 }
 
 function markerPixelSize(type) {
-  if (type === "emergency" || type === "dispute") return 48;
-  if (type === "customer_signup" || type === "driver_signup") return 44;
-  if (type === "online_driver") return 44;
-  return 42;
+  if (type === "emergency" || type === "dispute") return 40;
+  if (type === "customer_signup" || type === "driver_signup") return 36;
+  if (type === "online_driver") return 36;
+  return 34;
 }
 
 export function svgToDataUrl(svg) {
@@ -137,9 +137,9 @@ export function buildGoogleMapsMarkerIcon(type, colorKey) {
 }
 
 /** Leaflet DivIcon HTML/config — pass L from leaflet */
-export function buildLeafletMarkerIcon(L, type, colorKey) {
+export function buildLeafletMarkerIcon(L, type, colorKey, sizeOverride) {
   const svg = buildLiveOpsMarkerSvg(type, colorKey);
-  const size = markerPixelSize(type);
+  const size = sizeOverride || markerPixelSize(type);
   const color = resolveColor(type, colorKey);
   const pulse =
     type === "online_driver" || type === "emergency" || type === "dispute"
