@@ -107,6 +107,13 @@ export const mergeRideDetailRecords = (cached, incoming) => {
     from: incoming.from || cached.from || null,
     destination: incoming.destination || cached.destination || null,
     payment: incoming.payment || cached.payment || null,
+    driverPayout: incoming.driverPayout || cached.driverPayout || null,
+    pricing: incoming.pricing || cached.pricing || null,
+    waitingTotals: incoming.waitingTotals ?? cached.waitingTotals ?? null,
+    stops:
+      Array.isArray(incoming.stops) && incoming.stops.length
+        ? incoming.stops
+        : cached.stops || [],
     scheduledAt: incoming.scheduledAt ?? cached.scheduledAt ?? null,
     pre_date: incoming.pre_date ?? cached.pre_date ?? null,
     pre_time: incoming.pre_time ?? cached.pre_time ?? null,
@@ -306,7 +313,81 @@ export const formatRideField = (value) => {
   return String(value);
 };
 
-export const formatRidePaymentStatus = (havePaid) => (havePaid ? "Paid" : "Unpaid");
+export const formatRideEnumLabel = (value) => {
+  const formatted = formatRideField(value);
+
+  if (formatted === "—") {
+    return formatted;
+  }
+
+  return formatted
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+};
+
+export const formatRideDurationSeconds = (value) => {
+  if (value == null || value === "") {
+    return null;
+  }
+
+  const seconds = Number(value);
+
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return null;
+  }
+
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+
+  return remainder ? `${minutes}m ${remainder}s` : `${minutes}m`;
+};
+
+const ROUTE_ENDPOINT_KINDS = new Set(["pickup", "final", "dropoff", "destination"]);
+
+export const getRideStops = (ride) => {
+  if (!Array.isArray(ride?.stops) || !ride.stops.length) {
+    return [];
+  }
+
+  const pickupAddress = getRidePickupAddress(ride);
+  const destinationAddress = getRideDestinationAddress(ride);
+
+  return [...ride.stops]
+    .sort((a, b) => Number(a?.sequence ?? 0) - Number(b?.sequence ?? 0))
+    .filter((stop) => {
+      const kind = String(stop?.kind || "").toLowerCase();
+
+      if (ROUTE_ENDPOINT_KINDS.has(kind)) {
+        return false;
+      }
+
+      const address = typeof stop?.address === "string" ? stop.address.trim() : "";
+
+      if (address && pickupAddress !== "—" && address === pickupAddress) {
+        return false;
+      }
+
+      if (address && destinationAddress !== "—" && address === destinationAddress) {
+        return false;
+      }
+
+      return true;
+    });
+};
+
+export const formatRidePaymentStatus = (havePaid, paymentStatus) => {
+  if (paymentStatus && paymentStatus !== "false") {
+    return formatRideEnumLabel(paymentStatus);
+  }
+
+  return havePaid ? "Paid" : "Unpaid";
+};
 
 export const formatRideCommissionRate = (rate) => {
   if (rate == null || rate === "" || Number.isNaN(Number(rate))) {
