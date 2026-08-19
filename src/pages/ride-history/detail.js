@@ -17,6 +17,7 @@ import { formatDate, formatRelativeDate } from "../../utils/dateUtils";
 import { pageContainerSx, pageMainSx } from "../../utils/pageLayout";
 import {
   formatRideCommissionRate,
+  formatRideCoordinates,
   formatRideCurrency,
   formatRideField,
   formatRidePaymentStatus,
