@@ -1,9 +1,19 @@
 import { useEffect, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { Box, Container, Typography } from "@mui/material";
+import {
+  Box,
+  Container,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  Typography,
+} from "@mui/material";
 import { Layout as DashboardLayout } from "../../layouts/dashboard/layout";
 import { StatusBadge } from "../../components/table-cells";
+import { Scrollbar } from "../../components/scrollbar";
 import {
   DetailFieldGrid,
   DetailHero,
@@ -17,7 +27,6 @@ import { formatDateTime, formatRelativeDate } from "../../utils/dateUtils";
 import { pageContainerSx, pageMainSx } from "../../utils/pageLayout";
 import {
   formatRideCommissionRate,
-  formatRideCoordinates,
   formatRideCurrency,
   formatRideDurationSeconds,
   formatRideEnumLabel,
@@ -26,11 +35,9 @@ import {
   formatRideReason,
   getRideAdminEarning,
   getRideCustomer,
-  getRideCustomerName,
   getRideDestinationAddress,
   getRideDriver,
   getRideDriverEarning,
-  getRideDriverName,
   getRideFromResponse,
   getRidePickupAddress,
   getRideScheduledLabel,
@@ -102,9 +109,6 @@ const getRideStopsFromApi = (ride) => {
 
   return [...ride.stops].sort((a, b) => Number(a?.sequence ?? 0) - Number(b?.sequence ?? 0));
 };
-
-const formatStopCoordinates = (stop) =>
-  formatRideCoordinates(stop?.location || stop);
 
 const formatRideTimestamp = (value) => {
   if (!value || value === "false") {
@@ -270,7 +274,7 @@ const Page = () => {
                       { label: "Distance", value: formatRideField(ride.distance) },
                       { label: "Mode", value: formatRideEnumLabel(ride.mode) },
                     ]}
-                    subtitle={`${getRideDriverName(ride)} → ${getRideCustomerName(ride)}`}
+                    subtitle={`${driver?.fullName || driver?.name || "Unassigned"} → ${customer?.fullName || customer?.name || "—"}`}
                     title="Ride Details"
                   />
 
@@ -291,7 +295,6 @@ const Page = () => {
                           value: formatRideField(ride.numberOfPassenger),
                           hideEmpty: true,
                         },
-                        { label: "Ride ID", value: formatRideField(ride.rideId || ride._id) },
                       ]}
                     />
                   </DetailSection>
@@ -356,11 +359,6 @@ const Page = () => {
                             columns={{ sm: 2, lg: 3 }}
                             fields={[
                               { label: "Address", value: formatRideField(stop.address) },
-                              {
-                                label: "Coordinates",
-                                value: formatStopCoordinates(stop),
-                                hideEmpty: true,
-                              },
                               {
                                 label: "Planned Waiting",
                                 value: formatRideDurationSeconds(stop.plannedWaitingSeconds),
@@ -457,11 +455,6 @@ const Page = () => {
                           value: formatRideTimestamp(ride.refundedAt),
                           hideEmpty: true,
                         },
-                        {
-                          label: "Stripe PaymentIntent",
-                          value: formatRideField(ride.stripePaymentIntentId),
-                          hideEmpty: true,
-                        },
                       ].filter((field) => !field.hideEmpty || hasDetailValue(field.value))}
                     />
                   </DetailSection>
@@ -502,28 +495,43 @@ const Page = () => {
                         Loading timeline…
                       </Typography>
                     ) : events.length ? (
-                      <Box component="ol" sx={{ listStyle: "none", m: 0, p: 0 }}>
-                        {events.map((event, index) => (
-                          <Box
-                            component="li"
-                            key={event._id || `${event.type}-${event.serverTimestamp}-${index}`}
-                            sx={{
-                              borderLeft: "2px solid",
-                              borderColor: "divider",
-                              pb: 1.5,
-                              pl: 2,
-                            }}
-                          >
-                            <Typography sx={{ fontWeight: 600 }} variant="body2">
-                              {formatEventType(event.type)}
-                            </Typography>
-                            <Typography color="text.secondary" variant="caption">
-                              {formatRideTimestamp(event.serverTimestamp)}
-                              {event.sequence != null ? ` · stop ${event.sequence}` : ""}
-                              {event.actorType ? ` · ${event.actorType}` : ""}
-                            </Typography>
+                      <Box
+                        sx={{
+                          border: "1px solid",
+                          borderColor: "neutral.200",
+                          borderRadius: 2,
+                          overflow: "hidden",
+                        }}
+                      >
+                        <Scrollbar sx={{ maxHeight: 320 }}>
+                          <Box sx={{ minWidth: { xs: 360, md: "100%" } }}>
+                            <Table size="small" stickyHeader>
+                              <TableHead>
+                                <TableRow>
+                                  <TableCell>Event</TableCell>
+                                  <TableCell>Time</TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {events.map((event, index) => (
+                                  <TableRow
+                                    hover
+                                    key={event._id || `${event.type}-${event.serverTimestamp}-${index}`}
+                                  >
+                                    <TableCell>
+                                      <Typography fontWeight={600} variant="body2">
+                                        {formatEventType(event.type)}
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell sx={{ whiteSpace: "nowrap" }}>
+                                      {formatRideTimestamp(event.serverTimestamp) || "—"}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
                           </Box>
-                        ))}
+                        </Scrollbar>
                       </Box>
                     ) : (
                       <Typography color="text.secondary" variant="body2">
