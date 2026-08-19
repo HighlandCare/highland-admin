@@ -25,6 +25,7 @@
     "@react-google-maps/api": "^2.20.8",
     "apexcharts": "3.37.0",
     "axios": "^1.4.0",
+    "country-state-city": "^3.2.1",
     "date-fns": "2.29.3",
     "formik": "2.2.9",
     "https": "^1.0.0",

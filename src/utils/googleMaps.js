@@ -36,18 +36,17 @@ export const LIVE_OPS_MAP_STYLES = [
   },
   {
     featureType: "poi",
-    elementType: "geometry",
-    stylers: [{ color: "#eef2f4" }],
-  },
-  {
-    featureType: "poi",
-    elementType: "labels.text.fill",
-    stylers: [{ color: "#6c737f" }],
+    stylers: [{ visibility: "off" }],
   },
   {
     featureType: "poi.park",
     elementType: "geometry",
-    stylers: [{ color: "#e6f4f5" }],
+    stylers: [{ visibility: "on", color: "#e6f4f5" }],
+  },
+  {
+    featureType: "poi.park",
+    elementType: "labels",
+    stylers: [{ visibility: "off" }],
   },
   {
     featureType: "road",
@@ -71,8 +70,11 @@ export const LIVE_OPS_MAP_STYLES = [
   },
   {
     featureType: "transit",
-    elementType: "geometry",
-    stylers: [{ color: "#e5e7eb" }],
+    stylers: [{ visibility: "off" }],
+  },
+  {
+    featureType: "transit.station",
+    stylers: [{ visibility: "off" }],
   },
   {
     featureType: "water",

@@ -10,12 +10,12 @@ function markerZIndex(type) {
   return 200;
 }
 
-function markerSize(type) {
-  if (type === "emergency" || type === "dispute") return 48;
+function defaultMarkerSize(type) {
+  if (type === "emergency" || type === "dispute") return 40;
   if (type === "customer_signup" || type === "driver_signup" || type === "online_driver") {
-    return 44;
+    return 36;
   }
-  return 42;
+  return 34;
 }
 
 /**
@@ -28,9 +28,10 @@ export default function LiveOpsHtmlMarker({
   color,
   title,
   selected = false,
+  size: sizeProp,
   onClick,
 }) {
-  const size = markerSize(type);
+  const size = sizeProp || defaultMarkerSize(type);
   const svg = useMemo(() => buildLiveOpsMarkerSvg(type, color), [type, color]);
 
   const getPixelPositionOffset = useCallback(
@@ -90,5 +91,6 @@ LiveOpsHtmlMarker.propTypes = {
   color: PropTypes.string,
   title: PropTypes.string,
   selected: PropTypes.bool,
+  size: PropTypes.number,
   onClick: PropTypes.func,
 };

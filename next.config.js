@@ -53,6 +53,7 @@ module.exports = {
   },
 
   reactStrictMode: true,
+  transpilePackages: ["country-state-city"],
   images: {
     unoptimized: true,
   },

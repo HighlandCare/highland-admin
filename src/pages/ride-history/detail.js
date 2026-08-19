@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { Box, Container } from "@mui/material";
+import { Box, Container, Typography } from "@mui/material";
 import { Layout as DashboardLayout } from "../../layouts/dashboard/layout";
 import { StatusBadge } from "../../components/table-cells";
 import {
@@ -12,7 +12,7 @@ import {
   DetailPanel,
   DetailSection,
 } from "../../components/detail-page/detail-page-ui";
-import { getRideById } from "../../Services/Auth.service";
+import { getRideById, getRideEvents } from "../../Services/Auth.service";
 import { formatDate, formatRelativeDate } from "../../utils/dateUtils";
 import { pageContainerSx, pageMainSx } from "../../utils/pageLayout";
 import {
@@ -51,6 +51,44 @@ const hasDetailValue = (value) => {
   return true;
 };
 
+const STOP_KIND_LABELS = {
+  pickup: "Pickup",
+  intermediate: "Stop",
+  final: "Destination",
+};
+
+const stopKindLabel = (kind) => STOP_KIND_LABELS[kind] || "Stop";
+
+const formatStopState = (state) =>
+  String(state || "")
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/^./, (c) => c.toUpperCase());
+
+const formatEventType = (type) =>
+  String(type || "")
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/^./, (c) => c.toUpperCase());
+
+const formatSeconds = (seconds) => {
+  if (seconds == null || seconds === "") {
+    return null;
+  }
+
+  const total = Number(seconds);
+  if (!Number.isFinite(total) || total <= 0) {
+    return total === 0 ? "0 min" : null;
+  }
+
+  const minutes = Math.floor(total / 60);
+  const rest = total % 60;
+  if (!minutes) {
+    return `${rest} sec`;
+  }
+  return rest ? `${minutes} min ${rest} sec` : `${minutes} min`;
+};
+
 const formatRideTimestamp = (value) => {
   if (!value || value === "false") {
     return null;
@@ -72,6 +110,8 @@ const Page = () => {
   const { id } = router.query;
   const [ride, setRide] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [events, setEvents] = useState([]);
+  const [isEventsLoading, setIsEventsLoading] = useState(false);
 
   useEffect(() => {
     if (!id) {
@@ -111,7 +151,32 @@ const Page = () => {
     loadRide();
   }, [id]);
 
+  useEffect(() => {
+    if (!id) {
+      return;
+    }
+
+    // Loaded separately from the ride so a missing event log (every ride booked
+    // before multi-destination support) still renders the rest of the page.
+    const loadEvents = async () => {
+      setIsEventsLoading(true);
+      try {
+        const response = await getRideEvents(id, 1, 200);
+        setEvents(Array.isArray(response?.data) ? response.data : []);
+      } catch (error) {
+        console.error("Error loading ride events:", error);
+        setEvents([]);
+      } finally {
+        setIsEventsLoading(false);
+      }
+    };
+
+    loadEvents();
+  }, [id]);
+
   const statusMeta = ride ? getRideStatusMeta(ride.status) : null;
+  const stops = Array.isArray(ride?.stops) ? ride.stops : [];
+  const isMultiDestination = stops.length > 2;
   const customer = ride ? getRideCustomer(ride) : null;
   const driver = ride ? getRideDriver(ride) : null;
   const scheduledLabel = ride ? getRideScheduledLabel(ride) : null;
@@ -245,8 +310,134 @@ const Page = () => {
                           label: "Payment Source",
                           value: formatRideField(ride.payment?.source),
                         },
-                      ]}
+                        {
+                          label: "Payment Status",
+                          value: formatRidePaymentStatus(ride.paymentStatus),
+                          hideEmpty: true,
+                        },
+                        {
+                          label: "Locked Fare",
+                          value: formatRideCurrency(ride.lockedFare),
+                          hideEmpty: true,
+                        },
+                        {
+                          label: "Authorized At",
+                          value: formatRideTimestamp(ride.authorizedAt),
+                          hideEmpty: true,
+                        },
+                        {
+                          label: "Captured At",
+                          value: formatRideTimestamp(ride.paidAt),
+                          hideEmpty: true,
+                        },
+                        {
+                          label: "Stripe PaymentIntent",
+                          value: formatRideField(ride.stripePaymentIntentId),
+                          hideEmpty: true,
+                        },
+                        {
+                          label: "Driver Payout",
+                          value: formatRideField(ride.driverPayout?.status),
+                          hideEmpty: true,
+                        },
+                      ].filter((field) => !field.hideEmpty || hasDetailValue(field.value))}
                     />
+                  </DetailSection>
+
+                  {stops.length ? (
+                    <DetailSection
+                      title={`Stops (${stops.length})${isMultiDestination ? "" : " — single destination"}`}
+                    >
+                      {stops.map((stop) => (
+                        <Box key={stop.stopId || stop.sequence} sx={{ mb: 2.5 }}>
+                          <Typography sx={{ fontWeight: 600, mb: 0.75 }} variant="subtitle2">
+                            {`${stop.sequence + 1}. ${stopKindLabel(stop.kind)}`}
+                            {stop.state ? ` — ${formatStopState(stop.state)}` : ""}
+                          </Typography>
+                          <DetailFieldGrid
+                            columns={{ sm: 2, lg: 3 }}
+                            fields={[
+                              { label: "Address", value: formatRideField(stop.address) },
+                              {
+                                label: "Coordinates",
+                                value: formatRideCoordinates(stop),
+                                hideEmpty: true,
+                              },
+                              {
+                                label: "Planned Waiting",
+                                value: formatSeconds(stop.plannedWaitingSeconds),
+                                hideEmpty: true,
+                              },
+                              {
+                                label: "Actual Waiting",
+                                value: formatSeconds(stop.actualWaitingSeconds),
+                                hideEmpty: true,
+                              },
+                              {
+                                label: "Extra Waiting",
+                                value: formatSeconds(stop.extraWaitingSeconds),
+                                hideEmpty: true,
+                              },
+                              {
+                                label: "Arrived At",
+                                value: formatRideTimestamp(stop.arrivedAt),
+                                hideEmpty: true,
+                              },
+                              {
+                                label: "Departed At",
+                                value: formatRideTimestamp(stop.departedAt),
+                                hideEmpty: true,
+                              },
+                            ].filter(
+                              (field) => !field.hideEmpty || hasDetailValue(field.value)
+                            )}
+                          />
+                        </Box>
+                      ))}
+                      {isMultiDestination ? (
+                        <Typography color="text.secondary" variant="caption">
+                          Extra waiting time is recorded for review only. The customer
+                          paid the amount authorized before the ride.
+                        </Typography>
+                      ) : null}
+                    </DetailSection>
+                  ) : null}
+
+                  <DetailSection title="Timeline">
+                    {isEventsLoading ? (
+                      <Typography color="text.secondary" variant="body2">
+                        Loading timeline…
+                      </Typography>
+                    ) : events.length ? (
+                      <Box component="ol" sx={{ listStyle: "none", m: 0, p: 0 }}>
+                        {events.map((event) => (
+                          <Box
+                            component="li"
+                            key={event._id}
+                            sx={{
+                              borderLeft: "2px solid",
+                              borderColor: "divider",
+                              pb: 1.5,
+                              pl: 2,
+                            }}
+                          >
+                            <Typography sx={{ fontWeight: 600 }} variant="body2">
+                              {formatEventType(event.type)}
+                            </Typography>
+                            <Typography color="text.secondary" variant="caption">
+                              {formatRideTimestamp(event.serverTimestamp)}
+                              {event.sequence != null ? ` · stop ${event.sequence}` : ""}
+                              {event.actorType ? ` · ${event.actorType}` : ""}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </Box>
+                    ) : (
+                      <Typography color="text.secondary" variant="body2">
+                        No recorded events. Rides booked before multi-destination
+                        support have no event log.
+                      </Typography>
+                    )}
                   </DetailSection>
                 </DetailPanel>
               ) : null}

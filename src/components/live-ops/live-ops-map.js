@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import dynamic from "next/dynamic";
 import { GoogleMap, TrafficLayer, useJsApiLoader } from "@react-google-maps/api";
-import { Box, Stack, Typography } from "@mui/material";
+import { Box, Typography } from "@mui/material";
 import {
   DEFAULT_MAP_CENTER,
   DEFAULT_MAP_ZOOM,
@@ -12,9 +12,14 @@ import {
   LIVE_OPS_MAP_STYLES,
   sanitizeLiveOpsMarkers,
 } from "../../utils/googleMaps";
-import { spreadOverlappingMarkers } from "../../utils/liveOpsMarkerIcons";
+import {
+  clusterLiveOpsMarkers,
+  findZoomToSplit,
+  markerDisplaySize,
+} from "../../utils/liveOpsClusters";
 import { useSmoothLiveOpsMarkers } from "../../hooks/useSmoothLiveOpsMarkers";
 import LiveOpsHtmlMarker from "./live-ops-html-marker";
+import LiveOpsClusterMarker from "./live-ops-cluster-marker";
 
 const LiveOpsLeafletMap = dynamic(() => import("./live-ops-leaflet-map"), {
   ssr: false,
@@ -68,13 +73,16 @@ export default function LiveOpsMap({
   const mapRef = useRef(null);
   const lastFitKeyRef = useRef(null);
   const lastCameraRef = useRef("");
+  const zoomDebounceRef = useRef(null);
   const [authFailed, setAuthFailed] = useState(false);
   const [useFallback, setUseFallback] = useState(false);
   const [mapInstance, setMapInstance] = useState(null);
+  const [viewZoom, setViewZoom] = useState(zoom ?? mapZoom ?? DEFAULT_MAP_ZOOM);
+  const [expandedIds, setExpandedIds] = useState([]);
   const apiKey = getGoogleMapsApiKey();
 
   const mergedMarkers = useMemo(() => {
-    const base = spreadOverlappingMarkers(sanitizeLiveOpsMarkers(markers));
+    const base = sanitizeLiveOpsMarkers(markers);
     const selectedLat = Number(selectedMarker?.lat);
     const selectedLng = Number(selectedMarker?.lng);
     if (
@@ -108,6 +116,12 @@ export default function LiveOpsMap({
   }, [markers, selectedMarker]);
 
   const safeMarkers = useSmoothLiveOpsMarkers(mergedMarkers);
+  const expandedIdSet = useMemo(() => new Set(expandedIds), [expandedIds]);
+
+  const clusteredItems = useMemo(
+    () => clusterLiveOpsMarkers(safeMarkers, viewZoom, { expandedIds: expandedIdSet }),
+    [expandedIdSet, safeMarkers, viewZoom]
+  );
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: "highland-live-ops-map",
@@ -143,7 +157,12 @@ export default function LiveOpsMap({
     safeMarkers.forEach((marker) => {
       bounds.extend({ lat: marker.lat, lng: marker.lng });
     });
-    map.fitBounds(bounds, 64);
+    map.fitBounds(bounds, 72);
+    const fittedZoom = map.getZoom();
+    if (Number.isFinite(fittedZoom) && fittedZoom > 14) {
+      map.setZoom(14);
+    }
+    setViewZoom(Math.min(fittedZoom || 14, 14));
     return true;
   }, [safeMarkers]);
 
@@ -167,7 +186,34 @@ export default function LiveOpsMap({
 
     map.panTo(mapCenter);
     map.setZoom(mapZoom);
+    setViewZoom(mapZoom);
+    setExpandedIds([]);
   }, [fitToMarkers, isLoaded, mapCenter, mapZoom]);
+
+  const handleClusterClick = useCallback((cluster) => {
+    const map = mapRef.current;
+    const members = cluster?.members || [];
+    if (!map || !window.google?.maps || !members.length) return;
+
+    if (members.length === 1) {
+      onMarkerSelect?.(members[0]);
+      return;
+    }
+
+    const currentZoom = map.getZoom() || viewZoom;
+    const splitZoom = findZoomToSplit(members, currentZoom);
+
+    if (splitZoom != null) {
+      setExpandedIds([]);
+      map.panTo({ lat: cluster.lat, lng: cluster.lng });
+      map.setZoom(splitZoom);
+      setViewZoom(splitZoom);
+      return;
+    }
+
+    setExpandedIds(members.map((marker) => marker.id).filter(Boolean));
+    map.panTo({ lat: cluster.lat, lng: cluster.lng });
+  }, [onMarkerSelect, viewZoom]);
 
   useEffect(() => {
     if (loadError || authFailed) {
@@ -225,11 +271,26 @@ export default function LiveOpsMap({
       <GoogleMap
         mapContainerStyle={{ width: "100%", height: "100%" }}
         center={mapCenter}
-        zoom={zoom ?? DEFAULT_MAP_ZOOM}
+        zoom={viewZoom}
         onLoad={(map) => {
           mapRef.current = map;
           setMapInstance(map);
+          const initialZoom = map.getZoom();
+          if (Number.isFinite(initialZoom)) setViewZoom(initialZoom);
           onMapReady?.(true);
+        }}
+        onZoomChanged={() => {
+          const nextZoom = mapRef.current?.getZoom();
+          if (!Number.isFinite(nextZoom)) return;
+          if (zoomDebounceRef.current) clearTimeout(zoomDebounceRef.current);
+          zoomDebounceRef.current = setTimeout(() => {
+            setViewZoom((current) => {
+              if (current !== nextZoom) {
+                setExpandedIds((ids) => (ids.length ? [] : ids));
+              }
+              return current === nextZoom ? current : nextZoom;
+            });
+          }, 60);
         }}
         options={{
           styles: LIVE_OPS_MAP_STYLES,
@@ -247,18 +308,32 @@ export default function LiveOpsMap({
 
         {/* Overlay markers need a mounted map; gate on mapInstance */}
         {mapInstance
-          ? safeMarkers.map((marker) => (
-              <LiveOpsHtmlMarker
-                key={marker.id}
-                lat={marker.lat}
-                lng={marker.lng}
-                type={marker.type}
-                color={marker.color}
-                selected={selectedMarker?.id === marker.id}
-                title={`${marker.title || ""}${marker.subtitle ? ` — ${marker.subtitle}` : ""}`}
-                onClick={() => onMarkerSelect?.(marker)}
-              />
-            ))
+          ? clusteredItems.map((item) =>
+              item.kind === "cluster" ? (
+                <LiveOpsClusterMarker
+                  key={item.id}
+                  lat={item.lat}
+                  lng={item.lng}
+                  count={item.count}
+                  members={item.members}
+                  onClick={() => handleClusterClick(item)}
+                />
+              ) : (
+                <LiveOpsHtmlMarker
+                  key={item.marker.id || `${item.marker.lat}-${item.marker.lng}`}
+                  lat={item.marker.lat}
+                  lng={item.marker.lng}
+                  type={item.marker.type}
+                  color={item.marker.color}
+                  size={markerDisplaySize(item.marker.type, viewZoom)}
+                  selected={selectedMarker?.id === item.marker.id}
+                  title={`${item.marker.title || ""}${
+                    item.marker.subtitle ? ` — ${item.marker.subtitle}` : ""
+                  }`}
+                  onClick={() => onMarkerSelect?.(item.marker)}
+                />
+              )
+            )
           : null}
 
         {mapInstance && userLocation?.lat != null && userLocation?.lng != null ? (

@@ -35,6 +35,7 @@ import {
 import { storeDisputeDetail } from "../utils/disputeUtils";
 import { storeOrderDetailContext, storeRideDetail } from "../utils/rideUtils";
 import { filterMarkersNearLocation } from "../hooks/useSmoothLiveOpsMarkers";
+import { DEFAULT_GEO_FILTER, filterMarkersByGeo, parseGeoCoords } from "../utils/liveOpsGeo";
 import { toast } from "react-toastify";
 
 const LiveOpsMap = dynamic(() => import("../components/live-ops/live-ops-map"), {
@@ -138,6 +139,7 @@ const Page = () => {
   const [onlineOnly, setOnlineOnly] = useState(false);
   const [selectedMarker, setSelectedMarker] = useState(null);
   const [locationSearch, setLocationSearch] = useState("");
+  const [geoFilter, setGeoFilter] = useState(DEFAULT_GEO_FILTER);
   const [mapViewCenter, setMapViewCenter] = useState(DEFAULT_MAP_CENTER);
   const [mapZoom, setMapZoom] = useState(DEFAULT_MAP_ZOOM);
   const [userLocation, setUserLocation] = useState(null);
@@ -309,7 +311,7 @@ const Page = () => {
 
   const filteredMarkers = useMemo(() => {
     const markers = (snapshot?.markers ?? []).filter((marker) => !isFoodLiveOpsItem(marker));
-    return markers.filter((marker) => {
+    const typeFiltered = markers.filter((marker) => {
       if (onlineOnly) {
         return marker.type === "online_driver" && marker.available !== false;
       }
@@ -318,7 +320,8 @@ const Page = () => {
       }
       return selectedMarkerTypes.includes(marker.type);
     });
-  }, [snapshot?.markers, selectedMarkerTypes, onlineOnly]);
+    return filterMarkersByGeo(typeFiltered, geoFilter);
+  }, [snapshot?.markers, selectedMarkerTypes, onlineOnly, geoFilter]);
 
   const filteredLegend = useMemo(() => {
     const counts = {
@@ -456,7 +459,7 @@ const Page = () => {
   }, []);
 
   useEffect(() => {
-    if (didInitialFitRef.current || viewMode !== "map") {
+    if (didInitialFitRef.current || viewMode !== "map" || geoFilter.state || geoFilter.city) {
       return;
     }
 
@@ -465,14 +468,52 @@ const Page = () => {
       didInitialFitRef.current = true;
       requestFitToMarkers();
     }
-  }, [requestFitToMarkers, snapshot?.markers, viewMode]);
+  }, [geoFilter.city, geoFilter.state, requestFitToMarkers, snapshot?.markers, viewMode]);
 
   const handleMapFitComplete = useCallback(() => {
     setFitToMarkers(false);
   }, []);
 
+  const applyGeoFilter = useCallback(
+    (next) => {
+      setGeoFilter(next);
+      clearLocationTour();
+      setSelectedMarker(null);
+      setFitToMarkers(false);
+      setUserLocation(null);
+
+      if (next?.city) {
+        const coords = parseGeoCoords(next.city);
+        if (coords) {
+          setMapViewCenter(coords);
+          setMapZoom(13);
+          setLocationSearch(
+            [next.city.name, next.state?.isoCode || next.state?.name].filter(Boolean).join(", ")
+          );
+        }
+        return;
+      }
+
+      if (next?.state) {
+        const coords = parseGeoCoords(next.state);
+        if (coords) {
+          setMapViewCenter(coords);
+          setMapZoom(7);
+          setLocationSearch(next.state.name);
+        }
+        return;
+      }
+
+      setMapViewCenter(DEFAULT_MAP_CENTER);
+      setMapZoom(DEFAULT_MAP_ZOOM);
+      setLocationSearch("");
+    },
+    [clearLocationTour]
+  );
+
   const handleLocateRegion = useCallback(() => {
     clearLocationTour();
+    setGeoFilter(DEFAULT_GEO_FILTER);
     setMapViewCenter(DEFAULT_MAP_CENTER);
     setMapZoom(DEFAULT_MAP_ZOOM);
     setFitToMarkers(false);
@@ -810,6 +851,8 @@ const Page = () => {
                       tourStopIndex={tourStopIndex}
                       tourStopTotal={tourStopTotal}
                       snapshot={snapshot}
+                      geoFilter={geoFilter}
+                      onGeoFilterChange={applyGeoFilter}
                     />
                   </>
                 )}
