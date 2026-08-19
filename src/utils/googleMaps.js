@@ -1,20 +1,9 @@
 export function getGoogleMapsApiKey() {
-  return (
-    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ||
-    process.env.NEXT_PUBLIC_GOOGLE_MAP_KEY ||
-    process.env.VITE_GOOGLE_MAPS_API_KEY ||
-    ""
-  );
+  return process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
 }
 
 export function getServerGoogleMapsApiKey() {
-  return (
-    process.env.GOOGLE_MAPS_API_KEY ||
-    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ||
-    process.env.NEXT_PUBLIC_GOOGLE_MAP_KEY ||
-    process.env.VITE_GOOGLE_MAPS_API_KEY ||
-    ""
-  );
+  return process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
 }
 
 export const DEFAULT_MAP_CENTER = { lat: 39.8283, lng: -98.5795 };

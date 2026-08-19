@@ -414,6 +414,155 @@ export const formatRideCoordinates = (location) => {
   return `${lat}, ${long}`;
 };
 
+const isValidLatLng = (lat, lng) =>
+  Number.isFinite(lat) &&
+  Number.isFinite(lng) &&
+  lat >= -90 &&
+  lat <= 90 &&
+  lng >= -180 &&
+  lng <= 180;
+
+const parseLatLngCandidate = (value) => {
+  if (value == null) {
+    return null;
+  }
+
+  if (Array.isArray(value) && value.length >= 2) {
+    const first = Number(value[0]);
+    const second = Number(value[1]);
+
+    if (isValidLatLng(second, first)) {
+      return { lat: second, lng: first };
+    }
+
+    if (isValidLatLng(first, second)) {
+      return { lat: first, lng: second };
+    }
+
+    return null;
+  }
+
+  if (typeof value !== "object") {
+    return null;
+  }
+
+  if (Array.isArray(value.coordinates)) {
+    return parseLatLngCandidate(value.coordinates);
+  }
+
+  const lat = Number(value.lat ?? value.latitude ?? value.Lat);
+  const lng = Number(value.lng ?? value.long ?? value.longitude ?? value.Lon);
+
+  if (!isValidLatLng(lat, lng)) {
+    return null;
+  }
+
+  return { lat, lng };
+};
+
+export const parseRideLatLng = (value) => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const candidates = [
+    value,
+    value.location,
+    value.geo,
+    value.coords,
+    value.coordinates,
+    value.position,
+    value.from,
+    value.destination,
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = parseLatLngCandidate(candidate);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  return null;
+};
+
+const roleForStop = (stop, index, total) => {
+  const kind = String(stop?.kind || "").toLowerCase();
+
+  if (index === 0 || kind === "pickup") {
+    return "pickup";
+  }
+
+  if (index === total - 1) {
+    return "destination";
+  }
+
+  return "stop";
+};
+
+export const getRideRoutePoints = (ride) => {
+  if (!ride) {
+    return [];
+  }
+
+  const sortedStops = Array.isArray(ride.stops)
+    ? [...ride.stops].sort((a, b) => Number(a?.sequence ?? 0) - Number(b?.sequence ?? 0))
+    : [];
+
+  let unlabeledStopCount = 0;
+  const fromStops = sortedStops.map((stop, index) => {
+    const coords = parseRideLatLng(stop);
+    const role = roleForStop(stop, index, sortedStops.length);
+    let label = "Stop";
+
+    if (role === "pickup") {
+      label = "Pickup";
+    } else if (role === "destination") {
+      label = "Destination";
+    } else {
+      unlabeledStopCount += 1;
+      label = `Stop ${unlabeledStopCount}`;
+    }
+
+    return {
+      address: stop?.address || "",
+      label,
+      lat: coords?.lat ?? null,
+      lng: coords?.lng ?? null,
+      role,
+      sequence: Number(stop?.sequence ?? index),
+    };
+  });
+
+  if (fromStops.length) {
+    return fromStops;
+  }
+
+  const pickupCoords = parseRideLatLng(ride.from);
+  const destinationCoords = parseRideLatLng(ride.destination);
+  const points = [];
+
+  if (pickupCoords) {
+    points.push({
+      ...pickupCoords,
+      address: ride.from?.address || "",
+      label: "Pickup",
+      role: "pickup",
+    });
+  }
+
+  if (destinationCoords) {
+    points.push({
+      ...destinationCoords,
+      address: ride.destination?.address || "",
+      label: "Destination",
+      role: "destination",
+    });
+  }
+
+  return points;
+};
+
 export const storeRideDetail = (ride) => {
   if (typeof window !== "undefined" && ride) {
     sessionStorage.setItem("selectedRide", JSON.stringify(ride));

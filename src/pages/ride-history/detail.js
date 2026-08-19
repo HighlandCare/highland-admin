@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Head from "next/head";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/router";
 import {
   Box,
@@ -23,6 +24,11 @@ import {
   DetailSection,
 } from "../../components/detail-page/detail-page-ui";
 import { getRideById, getRideEvents } from "../../Services/Auth.service";
+
+const RideRouteMap = dynamic(
+  () => import("../../components/detail-page/ride-route-map").then((mod) => mod.RideRouteMap),
+  { ssr: false }
+);
 import { formatDateTime, formatRelativeDate } from "../../utils/dateUtils";
 import { pageContainerSx, pageMainSx } from "../../utils/pageLayout";
 import {
@@ -42,6 +48,7 @@ import {
   getRidePickupAddress,
   getRideScheduledLabel,
   getRideStatusMeta,
+  getRideStops,
   getStoredRideDetail,
   mergeRideDetailRecords,
   storeRideDetail,
@@ -100,14 +107,6 @@ const getRideEventsList = (response) => {
   }
 
   return [];
-};
-
-const getRideStopsFromApi = (ride) => {
-  if (!Array.isArray(ride?.stops) || !ride.stops.length) {
-    return [];
-  }
-
-  return [...ride.stops].sort((a, b) => Number(a?.sequence ?? 0) - Number(b?.sequence ?? 0));
 };
 
 const formatRideTimestamp = (value) => {
@@ -196,8 +195,8 @@ const Page = () => {
   }, [id]);
 
   const statusMeta = ride ? getRideStatusMeta(ride.status) : null;
-  const stops = ride ? getRideStopsFromApi(ride) : [];
-  const isMultiDestination = stops.length > 2;
+  const stops = ride ? getRideStops(ride) : [];
+  const isMultiDestination = stops.length > 0;
   const customer = ride ? getRideCustomer(ride) : null;
   const driver = ride ? getRideDriver(ride) : null;
   const scheduledLabel = ride ? getRideScheduledLabel(ride) : null;
@@ -343,16 +342,19 @@ const Page = () => {
                         <DetailFieldGrid columns={{ sm: 2, lg: 3 }} fields={waitingFields} />
                       </Box>
                     ) : null}
+                    <Box sx={{ mt: 3 }}>
+                      <RideRouteMap ride={ride} />
+                    </Box>
                   </DetailSection>
 
                   {stops.length ? (
                     <DetailSection
-                      title={`Stops (${stops.length})${isMultiDestination ? "" : " — single destination"}`}
+                      title={`Stops (${stops.length})`}
                     >
                       {stops.map((stop, index) => (
                         <Box key={stop.stopId || `${stop.sequence ?? index}`} sx={{ mb: 2.5 }}>
                           <Typography sx={{ fontWeight: 600, mb: 0.75 }} variant="subtitle2">
-                            {`${Number(stop.sequence ?? index) + 1}. ${stopKindLabel(stop.kind)}`}
+                            {`${index + 1}. ${stopKindLabel(stop.kind)}`}
                             {stop.state ? ` — ${formatStopState(stop.state)}` : ""}
                           </Typography>
                           <DetailFieldGrid

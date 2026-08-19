@@ -268,8 +268,8 @@ export default function LiveOpsMapOverlays({
             borderColor: markerBorder,
             borderWidth: 2,
             p: 2,
-            minWidth: { xs: 0, sm: 260 },
-            maxWidth: { xs: "none", sm: 320 },
+            minWidth: { xs: 0, sm: 300 },
+            maxWidth: { xs: "none", sm: 360 },
           }}
         >
           <Typography sx={{ color: markerBorder, fontSize: 12, fontWeight: 700, mb: 0.5 }}>
@@ -298,7 +298,7 @@ export default function LiveOpsMapOverlays({
             <Button
               size="small"
               variant="outlined"
-              sx={{ color: "text.secondary", flex: 1 }}
+              sx={{ color: "text.secondary", flex: 1, minWidth: 0, whiteSpace: "nowrap" }}
               onClick={onCloseMarker}
             >
               Close
@@ -307,7 +307,7 @@ export default function LiveOpsMapOverlays({
               size="small"
               variant="contained"
               color="primary"
-              sx={{ flex: 1 }}
+              sx={{ flex: 1, minWidth: 0, px: 1.5, whiteSpace: "nowrap" }}
               disabled={!detailPath}
               onClick={() => {
                 if (onViewDetails) {
