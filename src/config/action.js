@@ -1,5 +1,6 @@
 import { baseURL } from "./config";
 import axios from "axios";
+import { toast } from "react-toastify";
 import { redirectToLogin } from "../utils/authSession";
 
 // const getAuthToken = () => {
@@ -40,6 +41,8 @@ Action.interceptors.response.use(
     }
 
     if (status === 401 && !isLoginRequest) {
+      // Clear any in-flight error toasts so only the login-page message remains.
+      toast.dismiss();
       redirectToLogin({ reason: "expired" });
     }
 

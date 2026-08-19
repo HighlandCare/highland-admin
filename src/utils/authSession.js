@@ -1,6 +1,7 @@
 const AUTH_KEYS = ["isLogin", "user", "token"];
 
 const PUBLIC_PATHS = ["/auth/login", "/404"];
+const SESSION_EXPIRED_TOAST_KEY = "auth:session-expired-toast";
 
 let isRedirectingToLogin = false;
 
@@ -39,12 +40,35 @@ export const isAuthenticated = () => {
   }
 };
 
+export const isAuthRedirecting = () => isRedirectingToLogin;
+
+export const isUnauthorizedError = (error) => error?.response?.status === 401;
+
 export const clearAuthSession = () => {
   if (typeof window === "undefined") {
     return;
   }
 
   AUTH_KEYS.forEach((key) => localStorage.removeItem(key));
+};
+
+export const markSessionExpiredToast = () => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  sessionStorage.setItem(SESSION_EXPIRED_TOAST_KEY, "1");
+};
+
+export const consumeSessionExpiredToast = () => {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const shouldShow = sessionStorage.getItem(SESSION_EXPIRED_TOAST_KEY) === "1";
+  if (shouldShow) {
+    sessionStorage.removeItem(SESSION_EXPIRED_TOAST_KEY);
+  }
+  return shouldShow;
 };
 
 export const redirectToLogin = ({ reason, nextPath } = {}) => {
@@ -59,6 +83,10 @@ export const redirectToLogin = ({ reason, nextPath } = {}) => {
 
   isRedirectingToLogin = true;
   clearAuthSession();
+
+  if (reason === "expired") {
+    markSessionExpiredToast();
+  }
 
   const next =
     nextPath ||

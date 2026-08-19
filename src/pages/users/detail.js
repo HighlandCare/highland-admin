@@ -15,12 +15,10 @@ import {
   DetailSection,
 } from "../../components/detail-page/detail-page-ui";
 import {
-  UserSpendOverview,
   UserTransactionHistory,
 } from "../../components/user-transaction-history";
 import { getUserById, getUserTransactions } from "../../Services/Auth.service";
 import { formatDate, formatRelativeDate } from "../../utils/dateUtils";
-import { formatEarningsCurrency } from "../../utils/earningsUtils";
 import { pageContainerSx, pageMainSx } from "../../utils/pageLayout";
 import { brand } from "../../theme/colors";
 import {
@@ -33,7 +31,6 @@ import {
 } from "../../utils/userUtils";
 
 const TAB_OVERVIEW = "overview";
-const TAB_SPEND = "spend";
 const TAB_TRANSACTIONS = "transactions";
 
 const hasDetailValue = (value) => {
@@ -80,7 +77,6 @@ const emptyTxPayload = {
   transactions: [],
   pagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
   analytics: null,
-  lifetime: null,
 };
 
 const tabListSx = {
@@ -116,7 +112,6 @@ const Page = () => {
   const [transactions, setTransactions] = useState([]);
   const [pagination, setPagination] = useState(emptyTxPayload.pagination);
   const [analytics, setAnalytics] = useState(null);
-  const [lifetime, setLifetime] = useState(null);
   const [txFilters, setTxFilters] = useState({
     status: "",
     serviceCategory: "",
@@ -201,13 +196,11 @@ const Page = () => {
         }
       );
       setAnalytics(payload.analytics || null);
-      setLifetime(payload.lifetime || null);
     } catch (error) {
       console.error("Error loading user transactions:", error);
       setTransactions([]);
       setPagination({ page: txPage, limit: txLimit, total: 0, totalPages: 0 });
       setAnalytics(null);
-      setLifetime(null);
     } finally {
       setTxLoading(false);
     }
@@ -301,12 +294,6 @@ const Page = () => {
                       stats={[
                         { label: "Phone", value: phone },
                         { label: "Joined", value: joinedRelative },
-                        {
-                          label: "Lifetime spent",
-                          value: lifetime
-                            ? formatEarningsCurrency(lifetime.totalSpent ?? 0)
-                            : null,
-                        },
                       ]}
                       subtitle={email ? email.toLowerCase() : "No email linked"}
                       title={getUserDisplayName(user)}
@@ -328,7 +315,6 @@ const Page = () => {
                         onChange={(_, value) => setActiveTab(value)}
                       >
                         <Tab label="User overview" value={TAB_OVERVIEW} />
-                        <Tab label="Overview spend" value={TAB_SPEND} />
                         <Tab label="Transactions" value={TAB_TRANSACTIONS} />
                       </Tabs>
                     </Box>
@@ -434,10 +420,6 @@ const Page = () => {
                       </>
                     ) : null}
                   </DetailPanel>
-
-                  {activeTab === TAB_SPEND ? (
-                    <UserSpendOverview lifetime={lifetime} loading={txLoading} />
-                  ) : null}
 
                   {activeTab === TAB_TRANSACTIONS ? (
                     <UserTransactionHistory

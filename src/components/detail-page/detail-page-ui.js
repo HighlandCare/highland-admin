@@ -24,6 +24,20 @@ export const detailHeroSx = {
   py: { xs: 2.5, md: 3 },
 };
 
+const looksLikeEmail = (label, value) => {
+  if (typeof label === "string" && /email/i.test(label)) {
+    return true;
+  }
+  return typeof value === "string" && value.includes("@");
+};
+
+const formatEmailDisplay = (value) => {
+  if (value == null || value === "") {
+    return value;
+  }
+  return String(value).trim().toLowerCase();
+};
+
 export function DetailBackLink({ href, children = "Back" }) {
   return (
     <Button
@@ -94,6 +108,9 @@ export function DetailHero({
   stats = [],
   footer = null,
 }) {
+  const subtitleIsEmail = typeof subtitle === "string" && looksLikeEmail("", subtitle);
+  const subtitleText = subtitleIsEmail ? formatEmailDisplay(subtitle) : subtitle;
+
   return (
     <Box sx={detailHeroSx}>
       <Stack
@@ -108,9 +125,17 @@ export function DetailHero({
             <Typography sx={{ ...pageTitleSx, mb: 0.5 }} variant="h4">
               {title}
             </Typography>
-            {subtitle ? (
-              <Typography color="text.secondary" sx={{ wordBreak: "break-word" }} variant="body1">
-                {subtitle}
+            {subtitleText ? (
+              <Typography
+                color="text.secondary"
+                data-email={subtitleIsEmail ? "true" : undefined}
+                sx={{
+                  wordBreak: "break-word",
+                  ...(subtitleIsEmail ? { textTransform: "lowercase" } : {}),
+                }}
+                variant="body1"
+              >
+                {subtitleText}
               </Typography>
             ) : null}
           </Box>
@@ -239,12 +264,12 @@ DetailSection.propTypes = {
 };
 
 export function DetailField({ label, value, hideEmpty = false }) {
-  const isEmail = label === "Email" || (typeof value === "string" && value.includes("@"));
+  const isEmail = looksLikeEmail(label, value);
   const displayValue =
     value == null || value === "" || value === "false"
       ? "—"
       : isEmail
-        ? String(value).toLowerCase()
+        ? formatEmailDisplay(value)
         : value;
 
   if (hideEmpty && (displayValue === "—" || displayValue == null)) {
@@ -407,9 +432,7 @@ export function DetailRowList({ items = [] }) {
   return (
     <Stack spacing={0}>
       {visible.map((item, index) => {
-        const isEmail =
-          item.label === "Email" ||
-          (typeof item.value === "string" && item.value.includes("@"));
+        const isEmail = looksLikeEmail(item.label, item.value);
 
         return (
           <Stack
@@ -436,7 +459,7 @@ export function DetailRowList({ items = [] }) {
               }}
               variant="body2"
             >
-              {isEmail ? String(item.value).toLowerCase() : item.value}
+              {isEmail ? formatEmailDisplay(item.value) : item.value}
             </Typography>
           </Stack>
         );

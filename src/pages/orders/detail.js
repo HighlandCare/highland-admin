@@ -17,7 +17,6 @@ import { formatDate, formatRelativeDate } from "../../utils/dateUtils";
 import { pageContainerSx, pageMainSx } from "../../utils/pageLayout";
 import {
   formatRideCommissionRate,
-  formatRideCoordinates,
   formatRideCurrency,
   formatRideField,
   formatRidePaymentStatus,
@@ -253,9 +252,7 @@ const Page = () => {
                       fields={[
                         { label: "Restaurant", value: formatRideField(order.restaurant?.businessName) },
                         { label: "Pickup Address", value: getRidePickupAddress(order) },
-                        { label: "Pickup Coordinates", value: formatRideCoordinates(order.from) },
                         { label: "Delivery Address", value: getRideDestinationAddress(order) },
-                        { label: "Delivery Coordinates", value: formatRideCoordinates(order.destination) },
                       ]}
                     />
                   </DetailSection>
