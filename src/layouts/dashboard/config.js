@@ -78,15 +78,15 @@ export const items = [
       </SvgIcon>
     ),
   },
-  {
-    title: "Waiting Adjustments",
-    path: "/ride-adjustments",
-    icon: (
-      <SvgIcon fontSize="small">
-        <ClockIcon />
-      </SvgIcon>
-    ),
-  },
+  // {
+  //   title: "Waiting Adjustments",
+  //   path: "/ride-adjustments",
+  //   icon: (
+  //     <SvgIcon fontSize="small">
+  //       <ClockIcon />
+  //     </SvgIcon>
+  //   ),
+  // },
   {
     title: "Disputes",
     path: "/disputes",
