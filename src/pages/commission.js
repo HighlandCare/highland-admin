@@ -264,11 +264,17 @@ const Page = () => {
               <Loader page />
             ) : (
               <>
-                <Typography color="text.secondary" variant="body2">
-                  Allowed range {limits.minPercent}% – {limits.maxPercent}% · Default{" "}
-                  {limits.defaultPercent ?? DEFAULT_COMMISSION_LIMITS.defaultPercent}% · Active{" "}
-                  {formatRate(currentActiveRate)}
-                </Typography>
+                <Stack spacing={0.5}>
+                  <Typography color="text.secondary" variant="body2">
+                    Allowed range {limits.minPercent}% – {limits.maxPercent}%
+                  </Typography>
+                  <Typography
+                    sx={{ color: "success.main", fontWeight: 600 }}
+                    variant="body2"
+                  >
+                    Current rate {formatRate(currentActiveRate)}
+                  </Typography>
+                </Stack>
 
                 <Box sx={{ position: "relative" }}>
                   {tableLoading ? (
@@ -316,7 +322,7 @@ const Page = () => {
 
             <TextField
               disabled
-              label="Previous rate"
+              label="Current rate"
               value={formatRate(currentActiveRate)}
             />
 
@@ -328,7 +334,7 @@ const Page = () => {
               fullWidth
               helperText={validationError || undefined}
               inputProps={{ min: limits.minPercent, max: limits.maxPercent, step: 0.01 }}
-              label="Updated rate"
+              label="New rate"
               onChange={(event) => setPercent(event.target.value)}
               type="number"
               value={percent}
