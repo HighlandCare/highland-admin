@@ -1,7 +1,7 @@
 import { usePathname } from "next/navigation";
 import PropTypes from "prop-types";
-import { useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useMemo } from "react";
+import { useRouter } from "next/router";
 import ArrowLeftOnRectangleIcon from "@heroicons/react/24/solid/ArrowLeftOnRectangleIcon";
 
 import {
@@ -21,12 +21,47 @@ import { SideNavItem } from "./side-nav-item";
 import { clearAuthSession } from "../../utils/authSession";
 import { gradients } from "../../theme/colors";
 
+const getPathnameOnly = (path = "") => String(path).split("?")[0];
+
+const getQueryParam = (path = "", key) => {
+  const queryIndex = String(path).indexOf("?");
+  if (queryIndex === -1) {
+    return null;
+  }
+
+  try {
+    return new URLSearchParams(String(path).slice(queryIndex + 1)).get(key);
+  } catch (error) {
+    return null;
+  }
+};
+
+const isPathActive = (pathname, itemPath) => {
+  if (!itemPath) {
+    return false;
+  }
+
+  const basePath = getPathnameOnly(itemPath);
+  return (
+    pathname === basePath ||
+    pathname === `${basePath}/` ||
+    (basePath !== "/" && pathname?.startsWith(`${basePath}/`))
+  );
+};
+
 export const SideNav = (props) => {
   const { open, onClose } = props;
   const pathname = usePathname();
+  const router = useRouter();
   const lgUp = useMediaQuery((theme) => theme.breakpoints.up("lg"));
 
-  const router = useRouter();
+  const activeCategory = useMemo(() => {
+    if (typeof router.query?.category === "string") {
+      return router.query.category;
+    }
+    return getQueryParam(router.asPath, "category");
+  }, [router.asPath, router.query?.category]);
+
   const handleSignOut = useCallback(() => {
     clearAuthSession();
     onClose?.();
@@ -103,19 +138,31 @@ export const SideNav = (props) => {
             }}
           >
             {items.map((item) => {
-              const active = item.path
-                ? pathname === item.path ||
-                  pathname === `${item.path}/` ||
-                  (item.path !== "/" && pathname?.startsWith(`${item.path}/`))
-                : false;
+              const childrenItems = (item.children || []).map((child) => {
+                const childCategory = getQueryParam(child.path, "category");
+                const childActive =
+                  isPathActive(pathname, child.path) &&
+                  (!childCategory || childCategory === activeCategory);
+
+                return {
+                  ...child,
+                  active: childActive,
+                };
+              });
+
+              const childActive = childrenItems.some((child) => child.active);
+              const active = childActive || isPathActive(pathname, item.path);
+
               return (
                 <SideNavItem
                   active={active}
+                  childrenItems={childrenItems}
                   disabled={item.disabled}
                   external={item.external}
                   icon={item.icon}
                   key={item.title}
-                  path={item.path}
+                  open={childActive || active}
+                  path={item.children?.length ? undefined : item.path}
                   title={item.title}
                 />
               );

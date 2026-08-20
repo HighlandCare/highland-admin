@@ -263,7 +263,12 @@ const Page = () => {
                         { label: "Total Amount", value: formatRideCurrency(order.payment?.totalAmount) },
                         { label: "Driver Amount", value: formatRideCurrency(getRideDriverEarning(order)) },
                         { label: "Admin Commission", value: formatRideCurrency(getRideAdminEarning(order)) },
-                        { label: "Commission Rate", value: formatRideCommissionRate(order.payment?.commissionRate) },
+                        { label: "Commission Rate", value: formatRideCommissionRate(
+                          order.payment?.commissionPercent ??
+                            order.payment?.commissionRate ??
+                            order.commissionPercent ??
+                            order.commissionRate
+                        ) },
                         { label: "Payment Source", value: formatRideField(order.payment?.source) },
                       ]}
                     />

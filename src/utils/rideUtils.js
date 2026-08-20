@@ -394,13 +394,24 @@ export const formatRideCommissionRate = (rate) => {
     return "—";
   }
 
-  const numericRate = Number(rate);
-
-  if (numericRate <= 1) {
-    return `${(numericRate * 100).toFixed(2)}%`;
+  let percent = Number(rate);
+  if (!Number.isFinite(percent)) {
+    return "—";
   }
 
-  return `${numericRate.toFixed(2)}%`;
+  // API may send a ratio (0.19) or a whole percent (19).
+  if (percent > 0 && percent <= 1) {
+    percent *= 100;
+  }
+
+  // Clear float noise around whole percents (e.g. 18.95 / 19.0000001 → 19).
+  const nearestInt = Math.round(percent);
+  if (Math.abs(percent - nearestInt) <= 0.1) {
+    return `${nearestInt}%`;
+  }
+
+  // Keep up to 2 decimals without trailing zeros (19.5 not 19.50).
+  return `${parseFloat(percent.toFixed(2))}%`;
 };
 
 export const formatRideCoordinates = (location) => {

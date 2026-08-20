@@ -271,7 +271,7 @@ const Page = () => {
                         value: formatRidePaymentStatus(ride.havePaid, ride.paymentStatus),
                       },
                       { label: "Distance", value: formatRideField(ride.distance) },
-                      { label: "Mode", value: formatRideEnumLabel(ride.mode) },
+                      // { label: "Mode", value: formatRideEnumLabel(ride.mode) },
                     ]}
                     subtitle={`${driver?.fullName || driver?.name || "Unassigned"} → ${customer?.fullName || customer?.name || "—"}`}
                     title="Ride Details"
@@ -287,13 +287,13 @@ const Page = () => {
                         },
                         { label: "Type", value: formatRideEnumLabel(ride.type) },
                         { label: "Category", value: formatRideEnumLabel(ride.category), hideEmpty: true },
-                        { label: "Mode", value: formatRideEnumLabel(ride.mode), hideEmpty: true },
+                        // { label: "Mode", value: formatRideEnumLabel(ride.mode), hideEmpty: true },
                         { label: "Status", value: formatRideEnumLabel(ride.status) },
-                        {
-                          label: "Passengers",
-                          value: formatRideField(ride.numberOfPassenger),
-                          hideEmpty: true,
-                        },
+                        // {
+                        //   label: "Passengers",
+                        //   value: formatRideField(ride.numberOfPassenger),
+                        //   hideEmpty: true,
+                        // },
                       ]}
                     />
                   </DetailSection>
@@ -421,7 +421,12 @@ const Page = () => {
                         },
                         {
                           label: "Commission Rate",
-                          value: formatRideCommissionRate(ride.payment?.commissionRate),
+                          value: formatRideCommissionRate(
+                            ride.payment?.commissionPercent ??
+                              ride.payment?.commissionRate ??
+                              ride.commissionPercent ??
+                              ride.commissionRate
+                          ),
                         },
                         {
                           label: "Tip",

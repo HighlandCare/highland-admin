@@ -38,6 +38,7 @@ module.exports = {
       "/restaurants/index": { page: "/restaurants" },
       "/restaurants/detail/index": { page: "/restaurants/detail" },
       "/driver-earnings/index": { page: "/driver-earnings" },
+      "/commission/index": { page: "/commission" },
       "/ride-history/index": { page: "/ride-history" },
       "/ride-history/detail/index": { page: "/ride-history/detail" },
       "/orders/detail/index": { page: "/orders/detail" },

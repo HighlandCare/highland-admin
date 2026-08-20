@@ -9,6 +9,7 @@ import Cog6ToothIcon from "@heroicons/react/24/solid/Cog6ToothIcon";
 
 import QuestionMarkCircleIcon from "@heroicons/react/24/solid/QuestionMarkCircleIcon";
 import CurrencyDollarIcon from "@heroicons/react/24/solid/CurrencyDollarIcon";
+import ReceiptPercentIcon from "@heroicons/react/24/solid/ReceiptPercentIcon";
 import ClockIcon from "@heroicons/react/24/solid/ClockIcon";
 import ExclamationTriangleIcon from "@heroicons/react/24/solid/ExclamationTriangleIcon";
 import BuildingStorefrontIcon from "@heroicons/react/24/solid/BuildingStorefrontIcon";
@@ -68,6 +69,21 @@ export const items = [
         <CurrencyDollarIcon />
       </SvgIcon>
     ),
+  },
+  {
+    title: "Platform Commission",
+    path: "/commission",
+    icon: (
+      <SvgIcon fontSize="small">
+        <ReceiptPercentIcon />
+      </SvgIcon>
+    ),
+    children: [
+      {
+        title: "Transportation",
+        path: "/commission?category=transportation",
+      },
+    ],
   },
   {
     title: "Ride History",
