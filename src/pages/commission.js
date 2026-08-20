@@ -328,7 +328,7 @@ const Page = () => {
               fullWidth
               helperText={validationError || undefined}
               inputProps={{ min: limits.minPercent, max: limits.maxPercent, step: 0.01 }}
-              label="Current set rate"
+              label="Updated rate"
               onChange={(event) => setPercent(event.target.value)}
               type="number"
               value={percent}

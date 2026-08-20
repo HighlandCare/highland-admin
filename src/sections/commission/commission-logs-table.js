@@ -96,7 +96,7 @@ export function CommissionLogsTable({
         <TableRow>
           <TableCell>Category</TableCell>
           <TableCell>Previous rate</TableCell>
-          <TableCell>Current set rate</TableCell>
+          <TableCell>Updated rate</TableCell>
           <TableCell>Admin</TableCell>
           <TableCell>Date / time</TableCell>
         </TableRow>
