@@ -15,13 +15,17 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 import FunnelIcon from "@heroicons/react/24/solid/FunnelIcon";
 import MapPinIcon from "@heroicons/react/24/solid/MapPinIcon";
 import ArrowsPointingOutIcon from "@heroicons/react/24/solid/ArrowsPointingOutIcon";
 import ArrowsPointingInIcon from "@heroicons/react/24/solid/ArrowsPointingInIcon";
 import { toast } from "react-toastify";
 import LiveOpsLocationSearch from "./live-ops-location-search";
-import { buildLegendIconDataUrl } from "../../utils/liveOpsMarkerIcons";
+import { liveOpsGlass } from "../../theme/live-ops-page-theme";
+import { useLiveOpsUi } from "../../contexts/live-ops-ui-context";
+import SunIcon from "@heroicons/react/24/solid/SunIcon";
+import MoonIcon from "@heroicons/react/24/solid/MoonIcon";
 import { enrichLiveOpsItem, resolveLiveOpsDetailPath } from "../../utils/liveOpsNavigation";
 
 const LiveOpsGeoFilter = dynamic(() => import("./live-ops-geo-filter"), {
@@ -40,15 +44,6 @@ const LEGEND_ITEMS = [
   { key: "online_driver", label: "Online", color: "#f97316" },
   { key: "emergency", label: "Urgent", color: "#ef4444" },
 ];
-
-const glass = {
-  bgcolor: "rgba(255, 255, 255, 0.94)",
-  backdropFilter: "blur(12px)",
-  border: "1px solid",
-  borderColor: "divider",
-  borderRadius: "14px",
-  boxShadow: "0 8px 28px rgba(15, 23, 42, 0.08)",
-};
 
 export default function LiveOpsMapOverlays({
   legend,
@@ -76,6 +71,9 @@ export default function LiveOpsMapOverlays({
   onGeoFilterChange,
 }) {
   const router = useRouter();
+  const theme = useTheme();
+  const glass = liveOpsGlass(theme);
+  const { mapTheme, toggleMapTheme } = useLiveOpsUi();
   const [filterAnchor, setFilterAnchor] = useState(null);
   const hasGeoFilter = Boolean(geoFilter?.state || geoFilter?.city);
 
@@ -167,7 +165,7 @@ export default function LiveOpsMapOverlays({
             height: 48,
             color: "primary.main",
             flexShrink: 0,
-            bgcolor: hasGeoFilter ? "primary.alpha12" : "rgba(255, 255, 255, 0.94)",
+            bgcolor: hasGeoFilter ? "primary.alpha12" : glass.bgcolor,
             borderColor: hasGeoFilter ? "primary.main" : "divider",
             "&:hover": { bgcolor: "primary.alpha8" },
           }}
@@ -305,9 +303,19 @@ export default function LiveOpsMapOverlays({
             </Button>
             <Button
               size="small"
-              variant="contained"
-              color="primary"
-              sx={{ flex: 1, minWidth: 0, px: 1.5, whiteSpace: "nowrap" }}
+              variant="outlined"
+              sx={{
+                flex: 1,
+                minWidth: 0,
+                px: 1.5,
+                whiteSpace: "nowrap",
+                color: markerBorder,
+                borderColor: markerBorder,
+                "&:hover": {
+                  borderColor: markerBorder,
+                  bgcolor: `${markerBorder}14`,
+                },
+              }}
               disabled={!detailPath}
               onClick={() => {
                 if (onViewDetails) {
@@ -350,11 +358,12 @@ export default function LiveOpsMapOverlays({
             sx={{ flexShrink: 0 }}
           >
             <Box
-              alt=""
               aria-hidden
-              className="live-ops-legend-icon"
-              component="img"
-              src={buildLegendIconDataUrl(item.key, 16)}
+              className="live-ops-legend-dot"
+              sx={{
+                bgcolor: item.color,
+                boxShadow: `0 0 0 4px ${item.color}33, 0 0 10px ${item.color}`,
+              }}
             />
             <Typography sx={{ color: "text.secondary", fontSize: 12 }}>
               {item.label}: {legend?.[item.key] ?? 0}
@@ -372,9 +381,10 @@ export default function LiveOpsMapOverlays({
           zIndex: 1000,
         }}
       >
-        <Tooltip title="Reset map to United States view">
+        {/* <Tooltip title={mapTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
           <IconButton
-            onClick={onLocateRegion}
+            onClick={toggleMapTheme}
+            aria-label={mapTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             sx={{
               ...glass,
               width: 44,
@@ -382,9 +392,10 @@ export default function LiveOpsMapOverlays({
               color: "primary.main",
             }}
           >
-            <MapPinIcon width={22} />
+            {mapTheme === "dark" ? <SunIcon width={22} /> : <MoonIcon width={22} />}
           </IconButton>
-        </Tooltip>
+        </Tooltip> */}
+
         <Tooltip title={isMapFullscreen ? "Exit full screen" : "Full screen map"}>
           <IconButton
             onClick={onToggleFullscreen}

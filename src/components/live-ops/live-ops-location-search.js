@@ -17,15 +17,8 @@ import MagnifyingGlassIcon from "@heroicons/react/24/solid/MagnifyingGlassIcon";
 import MapPinIcon from "@heroicons/react/24/solid/MapPinIcon";
 import { toast } from "react-toastify";
 import { parseCoordinateQuery } from "../../utils/googleMaps";
-
-const glass = {
-  bgcolor: "rgba(255, 255, 255, 0.96)",
-  backdropFilter: "blur(12px)",
-  border: "1px solid",
-  borderColor: "divider",
-  borderRadius: "14px",
-  boxShadow: "0 8px 28px rgba(15, 23, 42, 0.08)",
-};
+import { liveOpsGlass } from "../../theme/live-ops-page-theme";
+import { useTheme } from "@mui/material/styles";
 
 async function geocodeLatLng(lat, lng) {
   const response = await fetch(`/api/maps/geocode?latlng=${lat},${lng}`);
@@ -94,6 +87,8 @@ export default function LiveOpsLocationSearch({
   locating,
   mapMarkers,
 }) {
+  const theme = useTheme();
+  const glass = liveOpsGlass(theme);
   const [placePredictions, setPlacePredictions] = useState([]);
   const [searching, setSearching] = useState(false);
   const [openSuggestions, setOpenSuggestions] = useState(false);
@@ -301,31 +296,12 @@ export default function LiveOpsLocationSearch({
         InputProps={{
           startAdornment: (
             <InputAdornment position="start">
-              <MagnifyingGlassIcon width={18} style={{ color: "#9DA4AE" }} />
+              <MagnifyingGlassIcon width={18} style={{ color: theme.palette.text.secondary }} />
             </InputAdornment>
           ),
           endAdornment: (
             <InputAdornment position="end">
               {searching ? <CircularProgress size={16} sx={{ color: "text.secondary" }} /> : null}
-              <Tooltip title="Use my current location">
-                <span>
-                  <IconButton
-                    aria-label="Use my current location"
-                    size="small"
-                    type="button"
-                    disabled={locating || !onCurrentLocation}
-                    onClick={handleCurrentLocationClick}
-                    onMouseDown={(event) => event.preventDefault()}
-                    sx={{ color: "primary.main" }}
-                  >
-                    {locating ? (
-                      <CircularProgress size={16} sx={{ color: "primary.main" }} />
-                    ) : (
-                      <MapPinIcon width={18} />
-                    )}
-                  </IconButton>
-                </span>
-              </Tooltip>
             </InputAdornment>
           ),
           sx: {

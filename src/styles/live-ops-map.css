@@ -26,10 +26,22 @@
   width: 16px;
 }
 
+.live-ops-legend-dot {
+  border-radius: 50%;
+  flex-shrink: 0;
+  height: 10px;
+  width: 10px;
+}
+
 /* Google Maps HTML overlay markers */
 .live-ops-html-marker {
-  display: block;
+  appearance: none;
+  background: transparent;
+  border: none;
+  display: grid;
   line-height: 0;
+  padding: 0;
+  place-items: center;
   pointer-events: auto;
 }
 
@@ -37,6 +49,94 @@
   display: block;
   height: 100%;
   width: 100%;
+}
+
+.live-ops-glow-marker {
+  --marker-color: #22c55e;
+  display: grid;
+  height: 18px;
+  place-items: center;
+  pointer-events: auto;
+  position: relative;
+  width: 18px;
+}
+
+.live-ops-glow-marker__aura {
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--marker-color) 55%, transparent) 0%,
+    color-mix(in srgb, var(--marker-color) 25%, transparent) 42%,
+    transparent 72%
+  );
+  border-radius: 50%;
+  inset: -35%;
+  opacity: 0.85;
+  pointer-events: none;
+  position: absolute;
+}
+
+.live-ops-glow-marker__halo {
+  background: radial-gradient(
+    circle,
+    var(--marker-color) 0%,
+    color-mix(in srgb, var(--marker-color) 65%, transparent) 38%,
+    transparent 70%
+  );
+  border-radius: 50%;
+  inset: -8%;
+  opacity: 0.72;
+  pointer-events: none;
+  position: absolute;
+}
+
+.live-ops-glow-marker__core {
+  background: radial-gradient(
+    circle at 50% 45%,
+    #ffffff 0%,
+    var(--marker-color) 55%,
+    var(--marker-color) 100%
+  );
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  border-radius: 50%;
+  box-shadow:
+    0 0 10px var(--marker-color),
+    0 0 20px var(--marker-color),
+    0 0 32px color-mix(in srgb, var(--marker-color) 55%, transparent);
+  height: 46%;
+  position: relative;
+  width: 46%;
+  z-index: 1;
+}
+
+.live-ops-glow-marker__hotspot {
+  background: #ffffff;
+  border-radius: 50%;
+  height: 18%;
+  opacity: 0.9;
+  pointer-events: none;
+  position: absolute;
+  width: 18%;
+  z-index: 2;
+}
+
+.live-ops-glow-marker.is-pulse .live-ops-glow-marker__aura {
+  animation: liveOpsGlowPulse 2s ease-out infinite;
+}
+
+.live-ops-glow-marker.is-selected {
+  transform: scale(1.18);
+}
+
+.live-ops-glow-marker.is-selected .live-ops-glow-marker__core {
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.4),
+    0 0 12px var(--marker-color),
+    0 0 24px var(--marker-color),
+    0 0 40px color-mix(in srgb, var(--marker-color) 60%, transparent);
+}
+
+.live-ops-glow-marker.is-user .live-ops-glow-marker__core {
+  border-color: #fff;
 }
 
 .live-ops-leaflet-marker .live-ops-cluster-marker,
@@ -57,6 +157,18 @@
   inset: -5px;
   pointer-events: none;
   position: absolute;
+}
+
+@keyframes liveOpsGlowPulse {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.92);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1.55);
+  }
 }
 
 @keyframes liveOpsClusterPulse {

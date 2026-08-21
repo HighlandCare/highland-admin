@@ -147,7 +147,7 @@ export default function LiveOpsRightPanel({
               label={tab.label}
               onClick={() => onFilterChange?.(tab.key)}
               sx={{
-                bgcolor: filter === tab.key ? "primary.main" : "neutral.50",
+                bgcolor: filter === tab.key ? "primary.main" : "action.hover",
                 color: filter === tab.key ? "primary.contrastText" : "text.primary",
                 fontWeight: 600,
                 border: "1px solid",

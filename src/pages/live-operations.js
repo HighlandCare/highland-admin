@@ -5,10 +5,14 @@ import {
   Box,
   Button,
   Drawer,
+  IconButton,
   Stack,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import UsersIcon from "@heroicons/react/24/solid/UsersIcon";
+import SunIcon from "@heroicons/react/24/solid/SunIcon";
+import MoonIcon from "@heroicons/react/24/solid/MoonIcon";
 import { useRouter } from "next/router";
 import { Layout as DashboardLayout } from "../layouts/dashboard/layout";
 import BaseLayout from "../layouts/BaseLayout";
@@ -25,7 +29,7 @@ import {
 import { OverviewRideAnalytics } from "../sections/overview/overview-ride-analytics";
 import { OverviewRideStatus } from "../sections/overview/overview-ride-status";
 import { loadDashboardAnalytics } from "../utils/dashboardUtils";
-import { useLiveOpsUi } from "../contexts/live-ops-ui-context";
+import { LiveOpsThemeProvider, useLiveOpsUi } from "../contexts/live-ops-ui-context";
 import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM, parseCoordinateQuery, sanitizeLiveOpsMarkers } from "../utils/googleMaps";
 import {
   enrichLiveOpsItem,
@@ -128,7 +132,7 @@ function resolveBookingStops(item, markers = []) {
 
 const Page = () => {
   const router = useRouter();
-  const { isMapFullscreen, setMapFullscreen } = useLiveOpsUi();
+  const { isMapFullscreen, setMapFullscreen, mapTheme, toggleMapTheme } = useLiveOpsUi();
   const [isLogin, setIsLogin] = useState(null);
   const [viewMode, setViewMode] = useState("map");
   const [loading, setLoading] = useState(true);
@@ -601,23 +605,10 @@ const Page = () => {
     [snapshot?.markers, startLocationTour]
   );
 
-  const handleMarkerSelect = useCallback(
-    (marker) => {
-      const stops = resolveBookingStops(marker, snapshot?.markers ?? []);
-      if (stops.length > 1) {
-        startLocationTour(stops, marker);
-        return;
-      }
-      clearLocationTour();
-      setSelectedMarker(marker);
-      if (marker?.lat != null && marker?.lng != null) {
-        setMapViewCenter({ lat: marker.lat, lng: marker.lng });
-        setMapZoom(15);
-        setFitToMarkers(false);
-      }
-    },
-    [clearLocationTour, snapshot?.markers, startLocationTour]
-  );
+  const handleMarkerSelect = useCallback((marker) => {
+    clearLocationTour();
+    setSelectedMarker(marker);
+  }, [clearLocationTour]);
 
   const handleViewDetails = useCallback(
     (marker) => {
@@ -701,12 +692,13 @@ const Page = () => {
   }
 
   return (
-    <>
+    <LiveOpsThemeProvider>
       <Head>
         <title>Live Operations | Highland Care Admin</title>
       </Head>
 
       <Box
+        data-live-ops-theme={mapTheme}
         sx={{
           position: "fixed",
           top: {
@@ -761,6 +753,32 @@ const Page = () => {
                   {" MAP"}
                 </Box>
               </Typography>
+              <Stack direction="row" alignItems="center" spacing={0.75} sx={{ display: { xs: "none", sm: "flex" } }}>
+                <Box
+                  sx={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    bgcolor: "#22c55e",
+                    boxShadow: "0 0 10px rgba(34,197,94,.7)",
+                    animation: "pulse 2s infinite",
+                    "@keyframes pulse": {
+                      "0%, 100%": { opacity: 1 },
+                      "50%": { opacity: 0.35 },
+                    },
+                  }}
+                />
+                <Typography
+                  sx={{
+                    color: "#22c55e",
+                    fontSize: 11,
+                    fontWeight: 800,
+                    letterSpacing: "0.12em",
+                  }}
+                >
+                  LIVE
+                </Typography>
+              </Stack>
             </Stack>
 
             <Stack
@@ -778,6 +796,22 @@ const Page = () => {
               >
                 {clock}
               </Typography>
+              <Tooltip title={mapTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
+                <IconButton
+                  onClick={toggleMapTheme}
+                  aria-label={mapTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                  sx={{
+                    width: 40,
+                    height: 40,
+                    color: "text.primary",
+                    border: "1px solid",
+                    borderColor: "divider",
+                    borderRadius: "10px",
+                  }}
+                >
+                  {mapTheme === "dark" ? <SunIcon width={18} /> : <MoonIcon width={18} />}
+                </IconButton>
+              </Tooltip>
               <Button
                 onClick={() => setIsSignupsOpen(true)}
                 aria-label="Open live signups"
@@ -935,7 +969,7 @@ const Page = () => {
           </Box>
         )}
       </Box>
-    </>
+    </LiveOpsThemeProvider>
   );
 };
 
