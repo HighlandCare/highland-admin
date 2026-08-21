@@ -30,6 +30,7 @@ import { OverviewRideAnalytics } from "../sections/overview/overview-ride-analyt
 import { OverviewRideStatus } from "../sections/overview/overview-ride-status";
 import { loadDashboardAnalytics } from "../utils/dashboardUtils";
 import { LiveOpsThemeProvider, useLiveOpsUi } from "../contexts/live-ops-ui-context";
+import { useDashboardLayout } from "../contexts/dashboard-layout-context";
 import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM, parseCoordinateQuery, sanitizeLiveOpsMarkers } from "../utils/googleMaps";
 import {
   enrichLiveOpsItem,
@@ -39,7 +40,7 @@ import {
 import { storeDisputeDetail } from "../utils/disputeUtils";
 import { storeOrderDetailContext, storeRideDetail } from "../utils/rideUtils";
 import { filterMarkersNearLocation } from "../hooks/useSmoothLiveOpsMarkers";
-import { DEFAULT_GEO_FILTER, filterMarkersByGeo, parseGeoCoords } from "../utils/liveOpsGeo";
+import { DEFAULT_GEO_FILTER, filterHotspotsByGeo, filterMarkersByGeo, parseGeoCoords } from "../utils/liveOpsGeo";
 import { toast } from "react-toastify";
 
 const LiveOpsMap = dynamic(() => import("../components/live-ops/live-ops-map"), {
@@ -60,7 +61,6 @@ const LiveOpsMap = dynamic(() => import("../components/live-ops/live-ops-map"), 
   ),
 });
 
-const SIDE_NAV_WIDTH = 280;
 const TOP_NAV_HEIGHT = 64;
 const STOP_TOUR_DELAY_MS = 2200;
 
@@ -133,6 +133,7 @@ function resolveBookingStops(item, markers = []) {
 const Page = () => {
   const router = useRouter();
   const { isMapFullscreen, setMapFullscreen, mapTheme, toggleMapTheme } = useLiveOpsUi();
+  const { sideNavWidth } = useDashboardLayout();
   const [isLogin, setIsLogin] = useState(null);
   const [viewMode, setViewMode] = useState("map");
   const [loading, setLoading] = useState(true);
@@ -142,6 +143,8 @@ const Page = () => {
   const [selectedMarkerTypes, setSelectedMarkerTypes] = useState(DEFAULT_MARKER_TYPES);
   const [onlineOnly, setOnlineOnly] = useState(false);
   const [selectedMarker, setSelectedMarker] = useState(null);
+  const [selectedHotspot, setSelectedHotspot] = useState(null);
+  const [showHotspots, setShowHotspots] = useState(true);
   const [locationSearch, setLocationSearch] = useState("");
   const [geoFilter, setGeoFilter] = useState(DEFAULT_GEO_FILTER);
   const [mapViewCenter, setMapViewCenter] = useState(DEFAULT_MAP_CENTER);
@@ -223,8 +226,17 @@ const Page = () => {
           return;
         }
 
-        if (isFoodLiveOpsItem(payload?.marker || payload)) {
+        if (isFoodLiveOpsItem(payload?.marker || payload?.item || payload)) {
           return;
+        }
+
+        if (eventName === "live-ops:hotspots.patch" && Array.isArray(payload?.hotspots)) {
+          const top = [...payload.hotspots].sort(
+            (a, b) => (Number(b.pendingCount) || 0) - (Number(a.pendingCount) || 0)
+          )[0];
+          if (top?.id) {
+            setSelectedHotspot((current) => current ?? top);
+          }
         }
 
         setSnapshot((prev) => {
@@ -327,6 +339,39 @@ const Page = () => {
     return filterMarkersByGeo(typeFiltered, geoFilter);
   }, [snapshot?.markers, selectedMarkerTypes, onlineOnly, geoFilter]);
 
+  const filteredHotspots = useMemo(() => {
+    const hotspots = (snapshot?.hotspots ?? []).filter((hotspot) => hotspot?.active !== false);
+    return filterHotspotsByGeo(hotspots, geoFilter);
+  }, [snapshot?.hotspots, geoFilter]);
+
+  const activeHotspotCount = filteredHotspots.length;
+
+  const primaryActiveHotspot = useMemo(() => {
+    if (!filteredHotspots.length) return null;
+    return [...filteredHotspots].sort(
+      (a, b) => (Number(b.pendingCount) || 0) - (Number(a.pendingCount) || 0)
+    )[0];
+  }, [filteredHotspots]);
+
+  const lastAutoPanHotspotIdRef = useRef(null);
+
+  useEffect(() => {
+    if (!primaryActiveHotspot?.id) {
+      lastAutoPanHotspotIdRef.current = null;
+      return;
+    }
+
+    if (lastAutoPanHotspotIdRef.current === primaryActiveHotspot.id) return;
+
+    const lat = Number(primaryActiveHotspot.lat);
+    const lng = Number(primaryActiveHotspot.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+    lastAutoPanHotspotIdRef.current = primaryActiveHotspot.id;
+    setMapViewCenter({ lat, lng });
+    setMapZoom((current) => (current && current >= 12 ? current : 13));
+  }, [primaryActiveHotspot]);
+
   const filteredLegend = useMemo(() => {
     const counts = {
       customer_signup: 0,
@@ -341,8 +386,14 @@ const Page = () => {
         counts[legendKey] += 1;
       }
     });
+    if (primaryActiveHotspot?.pendingCount) {
+      counts.ride_request = Math.max(
+        counts.ride_request,
+        Number(primaryActiveHotspot.pendingCount) || 0
+      );
+    }
     return counts;
-  }, [filteredMarkers]);
+  }, [filteredMarkers, primaryActiveHotspot]);
 
   const rideOnlyFeed = useMemo(
     () => (snapshot?.feed ?? []).filter((item) => !isFoodLiveOpsItem(item)),
@@ -607,7 +658,14 @@ const Page = () => {
 
   const handleMarkerSelect = useCallback((marker) => {
     clearLocationTour();
+    setSelectedHotspot(null);
     setSelectedMarker(marker);
+  }, [clearLocationTour]);
+
+  const handleHotspotSelect = useCallback((hotspot) => {
+    clearLocationTour();
+    setSelectedMarker(null);
+    setSelectedHotspot(hotspot);
   }, [clearLocationTour]);
 
   const handleViewDetails = useCallback(
@@ -707,7 +765,7 @@ const Page = () => {
           },
           left: {
             xs: 0,
-            lg: isMapFullscreen ? 0 : SIDE_NAV_WIDTH,
+            lg: isMapFullscreen ? 0 : sideNavWidth,
           },
           right: 0,
           bottom: 0,
@@ -716,6 +774,10 @@ const Page = () => {
           bgcolor: "background.default",
           color: "text.primary",
           zIndex: isMapFullscreen ? 1400 : 1,
+          transition: (theme) =>
+            theme.transitions.create("left", {
+              duration: theme.transitions.duration.shorter,
+            }),
         }}
       >
         {!isMapFullscreen ? (
@@ -852,16 +914,27 @@ const Page = () => {
                       center={mapCenter}
                       zoom={mapZoom ?? snapshot?.region?.zoom ?? DEFAULT_MAP_ZOOM}
                       markers={filteredMarkers}
+                      hotspots={filteredHotspots}
+                      showHotspots={showHotspots}
                       selectedMarker={selectedMarker}
+                      selectedHotspot={selectedHotspot}
                       userLocation={userLocation}
                       fitToMarkers={fitToMarkers}
                       mapFitKey={mapFitKey}
                       mapZoom={mapZoom}
                       onFitComplete={handleMapFitComplete}
                       onMarkerSelect={handleMarkerSelect}
+                      onHotspotSelect={handleHotspotSelect}
                     />
                     <LiveOpsMapOverlays
                       legend={filteredLegend}
+                      hotspots={filteredHotspots}
+                      activeHotspotCount={activeHotspotCount}
+                      activeHotspot={primaryActiveHotspot}
+                      showHotspots={showHotspots}
+                      onShowHotspotsChange={setShowHotspots}
+                      selectedHotspot={selectedHotspot}
+                      onCloseHotspot={() => setSelectedHotspot(null)}
                       locationSearch={locationSearch}
                       onLocationSearchChange={setLocationSearch}
                       onPlaceSelect={handlePlaceSelect}

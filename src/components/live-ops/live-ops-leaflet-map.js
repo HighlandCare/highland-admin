@@ -6,6 +6,10 @@ import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM, sanitizeLiveOpsMarkers } from "..
 import { buildLeafletMarkerIcon } from "../../utils/liveOpsMarkerIcons";
 import { useLiveOpsUi } from "../../contexts/live-ops-ui-context";
 import { clusterLiveOpsMarkers, markerDisplaySize } from "../../utils/liveOpsClusters";
+import {
+  getHotspotDisplayRadiusMeters,
+  normalizeHotspotCoords,
+} from "../../utils/liveOpsHotspots";
 
 const LIGHT_TILE_URL = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
 const DARK_TILE_URL = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
@@ -17,17 +21,21 @@ export default function LiveOpsLeafletMap({
   zoom,
   mapZoom,
   markers,
+  hotspots = [],
+  showHotspots = true,
   showTraffic,
   userLocation,
   fitToMarkers,
   mapFitKey = 0,
   onFitComplete,
   onMarkerSelect,
+  onHotspotSelect,
 }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const tileLayerRef = useRef(null);
   const markerLayerRef = useRef(null);
+  const hotspotLayerRef = useRef(null);
   const lastFitKeyRef = useRef(null);
   const lastCameraRef = useRef("");
   const { mapTheme } = useLiveOpsUi();
@@ -49,6 +57,7 @@ export default function LiveOpsLeafletMap({
       attribution: TILE_ATTRIBUTION,
     }).addTo(map);
     markerLayerRef.current = L.layerGroup().addTo(map);
+    hotspotLayerRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
 
     const resizeFrame = requestAnimationFrame(() => map.invalidateSize());
@@ -59,6 +68,7 @@ export default function LiveOpsLeafletMap({
       mapRef.current = null;
       tileLayerRef.current = null;
       markerLayerRef.current = null;
+      hotspotLayerRef.current = null;
     };
   }, []);
 
@@ -74,6 +84,33 @@ export default function LiveOpsLeafletMap({
       }
     ).addTo(map);
   }, [mapTheme, showTraffic]);
+
+  useEffect(() => {
+    const layer = hotspotLayerRef.current;
+    if (!layer) return;
+
+    layer.clearLayers();
+    if (!showHotspots) return;
+
+    (hotspots || []).forEach((hotspot) => {
+      if (hotspot?.active === false) return;
+      const coords = normalizeHotspotCoords(hotspot);
+      if (!coords) return;
+
+      const displayRadius = getHotspotDisplayRadiusMeters(hotspot.radiusMeters);
+
+      L.circle([coords.lat, coords.lng], {
+        radius: displayRadius,
+        color: "#ef4444",
+        fillColor: "#ef4444",
+        fillOpacity: hotspot.intensity === "high" ? 0.22 : 0.18,
+        weight: hotspot.intensity === "high" ? 3 : 2,
+        className: "live-ops-demand-hotspot-pulse",
+      })
+        .on("click", () => onHotspotSelect?.(hotspot))
+        .addTo(layer);
+    });
+  }, [hotspots, onHotspotSelect, showHotspots]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -155,10 +192,13 @@ LiveOpsLeafletMap.propTypes = {
   zoom: PropTypes.number,
   mapZoom: PropTypes.number,
   markers: PropTypes.array,
+  hotspots: PropTypes.array,
+  showHotspots: PropTypes.bool,
   showTraffic: PropTypes.bool,
   userLocation: PropTypes.object,
   fitToMarkers: PropTypes.bool,
   mapFitKey: PropTypes.number,
   onFitComplete: PropTypes.func,
   onMarkerSelect: PropTypes.func,
+  onHotspotSelect: PropTypes.func,
 };

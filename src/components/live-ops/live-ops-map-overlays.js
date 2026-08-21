@@ -27,6 +27,7 @@ import { useLiveOpsUi } from "../../contexts/live-ops-ui-context";
 import SunIcon from "@heroicons/react/24/solid/SunIcon";
 import MoonIcon from "@heroicons/react/24/solid/MoonIcon";
 import { enrichLiveOpsItem, resolveLiveOpsDetailPath } from "../../utils/liveOpsNavigation";
+import { getDemandHotspotStaticNotifyText } from "../../utils/liveOpsHotspots";
 
 const LiveOpsGeoFilter = dynamic(() => import("./live-ops-geo-filter"), {
   ssr: false,
@@ -43,10 +44,18 @@ const LEGEND_ITEMS = [
   { key: "ride_request", label: "Pending", color: "#3b82f6" },
   { key: "online_driver", label: "Online", color: "#f97316" },
   { key: "emergency", label: "Urgent", color: "#ef4444" },
+  { key: "demand_hotspot", label: "Demand", color: "#ef4444", isHotspot: true },
 ];
 
 export default function LiveOpsMapOverlays({
   legend,
+  hotspots = [],
+  activeHotspotCount = 0,
+  activeHotspot = null,
+  showHotspots = true,
+  onShowHotspotsChange,
+  selectedHotspot,
+  onCloseHotspot,
   locationSearch,
   onLocationSearchChange,
   onPlaceSelect,
@@ -79,6 +88,11 @@ export default function LiveOpsMapOverlays({
 
   const enrichedMarker = selectedMarker ? enrichLiveOpsItem(selectedMarker, snapshot) : null;
   const detailPath = enrichedMarker ? resolveLiveOpsDetailPath(enrichedMarker) : null;
+  const displayHotspot =
+    showHotspots && activeHotspotCount > 0 ? activeHotspot || selectedHotspot : null;
+  const demandStaticNotify = displayHotspot
+    ? getDemandHotspotStaticNotifyText(displayHotspot)
+    : null;
 
   const handleViewDetails = () => {
     if (!detailPath) {
@@ -133,7 +147,48 @@ export default function LiveOpsMapOverlays({
           Live Activity
         </Typography>
         <Typography sx={{ color: "text.secondary", fontSize: 12 }}>Real-time</Typography>
+        {activeHotspotCount > 0 ? (
+          <Typography
+            sx={{
+              color: "#ef4444",
+              fontSize: 11,
+              fontWeight: 700,
+              ml: 0.5,
+              px: 1,
+              py: 0.25,
+              borderRadius: 999,
+              bgcolor: "rgba(239,68,68,0.12)",
+            }}
+          >
+            High demand area
+          </Typography>
+        ) : null}
       </Box>
+
+      {demandStaticNotify ? (
+        <Box
+          sx={{
+            position: "absolute",
+            top: { xs: 52, md: 56 },
+            left: 16,
+            right: { xs: 16, md: "auto" },
+            zIndex: 1000,
+            ...glass,
+            borderColor: "#f97316",
+            borderWidth: 1.5,
+            px: 1.5,
+            py: 1,
+            maxWidth: 380,
+          }}
+        >
+          <Typography sx={{ color: "#ef4444", fontSize: 13, fontWeight: 700 }}>
+            {demandStaticNotify.pendingLabel}
+          </Typography>
+          <Typography sx={{ color: "#f97316", fontSize: 12, fontWeight: 700, mt: 0.5 }}>
+            {demandStaticNotify.notifyLabel}
+          </Typography>
+        </Box>
+      ) : null}
 
       <Stack
         direction="row"
@@ -252,6 +307,23 @@ export default function LiveOpsMapOverlays({
             </Typography>
           }
         />
+
+        <FormControlLabel
+          sx={{ mt: 0.5 }}
+          control={
+            <Checkbox
+              size="small"
+              checked={showHotspots}
+              onChange={(e) => onShowHotspotsChange?.(e.target.checked)}
+              sx={{ color: "neutral.400", "&.Mui-checked": { color: "#ef4444" } }}
+            />
+          }
+          label={
+            <Typography sx={{ color: "text.primary", fontSize: 13 }}>
+              Demand hotspots
+            </Typography>
+          }
+        />
       </Popover>
 
       {selectedMarker ? (
@@ -331,6 +403,35 @@ export default function LiveOpsMapOverlays({
         </Box>
       ) : null}
 
+      {displayHotspot ? (
+        <Box
+          sx={{
+            position: "absolute",
+            top: { xs: 108, sm: 120 },
+            left: { xs: 8, sm: 16 },
+            right: { xs: 8, sm: "auto" },
+            zIndex: 1000,
+            ...glass,
+            borderColor: "#ef4444",
+            borderWidth: 2,
+            p: 2,
+            minWidth: { xs: 0, sm: 280 },
+            maxWidth: { xs: "none", sm: 340 },
+          }}
+        >
+          <Typography sx={{ color: "#ef4444", fontSize: 12, fontWeight: 700, mb: 0.5 }}>
+            High demand zone
+          </Typography>
+          <Typography sx={{ color: "text.primary", fontWeight: 700, fontSize: 16 }}>
+            {demandStaticNotify?.pendingLabel || displayHotspot.label}
+          </Typography>
+          <Typography sx={{ color: "#f97316", fontSize: 13, fontWeight: 700, mt: 1 }}>
+            {demandStaticNotify?.notifyLabel ||
+              "High demand notification sending to (10) drivers"}
+          </Typography>
+        </Box>
+      ) : null}
+
       <Box
         sx={{
           position: "absolute",
@@ -366,7 +467,8 @@ export default function LiveOpsMapOverlays({
               }}
             />
             <Typography sx={{ color: "text.secondary", fontSize: 12 }}>
-              {item.label}: {legend?.[item.key] ?? 0}
+              {item.label}:{" "}
+              {item.isHotspot ? activeHotspotCount : (legend?.[item.key] ?? 0)}
             </Typography>
           </Stack>
         ))}
@@ -420,6 +522,12 @@ export default function LiveOpsMapOverlays({
 
 LiveOpsMapOverlays.propTypes = {
   legend: PropTypes.object,
+  hotspots: PropTypes.array,
+  activeHotspotCount: PropTypes.number,
+  showHotspots: PropTypes.bool,
+  onShowHotspotsChange: PropTypes.func,
+  selectedHotspot: PropTypes.object,
+  onCloseHotspot: PropTypes.func,
   locationSearch: PropTypes.string,
   onLocationSearchChange: PropTypes.func,
   onPlaceSelect: PropTypes.func,

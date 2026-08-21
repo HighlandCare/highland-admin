@@ -171,6 +171,20 @@
   }
 }
 
+.live-ops-demand-hotspot-pulse {
+  animation: liveOpsDemandHotspotPulse 2.4s ease-in-out infinite;
+}
+
+@keyframes liveOpsDemandHotspotPulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
 @keyframes liveOpsClusterPulse {
   0% {
     opacity: 0.55;

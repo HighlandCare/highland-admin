@@ -30,7 +30,8 @@ function KpiCard({ label, value, accent, sublabel }) {
       sx={{
         flex: { xs: "0 0 140px", sm: "0 0 160px", lg: "1 1 180px" },
         minWidth: { xs: 140, sm: 160 },
-        p: { xs: 1.5, md: 2 },
+        px: { xs: 1.5, md: 2 },
+        py: { xs: 0.5, md: 0.5 },
         borderRadius: "14px",
         bgcolor: "background.paper",
         border: "1px solid",

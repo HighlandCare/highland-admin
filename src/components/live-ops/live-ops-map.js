@@ -18,6 +18,7 @@ import { clusterLiveOpsMarkers } from "../../utils/liveOpsClusters";
 import { useSmoothLiveOpsMarkers } from "../../hooks/useSmoothLiveOpsMarkers";
 import { useLiveOpsUi } from "../../contexts/live-ops-ui-context";
 import LiveOpsGlowMarker from "./live-ops-glow-marker";
+import LiveOpsDemandHotspotsLayer from "./live-ops-demand-hotspots-layer";
 
 const LiveOpsLeafletMap = dynamic(() => import("./live-ops-leaflet-map"), {
   ssr: false,
@@ -79,7 +80,10 @@ export default function LiveOpsMap({
   center,
   zoom,
   markers,
+  hotspots = [],
+  showHotspots = true,
   selectedMarker,
+  selectedHotspot,
   showTraffic,
   userLocation,
   fitToMarkers,
@@ -87,6 +91,7 @@ export default function LiveOpsMap({
   mapZoom,
   onFitComplete,
   onMarkerSelect,
+  onHotspotSelect,
   onMapReady,
 }) {
   const mapRef = useRef(null);
@@ -201,12 +206,15 @@ export default function LiveOpsMap({
           zoom={initialZoom}
           mapZoom={mapZoom}
           markers={safeMarkers}
+          hotspots={hotspots}
+          showHotspots={showHotspots}
           showTraffic={showTraffic}
           userLocation={userLocation}
           fitToMarkers={fitToMarkers}
           mapFitKey={mapFitKey}
           onFitComplete={onFitComplete}
           onMarkerSelect={onMarkerSelect}
+          onHotspotSelect={onHotspotSelect}
         />
       </Box>
     );
@@ -255,6 +263,12 @@ export default function LiveOpsMap({
       >
         {showTraffic ? <TrafficLayer /> : null}
 
+        <LiveOpsDemandHotspotsLayer
+          hotspots={hotspots}
+          showHotspots={showHotspots}
+          onHotspotSelect={onHotspotSelect}
+        />
+
         {mapInstance
           ? mapItems.map((item) => (
               <LiveOpsGlowMarker
@@ -292,7 +306,10 @@ LiveOpsMap.propTypes = {
   }),
   zoom: PropTypes.number,
   markers: PropTypes.array,
+  hotspots: PropTypes.array,
+  showHotspots: PropTypes.bool,
   selectedMarker: PropTypes.object,
+  selectedHotspot: PropTypes.object,
   showTraffic: PropTypes.bool,
   userLocation: PropTypes.shape({
     lat: PropTypes.number,
@@ -303,5 +320,6 @@ LiveOpsMap.propTypes = {
   mapZoom: PropTypes.number,
   onFitComplete: PropTypes.func,
   onMarkerSelect: PropTypes.func,
+  onHotspotSelect: PropTypes.func,
   onMapReady: PropTypes.func,
 };

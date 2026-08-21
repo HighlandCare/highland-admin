@@ -9,6 +9,7 @@ const LIVE_OPS_EVENTS = [
   "live-ops:feed.event",
   "live-ops:stats.patch",
   "live-ops:legend.patch",
+  "live-ops:hotspots.patch",
   "live-ops:refresh",
 ];
 
@@ -189,6 +190,7 @@ export function mergeLiveOpsSnapshot(prev, incoming) {
     return {
       ...incoming,
       markers,
+      hotspots: incoming.hotspots ?? [],
       legend: recountLegend(markers),
     };
   }
@@ -211,8 +213,11 @@ export function mergeLiveOpsSnapshot(prev, incoming) {
     if (!m?.id) return;
     const existing = byId.get(m.id);
     if (!existing) {
-      // Keep briefly-seen live drivers until the next poll includes them.
-      if (m._fromSocket && m.type === "online_driver") {
+      // Keep live socket markers until the next HTTP snapshot includes them.
+      if (
+        m._fromSocket &&
+        (m.type === "online_driver" || m.type === "ride_request" || m.type === "chaperoneride")
+      ) {
         byId.set(m.id, m);
       }
       return;
@@ -234,6 +239,12 @@ export function mergeLiveOpsSnapshot(prev, incoming) {
   return {
     ...incoming,
     markers,
+    hotspots:
+      incoming.hotspots?.length > 0
+        ? incoming.hotspots
+        : prev.hotspots?.length > 0
+          ? prev.hotspots
+          : incoming.hotspots ?? prev.hotspots ?? [],
     legend: recountLegend(markers),
     // Prefer API totals, but never drop below what live socket markers already show
     stats: patchStatsFromMarkers(mergedStats, markers, { allowShrink: false }),
@@ -244,6 +255,7 @@ export function mergeLiveOpsSnapshot(prev, incoming) {
 function emptySnapshot() {
   return {
     markers: [],
+    hotspots: [],
     feed: [],
     stats: {},
     legend: recountLegend([]),
@@ -265,7 +277,7 @@ export function applyLiveOpsSocketEvent(snapshot, eventName, payload) {
     case "live-ops:marker.upsert": {
       const marker = payload?.marker;
       if (!marker?.id) break;
-      next.markers = upsertMarker(next.markers, marker);
+      next.markers = upsertMarker(next.markers, { ...marker, _fromSocket: true });
       next.legend = recountLegend(next.markers);
       next.stats = patchStatsFromMarkers(next.stats, next.markers);
       break;
@@ -374,6 +386,12 @@ export function applyLiveOpsSocketEvent(snapshot, eventName, payload) {
     case "live-ops:legend.patch": {
       next.legend = { ...next.legend, ...(payload || {}) };
       delete next.legend.at;
+      break;
+    }
+    case "live-ops:hotspots.patch": {
+      if (Array.isArray(payload?.hotspots) && payload.hotspots.length > 0) {
+        next.hotspots = payload.hotspots;
+      }
       break;
     }
     default:

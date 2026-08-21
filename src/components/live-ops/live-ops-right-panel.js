@@ -100,7 +100,7 @@ export default function LiveOpsRightPanel({
   return (
     <Box
       sx={{
-        width: mobile ? "100%" : 360,
+        width: mobile ? "100%" : 280,
         height: "100%",
         maxHeight: "100%",
         minHeight: 0,
