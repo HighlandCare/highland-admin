@@ -30,7 +30,6 @@ import { OverviewRideAnalytics } from "../sections/overview/overview-ride-analyt
 import { OverviewRideStatus } from "../sections/overview/overview-ride-status";
 import { loadDashboardAnalytics } from "../utils/dashboardUtils";
 import { LiveOpsThemeProvider, useLiveOpsUi } from "../contexts/live-ops-ui-context";
-import { useDashboardLayout } from "../contexts/dashboard-layout-context";
 import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM, parseCoordinateQuery, sanitizeLiveOpsMarkers } from "../utils/googleMaps";
 import {
   enrichLiveOpsItem,
@@ -61,7 +60,6 @@ const LiveOpsMap = dynamic(() => import("../components/live-ops/live-ops-map"), 
   ),
 });
 
-const TOP_NAV_HEIGHT = 64;
 const STOP_TOUR_DELAY_MS = 2200;
 
 const MARKER_TYPE_FILTERS = [
@@ -133,13 +131,12 @@ function resolveBookingStops(item, markers = []) {
 const Page = () => {
   const router = useRouter();
   const { isMapFullscreen, setMapFullscreen, mapTheme, toggleMapTheme } = useLiveOpsUi();
-  const { sideNavWidth } = useDashboardLayout();
   const [isLogin, setIsLogin] = useState(null);
   const [viewMode, setViewMode] = useState("map");
   const [loading, setLoading] = useState(true);
   const [snapshot, setSnapshot] = useState(null);
   const [feedFilter, setFeedFilter] = useState("all");
-  const [region, setRegion] = useState("all");
+  const [region, setRegion] = useState("texas");
   const [selectedMarkerTypes, setSelectedMarkerTypes] = useState(DEFAULT_MARKER_TYPES);
   const [onlineOnly, setOnlineOnly] = useState(false);
   const [selectedMarker, setSelectedMarker] = useState(null);
@@ -162,6 +159,14 @@ const Page = () => {
   const refreshTimerRef = useRef(null);
   const socketApiRef = useRef(null);
   const didInitialFitRef = useRef(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const clearLocationTour = useCallback(() => {
     if (tourTimerRef.current) {
@@ -181,6 +186,7 @@ const Page = () => {
       });
 
       if (response?.status && response?.data) {
+        if (!isMountedRef.current) return;
         setSnapshot((prev) =>
           stripFoodFromSnapshot(mergeLiveOpsSnapshot(prev, stripFoodFromSnapshot(response.data)))
         );
@@ -221,6 +227,8 @@ const Page = () => {
     const connection = connectLiveOpsSocket({
       region,
       onEvent: (eventName, payload) => {
+        if (!isMountedRef.current) return;
+
         if (eventName === "live-ops:refresh") {
           scheduleSoftRefresh();
           return;
@@ -272,7 +280,21 @@ const Page = () => {
     socketApiRef.current = connection;
     connection.syncNow?.();
 
+    const handleRouteChangeStart = () => {
+      isMountedRef.current = false;
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+      connection?.disconnect?.();
+      socketApiRef.current = null;
+      setMapFullscreen(false);
+    };
+
+    router.events.on("routeChangeStart", handleRouteChangeStart);
+
     return () => {
+      router.events.off("routeChangeStart", handleRouteChangeStart);
       if (refreshTimerRef.current) {
         clearTimeout(refreshTimerRef.current);
         refreshTimerRef.current = null;
@@ -280,7 +302,7 @@ const Page = () => {
       socketApiRef.current = null;
       connection?.disconnect?.();
     };
-  }, [isLogin, viewMode, loadSnapshot]);
+  }, [isLogin, viewMode, loadSnapshot, router.events, setMapFullscreen]);
 
   useEffect(() => {
     socketApiRef.current?.setRegion?.(region);
@@ -514,7 +536,11 @@ const Page = () => {
   }, []);
 
   useEffect(() => {
-    if (didInitialFitRef.current || viewMode !== "map" || geoFilter.state || geoFilter.city) {
+    if (
+      didInitialFitRef.current ||
+      viewMode !== "map" ||
+      (!geoFilter.state && !geoFilter.city)
+    ) {
       return;
     }
 
@@ -758,26 +784,26 @@ const Page = () => {
       <Box
         data-live-ops-theme={mapTheme}
         sx={{
-          position: "fixed",
-          top: {
-            xs: isMapFullscreen ? 0 : TOP_NAV_HEIGHT,
-            lg: 0,
-          },
-          left: {
-            xs: 0,
-            lg: isMapFullscreen ? 0 : sideNavWidth,
-          },
-          right: 0,
-          bottom: 0,
           display: "flex",
           flexDirection: "column",
+          flex: 1,
+          minHeight: 0,
+          width: "100%",
+          height: "100%",
+          maxHeight: "100%",
+          overflow: "hidden",
           bgcolor: "background.default",
           color: "text.primary",
-          zIndex: isMapFullscreen ? 1400 : 1,
-          transition: (theme) =>
-            theme.transitions.create("left", {
-              duration: theme.transitions.duration.shorter,
-            }),
+          ...(isMapFullscreen
+            ? {
+                position: "fixed",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 1400,
+              }
+            : {}),
         }}
       >
         {!isMapFullscreen ? (
@@ -904,8 +930,8 @@ const Page = () => {
 
         {viewMode === "map" ? (
           <>
-            <Box sx={{ flex: 1, display: "flex", minHeight: 0 }}>
-              <Box sx={{ flex: 1, position: "relative", minWidth: 0 }}>
+            <Box sx={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}>
+              <Box sx={{ flex: 1, position: "relative", minWidth: 0, minHeight: 0, height: "100%" }}>
                 {loading && !snapshot ? (
                   <Loader minHeight="100%" />
                 ) : (

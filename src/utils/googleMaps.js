@@ -6,9 +6,9 @@ export function getServerGoogleMapsApiKey() {
   return process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
 }
 
-export const DEFAULT_MAP_CENTER = { lat: 39.8283, lng: -98.5795 };
-/** Continental United States overview */
-export const DEFAULT_MAP_ZOOM = 4;
+export const DEFAULT_MAP_CENTER = { lat: 31.0, lng: -99.0 };
+/** Entire Texas overview */
+export const DEFAULT_MAP_ZOOM = 6;
 
 /** Map only — Places runs through /api/maps/* routes */
 export const GOOGLE_MAP_LIBRARIES = [];

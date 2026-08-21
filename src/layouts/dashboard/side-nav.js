@@ -1,4 +1,3 @@
-import { usePathname } from "next/navigation";
 import PropTypes from "prop-types";
 import { useCallback, useMemo } from "react";
 import { useRouter } from "next/router";
@@ -59,8 +58,8 @@ const isPathActive = (pathname, itemPath) => {
 
 export const SideNav = (props) => {
   const { open, onClose, collapsed = false, onToggleCollapse } = props;
-  const pathname = usePathname();
   const router = useRouter();
+  const pathname = router.pathname || "";
   const lgUp = useMediaQuery((theme) => theme.breakpoints.up("lg"));
   const drawerWidth = collapsed ? SIDE_NAV_WIDTH_COLLAPSED : SIDE_NAV_WIDTH_EXPANDED;
 

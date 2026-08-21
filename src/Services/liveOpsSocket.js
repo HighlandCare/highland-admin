@@ -1,5 +1,6 @@
 import { io } from "socket.io-client";
 import { parseCoordinateQuery } from "../utils/googleMaps";
+import { getSocketIoClientOptions, normalizeSocketIoUrl } from "../utils/socketClient";
 
 const LIVE_OPS_EVENTS = [
   "live-ops:driver.location",
@@ -14,11 +15,23 @@ const LIVE_OPS_EVENTS = [
 ];
 
 export function getLiveOpsSocketUrl() {
-  return (
+  if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+    // Same-origin proxy in next.config.js avoids CORS when hitting prod socket from localhost.
+    return window.location.origin;
+  }
+
+  const raw =
     process.env.NEXT_PUBLIC_SOCKET_URL ||
     process.env.NEXT_PUBLIC_SOCKET_CONNECTION_URL ||
-    ""
-  );
+    "";
+  const url = normalizeSocketIoUrl(raw);
+  if (url.includes(":1120") && !url.includes("/api")) {
+    console.warn(
+      "[live-ops] NEXT_PUBLIC_SOCKET_URL points to port 1120 (API). " +
+        "Use cura-driver port 9180 instead, e.g. https://highland.prodservers.com:9180"
+    );
+  }
+  return url;
 }
 
 /**
@@ -37,17 +50,12 @@ export function connectLiveOpsSocket({
     return { disconnect: () => {}, setRegion: () => {}, syncNow: () => {} };
   }
 
-  const socket = io(url, {
-    transports: ["websocket", "polling"],
-    reconnection: true,
-    reconnectionAttempts: Infinity,
-    reconnectionDelay: 1500,
-  });
+  const socket = io(url, getSocketIoClientOptions());
 
-  let activeRegion = region || "all";
+  let activeRegion = region || "texas";
 
   const joinRoom = (nextRegion) => {
-    activeRegion = nextRegion || "all";
+    activeRegion = nextRegion || "texas";
     socket.emit("adminJoinLiveOps", { region: activeRegion }, () => {});
   };
 
@@ -81,7 +89,7 @@ export function connectLiveOpsSocket({
   return {
     setRegion: (nextRegion) => {
       if (socket.connected) joinRoom(nextRegion);
-      else activeRegion = nextRegion || "all";
+      else activeRegion = nextRegion || "texas";
     },
     syncNow,
     disconnect: () => {
@@ -259,7 +267,7 @@ function emptySnapshot() {
     feed: [],
     stats: {},
     legend: recountLegend([]),
-    region: { key: "all", center: { lat: 39.8283, lng: -98.5795 }, zoom: 4 },
+    region: { key: "texas", center: { lat: 31.0, lng: -99.0 }, zoom: 6 },
   };
 }
 

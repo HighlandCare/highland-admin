@@ -1,4 +1,20 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+
+function renderedMarkersEqual(a = [], b = []) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i].id !== b[i].id || a[i].lat !== b[i].lat || a[i].lng !== b[i].lng) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function buildMarkersSignature(markers = []) {
+  return markers
+    .map((marker) => `${marker.id}|${marker.lat}|${marker.lng}|${marker.type ?? ""}`)
+    .join(";");
+}
 
 /**
  * Smoothly interpolate online-driver marker positions between socket updates.
@@ -13,11 +29,14 @@ export function useSmoothLiveOpsMarkers(markers = [], durationMs = 900) {
 
   markersRef.current = markers;
 
+  const markersKey = useMemo(() => buildMarkersSignature(markers), [markers]);
+
   useEffect(() => {
+    const currentMarkers = markersRef.current;
     const nextTargets = new Map();
     const nextMarkers = [];
 
-    markers.forEach((marker) => {
+    currentMarkers.forEach((marker) => {
       const lat = Number(marker.lat);
       const lng = Number(marker.lng);
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
@@ -30,19 +49,26 @@ export function useSmoothLiveOpsMarkers(markers = [], durationMs = 900) {
       }
     });
 
-    // Drop removed markers
     for (const id of [...positionsRef.current.keys()]) {
       if (!nextTargets.has(id)) positionsRef.current.delete(id);
     }
 
     targetsRef.current = nextTargets;
 
-    const hasMovingOnline = nextMarkers.some(
-      (m) => m.type === "online_driver" && positionsRef.current.has(m.id)
-    );
+    const hasMovingOnline = nextMarkers.some((marker) => {
+      if (marker.type !== "online_driver") return false;
+      const pos = positionsRef.current.get(marker.id);
+      const target = nextTargets.get(marker.id);
+      if (!pos || !target) return false;
+      return pos.lat !== target.lat || pos.lng !== target.lng;
+    });
+
+    const commitRendered = (next) => {
+      setRendered((prev) => (renderedMarkersEqual(prev, next) ? prev : next));
+    };
 
     if (!hasMovingOnline) {
-      setRendered(
+      commitRendered(
         nextMarkers.map((marker) => {
           const pos = positionsRef.current.get(marker.id);
           return pos ? { ...marker, lat: pos.lat, lng: pos.lng } : marker;
@@ -75,7 +101,7 @@ export function useSmoothLiveOpsMarkers(markers = [], durationMs = 900) {
         });
       });
 
-      setRendered(
+      commitRendered(
         markersRef.current
           .map((marker) => {
             const pos = positionsRef.current.get(marker.id);
@@ -94,7 +120,7 @@ export function useSmoothLiveOpsMarkers(markers = [], durationMs = 900) {
     rafRef.current = requestAnimationFrame(tick);
 
     return () => cancelAnimationFrame(rafRef.current);
-  }, [markers, durationMs]);
+  }, [markersKey, durationMs]);
 
   return rendered;
 }

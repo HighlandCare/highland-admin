@@ -103,7 +103,9 @@ export default function LiveOpsMap({
   const [mapInstance, setMapInstance] = useState(null);
   const apiKey = getGoogleMapsApiKey();
 
-  const safeMarkers = useSmoothLiveOpsMarkers(sanitizeLiveOpsMarkers(markers));
+  const safeMarkers = useSmoothLiveOpsMarkers(
+    useMemo(() => sanitizeLiveOpsMarkers(markers), [markers])
+  );
   const mapItems = useMemo(() => clusterLiveOpsMarkers(safeMarkers), [safeMarkers]);
 
   const { isLoaded, loadError } = useJsApiLoader({
@@ -247,6 +249,9 @@ export default function LiveOpsMap({
         onLoad={(map) => {
           mapRef.current = map;
           setMapInstance(map);
+          window.google?.maps?.event?.trigger(map, "resize");
+          map.setCenter(mapCenter);
+          map.setZoom(initialZoom);
           onMapReady?.(true);
         }}
         options={{
