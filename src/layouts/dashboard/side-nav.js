@@ -160,7 +160,7 @@ export const SideNav = (props) => {
                   disabled={item.disabled}
                   external={item.external}
                   icon={item.icon}
-                  key={item.title}
+                  key={item.path || item.title}
                   open={childActive || active}
                   path={item.children?.length ? undefined : item.path}
                   title={item.title}

@@ -18,11 +18,16 @@ import { Layout as DashboardLayout } from "../layouts/dashboard/layout";
 import Loader from "../components/Loader";
 import { ROWS_PER_PAGE } from "../components/data-table";
 import { CommissionLogsTable } from "../sections/commission/commission-logs-table";
+import { StopWaitingRateLogsTable } from "../sections/commission/stop-waiting-rate-logs-table";
 import { TransportationFareLogsTable } from "../sections/commission/transportation-fare-logs-table";
 import {
   createCommissionLog,
   listCommissionLogs,
 } from "../Services/commission.service";
+import {
+  getStopWaitingRate,
+  publishStopWaitingRate,
+} from "../Services/stop-waiting-rate.service";
 import {
   getTransportationFare,
   publishTransportationFare,
@@ -40,8 +45,15 @@ import {
   validateCommissionPercent,
 } from "../utils/commissionUtils";
 import {
+  DEFAULT_STOP_WAITING_RATE,
+  formatWaitingRateDollars,
+  getActiveStopWaitingRate,
+  getStopWaitingRateLogs,
+  getStopWaitingRatePayload,
+  validateWaitingRateDollars,
+} from "../utils/stopWaitingRateUtils";
+import {
   DEFAULT_TRANSPORTATION_FARE,
-  FARE_FORMULA_LABEL,
   formatFareDollars,
   getActiveTransportationFare,
   getTransportationFareLogs,
@@ -53,13 +65,24 @@ import { pageContainerSx, pageMainSx, pageTitleSx, responsiveModalSx } from "../
 const DEFAULT_CATEGORY = SERVICE_CATEGORIES.TRANSPORTATION;
 const TAB_COMMISSION = "commission";
 const TAB_FARE = "fare";
+const TAB_WAITING = "waiting";
 
 const resolveCategory = (value) => {
   const match = SERVICE_CATEGORY_OPTIONS.find((option) => option.value === value);
   return match?.value || DEFAULT_CATEGORY;
 };
 
-const resolveTab = (value) => (value === TAB_FARE ? TAB_FARE : TAB_COMMISSION);
+const resolveTab = (value) => {
+  if (value === TAB_FARE) return TAB_FARE;
+  if (value === TAB_WAITING) return TAB_WAITING;
+  return TAB_COMMISSION;
+};
+
+const pageHeadingForTab = (tab) => {
+  if (tab === TAB_FARE) return "Transportation Fare";
+  if (tab === TAB_WAITING) return "Stop Waiting Rate";
+  return "Platform Commission";
+};
 
 const formatRate = (value) => {
   const percent = toCommissionPercent(value);
@@ -93,18 +116,29 @@ const Page = () => {
   const [minimumFare, setMinimumFare] = useState("");
   const [fareLoaded, setFareLoaded] = useState(false);
 
+  const [waitingBootLoading, setWaitingBootLoading] = useState(false);
+  const [waitingTableLoading, setWaitingTableLoading] = useState(false);
+  const [waitingSaving, setWaitingSaving] = useState(false);
+  const [waitingModalOpen, setWaitingModalOpen] = useState(false);
+  const [waitingActive, setWaitingActive] = useState(DEFAULT_STOP_WAITING_RATE);
+  const [waitingLogs, setWaitingLogs] = useState([]);
+  const [waitingLogsTotal, setWaitingLogsTotal] = useState(0);
+  const [waitingPage, setWaitingPage] = useState(1);
+  const [waitingRatePerMinute, setWaitingRatePerMinute] = useState("");
+  const [waitingLoaded, setWaitingLoaded] = useState(false);
+
   const activeCategory = useMemo(
     () => resolveCategory(router.query?.category),
     [router.query?.category]
   );
 
-  const showFareTab = activeCategory === SERVICE_CATEGORIES.TRANSPORTATION;
+  const showRateTabs = activeCategory === SERVICE_CATEGORIES.TRANSPORTATION;
   const activeTab = useMemo(() => {
-    if (!showFareTab) {
+    if (!showRateTabs) {
       return TAB_COMMISSION;
     }
     return resolveTab(router.query?.tab);
-  }, [router.query?.tab, showFareTab]);
+  }, [router.query?.tab, showRateTabs]);
 
   useEffect(() => {
     const isLogin = JSON.parse(typeof window !== "undefined" && localStorage.getItem("isLogin"));
@@ -133,7 +167,7 @@ const Page = () => {
 
     if (rawCategory === SERVICE_CATEGORIES.TRANSPORTATION) {
       const rawTab = router.query?.tab;
-      if (rawTab !== TAB_COMMISSION && rawTab !== TAB_FARE) {
+      if (rawTab !== TAB_COMMISSION && rawTab !== TAB_FARE && rawTab !== TAB_WAITING) {
         router.replace(
           {
             pathname: "/commission",
@@ -151,7 +185,12 @@ const Page = () => {
   }, [activeCategory]);
 
   useEffect(() => {
-    setFarePage(1);
+    if (activeTab === TAB_FARE) {
+      setFarePage(1);
+    }
+    if (activeTab === TAB_WAITING) {
+      setWaitingPage(1);
+    }
   }, [activeTab]);
 
   const handleTabChange = (_event, value) => {
@@ -251,6 +290,38 @@ const Page = () => {
     [farePage]
   );
 
+  const loadWaiting = useCallback(
+    async ({ silent = false } = {}) => {
+      if (!silent) {
+        setWaitingTableLoading(true);
+      }
+
+      try {
+        const response = await getStopWaitingRate({
+          limit: Math.max(ROWS_PER_PAGE * 10, 100),
+        });
+        const payload = getStopWaitingRatePayload(response);
+        const allLogs = getStopWaitingRateLogs(payload);
+        const start = (waitingPage - 1) * ROWS_PER_PAGE;
+
+        setWaitingActive(getActiveStopWaitingRate(payload));
+        setWaitingLogs(allLogs.slice(start, start + ROWS_PER_PAGE));
+        setWaitingLogsTotal(allLogs.length);
+        setWaitingLoaded(true);
+        return response;
+      } catch (error) {
+        setWaitingLogs([]);
+        setWaitingLogsTotal(0);
+        throw error;
+      } finally {
+        if (!silent) {
+          setWaitingTableLoading(false);
+        }
+      }
+    },
+    [waitingPage]
+  );
+
   useEffect(() => {
     if (!router.isReady || activeTab !== TAB_COMMISSION) {
       return undefined;
@@ -280,7 +351,7 @@ const Page = () => {
   }, [activeTab, loadLogs, router.isReady]);
 
   useEffect(() => {
-    if (!router.isReady || !showFareTab || activeTab !== TAB_FARE) {
+    if (!router.isReady || !showRateTabs || activeTab !== TAB_FARE) {
       return undefined;
     }
 
@@ -307,7 +378,37 @@ const Page = () => {
     return () => {
       active = false;
     };
-  }, [activeTab, fareLoaded, loadFare, router.isReady, showFareTab]);
+  }, [activeTab, fareLoaded, loadFare, router.isReady, showRateTabs]);
+
+  useEffect(() => {
+    if (!router.isReady || !showRateTabs || activeTab !== TAB_WAITING) {
+      return undefined;
+    }
+
+    let active = true;
+
+    const boot = async () => {
+      try {
+        if (!waitingLoaded) {
+          setWaitingBootLoading(true);
+        }
+        await loadWaiting({ silent: waitingLoaded });
+      } catch (error) {
+        if (active) {
+          toast.error(error.message || "Failed to load stop waiting rate");
+        }
+      } finally {
+        if (active) {
+          setWaitingBootLoading(false);
+        }
+      }
+    };
+
+    boot();
+    return () => {
+      active = false;
+    };
+  }, [activeTab, loadWaiting, router.isReady, showRateTabs, waitingLoaded]);
 
   const handleOpenCreate = () => {
     const current =
@@ -333,11 +434,11 @@ const Page = () => {
 
     try {
       setSaving(true);
-      const response = await createCommissionLog({
+      await createCommissionLog({
         serviceCategory: activeCategory,
         commissionPercent: Number(percent),
       });
-      toast.success(response?.message || "Platform commission log created");
+      toast.success("Platform commission updated successfully");
       setCreateModalOpen(false);
 
       if (page !== 1) {
@@ -372,11 +473,11 @@ const Page = () => {
 
     try {
       setFareSaving(true);
-      const response = await publishTransportationFare({
+      await publishTransportationFare({
         perMileRate: Number(perMileRate),
         minimumFare: Number(minimumFare),
       });
-      toast.success(response?.message || "Transportation fare published");
+      toast.success("Transportation fare published successfully");
       setFareModalOpen(false);
 
       if (farePage !== 1) {
@@ -391,27 +492,65 @@ const Page = () => {
     }
   };
 
+  const handleOpenWaitingCreate = () => {
+    setWaitingRatePerMinute(
+      String(waitingActive?.waitingRatePerMinute ?? DEFAULT_STOP_WAITING_RATE.waitingRatePerMinute)
+    );
+    setWaitingModalOpen(true);
+  };
+
+  const handleCloseWaitingCreate = () => {
+    if (waitingSaving) return;
+    setWaitingModalOpen(false);
+  };
+
+  const handleSaveWaiting = async () => {
+    const validationError = validateWaitingRateDollars(waitingRatePerMinute);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
+    try {
+      setWaitingSaving(true);
+      await publishStopWaitingRate({
+        waitingRatePerMinute: Number(waitingRatePerMinute),
+      });
+      toast.success("Stop waiting rate published successfully");
+      setWaitingModalOpen(false);
+
+      if (waitingPage !== 1) {
+        setWaitingPage(1);
+      } else {
+        await loadWaiting({ silent: true });
+      }
+    } catch (error) {
+      toast.error(error.message || "Failed to publish stop waiting rate");
+    } finally {
+      setWaitingSaving(false);
+    }
+  };
+
   const validationError = percent === "" ? null : validateCommissionPercent(percent, limits);
   const saveDisabled = saving || Boolean(validationError) || percent === "";
   const fareValidationError = validateFareDollars(perMileRate, minimumFare);
   const fareSaveDisabled =
     fareSaving || Boolean(fareValidationError) || perMileRate === "" || minimumFare === "";
+  const waitingValidationError = validateWaitingRateDollars(waitingRatePerMinute);
+  const waitingSaveDisabled =
+    waitingSaving || Boolean(waitingValidationError) || waitingRatePerMinute === "";
   const categoryLabel = formatServiceCategoryLabel(activeCategory);
   const currentActiveRate =
     activeRate?.commissionPercent ??
     logs[0]?.currentSetRate ??
     limits.defaultPercent ??
     DEFAULT_COMMISSION_LIMITS.defaultPercent;
-  const fareFormula = fareActive?.formula || FARE_FORMULA_LABEL;
+  const pageHeading = pageHeadingForTab(activeTab);
 
   return (
     <>
       <Head>
-        <title>
-          {activeTab === TAB_FARE
-            ? `${categoryLabel} Transportation Fare | Highland Care`
-            : `${categoryLabel} Platform Commission | Highland Care`}
-        </title>
+        <title>{pageHeading} | Highland Care</title>
       </Head>
 
       <Box component="main" sx={pageMainSx}>
@@ -425,7 +564,7 @@ const Page = () => {
             >
               <Stack spacing={1}>
                 <Typography sx={pageTitleSx} variant="h4">
-                  {categoryLabel}
+                  {pageHeading}
                 </Typography>
               </Stack>
               {activeTab === TAB_COMMISSION && !bootLoading ? (
@@ -438,9 +577,14 @@ const Page = () => {
                   Set transportation fare
                 </Button>
               ) : null}
+              {activeTab === TAB_WAITING && !waitingBootLoading ? (
+                <Button color="primary" onClick={handleOpenWaitingCreate} variant="contained">
+                  Set stop waiting rate
+                </Button>
+              ) : null}
             </Stack>
 
-            {showFareTab ? (
+            {showRateTabs ? (
               <Tabs
                 onChange={handleTabChange}
                 sx={{
@@ -457,6 +601,7 @@ const Page = () => {
               >
                 <Tab label="Commission" value={TAB_COMMISSION} />
                 <Tab label="Fare" value={TAB_FARE} />
+                <Tab label="Stop Waiting" value={TAB_WAITING} />
               </Tabs>
             ) : null}
 
@@ -512,14 +657,11 @@ const Page = () => {
               ) : (
                 <>
                   <Stack spacing={0.5}>
-                    <Typography color="text.secondary" variant="body2">
-                      {fareFormula}
-                    </Typography>
                     <Typography
                       sx={{ color: "success.main", fontWeight: 600 }}
                       variant="body2"
                     >
-                      Current {formatFareDollars(fareActive?.perMileRate)} / mi · Minimum{" "}
+                      Current {formatFareDollars(fareActive?.perMileRate)} / mi · Minimum Fare{" "}
                       {formatFareDollars(fareActive?.minimumFare)}
                     </Typography>
                   </Stack>
@@ -547,6 +689,49 @@ const Page = () => {
                       page={farePage}
                       title="Transportation fare change logs"
                       total={fareLogsTotal}
+                    />
+                  </Box>
+                </>
+              )
+            ) : null}
+
+            {activeTab === TAB_WAITING ? (
+              waitingBootLoading ? (
+                <Loader page />
+              ) : (
+                <>
+                  <Stack spacing={0.5}>
+                    <Typography
+                      sx={{ color: "success.main", fontWeight: 600 }}
+                      variant="body2"
+                    >
+                      Current {formatWaitingRateDollars(waitingActive?.waitingRatePerMinute)} / min
+                    </Typography>
+                  </Stack>
+
+                  <Box sx={{ position: "relative" }}>
+                    {waitingTableLoading ? (
+                      <Box
+                        sx={{
+                          alignItems: "center",
+                          bgcolor: "rgba(255, 255, 255, 0.72)",
+                          display: "flex",
+                          inset: 0,
+                          justifyContent: "center",
+                          position: "absolute",
+                          zIndex: 2,
+                        }}
+                      >
+                        <Loader size="md" />
+                      </Box>
+                    ) : null}
+                    <StopWaitingRateLogsTable
+                      items={waitingLogs}
+                      loading={waitingTableLoading}
+                      onPageChange={setWaitingPage}
+                      page={waitingPage}
+                      title="Stop waiting rate change logs"
+                      total={waitingLogsTotal}
                     />
                   </Box>
                 </>
@@ -613,7 +798,7 @@ const Page = () => {
             Set transportation fare
           </Typography>
           <Typography color="text.secondary" sx={{ mb: 2.5 }} variant="body2">
-            Publishes a new fare version. {fareFormula}
+            Publishes a new fare version.
           </Typography>
 
           <Stack spacing={2.25}>
@@ -677,6 +862,64 @@ const Page = () => {
                 variant="contained"
               >
                 {fareSaving ? <Loader color="#fff" inline size="xs" /> : "Set Fare"}
+              </Button>
+            </Stack>
+          </Stack>
+        </Box>
+      </Modal>
+
+      <Modal open={waitingModalOpen} onClose={handleCloseWaitingCreate}>
+        <Box sx={responsiveModalSx}>
+          <Typography sx={{ mb: 0.5 }} variant="h6">
+            Set stop waiting rate
+          </Typography>
+          <Typography color="text.secondary" sx={{ mb: 2.5 }} variant="body2">
+            Publishes a new stop waiting rate for intermediate stops.
+          </Typography>
+
+          <Stack spacing={2.25}>
+            <TextField
+              disabled
+              label="Current rate"
+              value={`${formatWaitingRateDollars(waitingActive?.waitingRatePerMinute)} / min`}
+            />
+
+            <TextField
+              InputProps={{
+                startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                endAdornment: <InputAdornment position="end">/ min</InputAdornment>,
+              }}
+              error={Boolean(waitingValidationError && waitingRatePerMinute !== "")}
+              fullWidth
+              helperText={
+                waitingValidationError && waitingRatePerMinute !== ""
+                  ? waitingValidationError
+                  : undefined
+              }
+              inputProps={{ min: 0.01, step: 0.01 }}
+              label="New rate"
+              onChange={(event) => setWaitingRatePerMinute(event.target.value)}
+              type="number"
+              value={waitingRatePerMinute}
+            />
+
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ pt: 0.5 }}>
+              <Button
+                color="inherit"
+                disabled={waitingSaving}
+                fullWidth
+                onClick={handleCloseWaitingCreate}
+                variant="outlined"
+              >
+                Cancel
+              </Button>
+              <Button
+                disabled={waitingSaveDisabled}
+                fullWidth
+                onClick={handleSaveWaiting}
+                variant="contained"
+              >
+                {waitingSaving ? <Loader color="#fff" inline size="xs" /> : "Set Rate"}
               </Button>
             </Stack>
           </Stack>

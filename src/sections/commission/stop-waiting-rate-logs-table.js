@@ -9,9 +9,8 @@ import {
   ROWS_PER_PAGE,
 } from "../../components/data-table";
 import { formatDateTime } from "../../utils/dateUtils";
-import { formatFareDollars } from "../../utils/transportationFareUtils";
+import { formatWaitingRateDollars } from "../../utils/stopWaitingRateUtils";
 
-/** Capitalize each word for person names. */
 const toPersonNameCase = (value) => {
   const text = String(value || "").trim();
   if (!text) {
@@ -24,7 +23,6 @@ const toPersonNameCase = (value) => {
     .join(" ");
 };
 
-/** First letter capital, remaining letters lowercase. */
 const toSentenceCase = (value) => {
   const text = String(value || "").trim();
   if (!text) {
@@ -33,13 +31,13 @@ const toSentenceCase = (value) => {
   return text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
 };
 
-export function TransportationFareLogsTable({
+export function StopWaitingRateLogsTable({
   actions,
   items = [],
   loading = false,
   onPageChange = () => {},
   page = 1,
-  title = "Transportation fare change logs",
+  title = "Stop waiting rate change logs",
   total = 0,
 }) {
   const [search, setSearch] = useState("");
@@ -49,10 +47,8 @@ export function TransportationFareLogsTable({
       [
         item.updatedByName,
         item.updatedByEmail,
-        String(item.previousPerMileRate ?? ""),
-        String(item.currentPerMileRate ?? ""),
-        String(item.previousMinimumFare ?? ""),
-        String(item.currentMinimumFare ?? ""),
+        String(item.previousWaitingRatePerMinute ?? ""),
+        String(item.currentWaitingRatePerMinute ?? ""),
         String(item.version ?? ""),
       ]
         .filter(Boolean)
@@ -88,10 +84,8 @@ export function TransportationFareLogsTable({
     >
       <TableHead>
         <TableRow>
-          <TableCell>Previous $/mi</TableCell>
-          <TableCell>Updated $/mi</TableCell>
-          <TableCell>Previous minimum Fare</TableCell>
-          <TableCell>Updated minimum Fare</TableCell>
+          <TableCell>Previous $/min</TableCell>
+          <TableCell>Updated $/min</TableCell>
           <TableCell>User</TableCell>
           <TableCell>Date / time</TableCell>
         </TableRow>
@@ -99,9 +93,9 @@ export function TransportationFareLogsTable({
       <TableBody>
         {loading && filteredItems.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={6}>
+            <TableCell colSpan={4}>
               <Typography color="text.secondary" variant="body2">
-                Loading transportation fare logs…
+                Loading stop waiting rate logs…
               </Typography>
             </TableCell>
           </TableRow>
@@ -111,10 +105,8 @@ export function TransportationFareLogsTable({
               hover
               key={item._id || `${item.version}-${item.sequence}-${item.updatedAt}-${index}`}
             >
-              <TableCell>{formatFareDollars(item.previousPerMileRate)}</TableCell>
-              <TableCell>{formatFareDollars(item.currentPerMileRate)}</TableCell>
-              <TableCell>{formatFareDollars(item.previousMinimumFare)}</TableCell>
-              <TableCell>{formatFareDollars(item.currentMinimumFare)}</TableCell>
+              <TableCell>{formatWaitingRateDollars(item.previousWaitingRatePerMinute)}</TableCell>
+              <TableCell>{formatWaitingRateDollars(item.currentWaitingRatePerMinute)}</TableCell>
               <TableCell>
                 <Typography variant="body2">
                   {item.updatedByName ? toPersonNameCase(item.updatedByName) : "—"}
@@ -138,7 +130,7 @@ export function TransportationFareLogsTable({
   );
 }
 
-TransportationFareLogsTable.propTypes = {
+StopWaitingRateLogsTable.propTypes = {
   actions: PropTypes.node,
   items: PropTypes.array,
   loading: PropTypes.bool,

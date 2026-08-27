@@ -71,7 +71,7 @@ export const items = [
     ),
   },
   {
-    title: "Platform Commission",
+    title: "Commission & Fare",
     path: "/commission",
     icon: (
       <SvgIcon fontSize="small">
