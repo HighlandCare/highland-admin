@@ -15,14 +15,19 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 import FunnelIcon from "@heroicons/react/24/solid/FunnelIcon";
 import MapPinIcon from "@heroicons/react/24/solid/MapPinIcon";
 import ArrowsPointingOutIcon from "@heroicons/react/24/solid/ArrowsPointingOutIcon";
 import ArrowsPointingInIcon from "@heroicons/react/24/solid/ArrowsPointingInIcon";
 import { toast } from "react-toastify";
 import LiveOpsLocationSearch from "./live-ops-location-search";
-import { buildLegendIconDataUrl } from "../../utils/liveOpsMarkerIcons";
+import { liveOpsGlass } from "../../theme/live-ops-page-theme";
+import { useLiveOpsUi } from "../../contexts/live-ops-ui-context";
+import SunIcon from "@heroicons/react/24/solid/SunIcon";
+import MoonIcon from "@heroicons/react/24/solid/MoonIcon";
 import { enrichLiveOpsItem, resolveLiveOpsDetailPath } from "../../utils/liveOpsNavigation";
+import { getDemandHotspotStaticNotifyText } from "../../utils/liveOpsHotspots";
 
 const LiveOpsGeoFilter = dynamic(() => import("./live-ops-geo-filter"), {
   ssr: false,
@@ -39,19 +44,18 @@ const LEGEND_ITEMS = [
   { key: "ride_request", label: "Pending", color: "#3b82f6" },
   { key: "online_driver", label: "Online", color: "#f97316" },
   { key: "emergency", label: "Urgent", color: "#ef4444" },
+  { key: "demand_hotspot", label: "Demand", color: "#ef4444", isHotspot: true },
 ];
-
-const glass = {
-  bgcolor: "rgba(255, 255, 255, 0.94)",
-  backdropFilter: "blur(12px)",
-  border: "1px solid",
-  borderColor: "divider",
-  borderRadius: "14px",
-  boxShadow: "0 8px 28px rgba(15, 23, 42, 0.08)",
-};
 
 export default function LiveOpsMapOverlays({
   legend,
+  hotspots = [],
+  activeHotspotCount = 0,
+  activeHotspot = null,
+  showHotspots = true,
+  onShowHotspotsChange,
+  selectedHotspot,
+  onCloseHotspot,
   locationSearch,
   onLocationSearchChange,
   onPlaceSelect,
@@ -76,11 +80,19 @@ export default function LiveOpsMapOverlays({
   onGeoFilterChange,
 }) {
   const router = useRouter();
+  const theme = useTheme();
+  const glass = liveOpsGlass(theme);
+  const { mapTheme, toggleMapTheme } = useLiveOpsUi();
   const [filterAnchor, setFilterAnchor] = useState(null);
   const hasGeoFilter = Boolean(geoFilter?.state || geoFilter?.city);
 
   const enrichedMarker = selectedMarker ? enrichLiveOpsItem(selectedMarker, snapshot) : null;
   const detailPath = enrichedMarker ? resolveLiveOpsDetailPath(enrichedMarker) : null;
+  const displayHotspot =
+    showHotspots && activeHotspotCount > 0 ? activeHotspot || selectedHotspot : null;
+  const demandStaticNotify = displayHotspot
+    ? getDemandHotspotStaticNotifyText(displayHotspot)
+    : null;
 
   const handleViewDetails = () => {
     if (!detailPath) {
@@ -135,7 +147,48 @@ export default function LiveOpsMapOverlays({
           Live Activity
         </Typography>
         <Typography sx={{ color: "text.secondary", fontSize: 12 }}>Real-time</Typography>
+        {activeHotspotCount > 0 ? (
+          <Typography
+            sx={{
+              color: "#ef4444",
+              fontSize: 11,
+              fontWeight: 700,
+              ml: 0.5,
+              px: 1,
+              py: 0.25,
+              borderRadius: 999,
+              bgcolor: "rgba(239,68,68,0.12)",
+            }}
+          >
+            High demand area
+          </Typography>
+        ) : null}
       </Box>
+
+      {demandStaticNotify ? (
+        <Box
+          sx={{
+            position: "absolute",
+            top: { xs: 52, md: 56 },
+            left: 16,
+            right: { xs: 16, md: "auto" },
+            zIndex: 1000,
+            ...glass,
+            borderColor: "#f97316",
+            borderWidth: 1.5,
+            px: 1.5,
+            py: 1,
+            maxWidth: 380,
+          }}
+        >
+          <Typography sx={{ color: "#ef4444", fontSize: 13, fontWeight: 700 }}>
+            {demandStaticNotify.pendingLabel}
+          </Typography>
+          <Typography sx={{ color: "#f97316", fontSize: 12, fontWeight: 700, mt: 0.5 }}>
+            {demandStaticNotify.notifyLabel}
+          </Typography>
+        </Box>
+      ) : null}
 
       <Stack
         direction="row"
@@ -167,7 +220,7 @@ export default function LiveOpsMapOverlays({
             height: 48,
             color: "primary.main",
             flexShrink: 0,
-            bgcolor: hasGeoFilter ? "primary.alpha12" : "rgba(255, 255, 255, 0.94)",
+            bgcolor: hasGeoFilter ? "primary.alpha12" : glass.bgcolor,
             borderColor: hasGeoFilter ? "primary.main" : "divider",
             "&:hover": { bgcolor: "primary.alpha8" },
           }}
@@ -254,6 +307,23 @@ export default function LiveOpsMapOverlays({
             </Typography>
           }
         />
+
+        <FormControlLabel
+          sx={{ mt: 0.5 }}
+          control={
+            <Checkbox
+              size="small"
+              checked={showHotspots}
+              onChange={(e) => onShowHotspotsChange?.(e.target.checked)}
+              sx={{ color: "neutral.400", "&.Mui-checked": { color: "#ef4444" } }}
+            />
+          }
+          label={
+            <Typography sx={{ color: "text.primary", fontSize: 13 }}>
+              Demand hotspots
+            </Typography>
+          }
+        />
       </Popover>
 
       {selectedMarker ? (
@@ -305,9 +375,19 @@ export default function LiveOpsMapOverlays({
             </Button>
             <Button
               size="small"
-              variant="contained"
-              color="primary"
-              sx={{ flex: 1, minWidth: 0, px: 1.5, whiteSpace: "nowrap" }}
+              variant="outlined"
+              sx={{
+                flex: 1,
+                minWidth: 0,
+                px: 1.5,
+                whiteSpace: "nowrap",
+                color: markerBorder,
+                borderColor: markerBorder,
+                "&:hover": {
+                  borderColor: markerBorder,
+                  bgcolor: `${markerBorder}14`,
+                },
+              }}
               disabled={!detailPath}
               onClick={() => {
                 if (onViewDetails) {
@@ -320,6 +400,35 @@ export default function LiveOpsMapOverlays({
               View Details
             </Button>
           </Stack>
+        </Box>
+      ) : null}
+
+      {displayHotspot ? (
+        <Box
+          sx={{
+            position: "absolute",
+            top: { xs: 108, sm: 120 },
+            left: { xs: 8, sm: 16 },
+            right: { xs: 8, sm: "auto" },
+            zIndex: 1000,
+            ...glass,
+            borderColor: "#ef4444",
+            borderWidth: 2,
+            p: 2,
+            minWidth: { xs: 0, sm: 280 },
+            maxWidth: { xs: "none", sm: 340 },
+          }}
+        >
+          <Typography sx={{ color: "#ef4444", fontSize: 12, fontWeight: 700, mb: 0.5 }}>
+            High demand zone
+          </Typography>
+          <Typography sx={{ color: "text.primary", fontWeight: 700, fontSize: 16 }}>
+            {demandStaticNotify?.pendingLabel || displayHotspot.label}
+          </Typography>
+          <Typography sx={{ color: "#f97316", fontSize: 13, fontWeight: 700, mt: 1 }}>
+            {demandStaticNotify?.notifyLabel ||
+              "High demand notification sending to (10) drivers"}
+          </Typography>
         </Box>
       ) : null}
 
@@ -350,14 +459,16 @@ export default function LiveOpsMapOverlays({
             sx={{ flexShrink: 0 }}
           >
             <Box
-              alt=""
               aria-hidden
-              className="live-ops-legend-icon"
-              component="img"
-              src={buildLegendIconDataUrl(item.key, 16)}
+              className="live-ops-legend-dot"
+              sx={{
+                bgcolor: item.color,
+                boxShadow: `0 0 0 4px ${item.color}33, 0 0 10px ${item.color}`,
+              }}
             />
             <Typography sx={{ color: "text.secondary", fontSize: 12 }}>
-              {item.label}: {legend?.[item.key] ?? 0}
+              {item.label}:{" "}
+              {item.isHotspot ? activeHotspotCount : (legend?.[item.key] ?? 0)}
             </Typography>
           </Stack>
         ))}
@@ -372,9 +483,10 @@ export default function LiveOpsMapOverlays({
           zIndex: 1000,
         }}
       >
-        <Tooltip title="Reset map to United States view">
+        {/* <Tooltip title={mapTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
           <IconButton
-            onClick={onLocateRegion}
+            onClick={toggleMapTheme}
+            aria-label={mapTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             sx={{
               ...glass,
               width: 44,
@@ -382,9 +494,10 @@ export default function LiveOpsMapOverlays({
               color: "primary.main",
             }}
           >
-            <MapPinIcon width={22} />
+            {mapTheme === "dark" ? <SunIcon width={22} /> : <MoonIcon width={22} />}
           </IconButton>
-        </Tooltip>
+        </Tooltip> */}
+
         <Tooltip title={isMapFullscreen ? "Exit full screen" : "Full screen map"}>
           <IconButton
             onClick={onToggleFullscreen}
@@ -409,6 +522,12 @@ export default function LiveOpsMapOverlays({
 
 LiveOpsMapOverlays.propTypes = {
   legend: PropTypes.object,
+  hotspots: PropTypes.array,
+  activeHotspotCount: PropTypes.number,
+  showHotspots: PropTypes.bool,
+  onShowHotspotsChange: PropTypes.func,
+  selectedHotspot: PropTypes.object,
+  onCloseHotspot: PropTypes.func,
   locationSearch: PropTypes.string,
   onLocationSearchChange: PropTypes.func,
   onPlaceSelect: PropTypes.func,

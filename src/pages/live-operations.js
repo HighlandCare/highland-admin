@@ -5,10 +5,14 @@ import {
   Box,
   Button,
   Drawer,
+  IconButton,
   Stack,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import UsersIcon from "@heroicons/react/24/solid/UsersIcon";
+import SunIcon from "@heroicons/react/24/solid/SunIcon";
+import MoonIcon from "@heroicons/react/24/solid/MoonIcon";
 import { useRouter } from "next/router";
 import { Layout as DashboardLayout } from "../layouts/dashboard/layout";
 import BaseLayout from "../layouts/BaseLayout";
@@ -25,7 +29,7 @@ import {
 import { OverviewRideAnalytics } from "../sections/overview/overview-ride-analytics";
 import { OverviewRideStatus } from "../sections/overview/overview-ride-status";
 import { loadDashboardAnalytics } from "../utils/dashboardUtils";
-import { useLiveOpsUi } from "../contexts/live-ops-ui-context";
+import { LiveOpsThemeProvider, useLiveOpsUi } from "../contexts/live-ops-ui-context";
 import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM, parseCoordinateQuery, sanitizeLiveOpsMarkers } from "../utils/googleMaps";
 import {
   enrichLiveOpsItem,
@@ -35,7 +39,7 @@ import {
 import { storeDisputeDetail } from "../utils/disputeUtils";
 import { storeOrderDetailContext, storeRideDetail } from "../utils/rideUtils";
 import { filterMarkersNearLocation } from "../hooks/useSmoothLiveOpsMarkers";
-import { DEFAULT_GEO_FILTER, filterMarkersByGeo, parseGeoCoords } from "../utils/liveOpsGeo";
+import { DEFAULT_GEO_FILTER, filterHotspotsByGeo, filterMarkersByGeo, parseGeoCoords } from "../utils/liveOpsGeo";
 import { toast } from "react-toastify";
 
 const LiveOpsMap = dynamic(() => import("../components/live-ops/live-ops-map"), {
@@ -56,8 +60,6 @@ const LiveOpsMap = dynamic(() => import("../components/live-ops/live-ops-map"), 
   ),
 });
 
-const SIDE_NAV_WIDTH = 280;
-const TOP_NAV_HEIGHT = 64;
 const STOP_TOUR_DELAY_MS = 2200;
 
 const MARKER_TYPE_FILTERS = [
@@ -128,16 +130,18 @@ function resolveBookingStops(item, markers = []) {
 
 const Page = () => {
   const router = useRouter();
-  const { isMapFullscreen, setMapFullscreen } = useLiveOpsUi();
+  const { isMapFullscreen, setMapFullscreen, mapTheme, toggleMapTheme } = useLiveOpsUi();
   const [isLogin, setIsLogin] = useState(null);
   const [viewMode, setViewMode] = useState("map");
   const [loading, setLoading] = useState(true);
   const [snapshot, setSnapshot] = useState(null);
   const [feedFilter, setFeedFilter] = useState("all");
-  const [region, setRegion] = useState("all");
+  const [region, setRegion] = useState("texas");
   const [selectedMarkerTypes, setSelectedMarkerTypes] = useState(DEFAULT_MARKER_TYPES);
   const [onlineOnly, setOnlineOnly] = useState(false);
   const [selectedMarker, setSelectedMarker] = useState(null);
+  const [selectedHotspot, setSelectedHotspot] = useState(null);
+  const [showHotspots, setShowHotspots] = useState(true);
   const [locationSearch, setLocationSearch] = useState("");
   const [geoFilter, setGeoFilter] = useState(DEFAULT_GEO_FILTER);
   const [mapViewCenter, setMapViewCenter] = useState(DEFAULT_MAP_CENTER);
@@ -155,6 +159,14 @@ const Page = () => {
   const refreshTimerRef = useRef(null);
   const socketApiRef = useRef(null);
   const didInitialFitRef = useRef(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const clearLocationTour = useCallback(() => {
     if (tourTimerRef.current) {
@@ -174,6 +186,7 @@ const Page = () => {
       });
 
       if (response?.status && response?.data) {
+        if (!isMountedRef.current) return;
         setSnapshot((prev) =>
           stripFoodFromSnapshot(mergeLiveOpsSnapshot(prev, stripFoodFromSnapshot(response.data)))
         );
@@ -214,13 +227,24 @@ const Page = () => {
     const connection = connectLiveOpsSocket({
       region,
       onEvent: (eventName, payload) => {
+        if (!isMountedRef.current) return;
+
         if (eventName === "live-ops:refresh") {
           scheduleSoftRefresh();
           return;
         }
 
-        if (isFoodLiveOpsItem(payload?.marker || payload)) {
+        if (isFoodLiveOpsItem(payload?.marker || payload?.item || payload)) {
           return;
+        }
+
+        if (eventName === "live-ops:hotspots.patch" && Array.isArray(payload?.hotspots)) {
+          const top = [...payload.hotspots].sort(
+            (a, b) => (Number(b.pendingCount) || 0) - (Number(a.pendingCount) || 0)
+          )[0];
+          if (top?.id) {
+            setSelectedHotspot((current) => current ?? top);
+          }
         }
 
         setSnapshot((prev) => {
@@ -256,7 +280,21 @@ const Page = () => {
     socketApiRef.current = connection;
     connection.syncNow?.();
 
+    const handleRouteChangeStart = () => {
+      isMountedRef.current = false;
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+      connection?.disconnect?.();
+      socketApiRef.current = null;
+      setMapFullscreen(false);
+    };
+
+    router.events.on("routeChangeStart", handleRouteChangeStart);
+
     return () => {
+      router.events.off("routeChangeStart", handleRouteChangeStart);
       if (refreshTimerRef.current) {
         clearTimeout(refreshTimerRef.current);
         refreshTimerRef.current = null;
@@ -264,7 +302,7 @@ const Page = () => {
       socketApiRef.current = null;
       connection?.disconnect?.();
     };
-  }, [isLogin, viewMode, loadSnapshot]);
+  }, [isLogin, viewMode, loadSnapshot, router.events, setMapFullscreen]);
 
   useEffect(() => {
     socketApiRef.current?.setRegion?.(region);
@@ -323,6 +361,39 @@ const Page = () => {
     return filterMarkersByGeo(typeFiltered, geoFilter);
   }, [snapshot?.markers, selectedMarkerTypes, onlineOnly, geoFilter]);
 
+  const filteredHotspots = useMemo(() => {
+    const hotspots = (snapshot?.hotspots ?? []).filter((hotspot) => hotspot?.active !== false);
+    return filterHotspotsByGeo(hotspots, geoFilter);
+  }, [snapshot?.hotspots, geoFilter]);
+
+  const activeHotspotCount = filteredHotspots.length;
+
+  const primaryActiveHotspot = useMemo(() => {
+    if (!filteredHotspots.length) return null;
+    return [...filteredHotspots].sort(
+      (a, b) => (Number(b.pendingCount) || 0) - (Number(a.pendingCount) || 0)
+    )[0];
+  }, [filteredHotspots]);
+
+  const lastAutoPanHotspotIdRef = useRef(null);
+
+  useEffect(() => {
+    if (!primaryActiveHotspot?.id) {
+      lastAutoPanHotspotIdRef.current = null;
+      return;
+    }
+
+    if (lastAutoPanHotspotIdRef.current === primaryActiveHotspot.id) return;
+
+    const lat = Number(primaryActiveHotspot.lat);
+    const lng = Number(primaryActiveHotspot.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+    lastAutoPanHotspotIdRef.current = primaryActiveHotspot.id;
+    setMapViewCenter({ lat, lng });
+    setMapZoom((current) => (current && current >= 12 ? current : 13));
+  }, [primaryActiveHotspot]);
+
   const filteredLegend = useMemo(() => {
     const counts = {
       customer_signup: 0,
@@ -337,8 +408,14 @@ const Page = () => {
         counts[legendKey] += 1;
       }
     });
+    if (primaryActiveHotspot?.pendingCount) {
+      counts.ride_request = Math.max(
+        counts.ride_request,
+        Number(primaryActiveHotspot.pendingCount) || 0
+      );
+    }
     return counts;
-  }, [filteredMarkers]);
+  }, [filteredMarkers, primaryActiveHotspot]);
 
   const rideOnlyFeed = useMemo(
     () => (snapshot?.feed ?? []).filter((item) => !isFoodLiveOpsItem(item)),
@@ -459,7 +536,11 @@ const Page = () => {
   }, []);
 
   useEffect(() => {
-    if (didInitialFitRef.current || viewMode !== "map" || geoFilter.state || geoFilter.city) {
+    if (
+      didInitialFitRef.current ||
+      viewMode !== "map" ||
+      (!geoFilter.state && !geoFilter.city)
+    ) {
       return;
     }
 
@@ -601,23 +682,17 @@ const Page = () => {
     [snapshot?.markers, startLocationTour]
   );
 
-  const handleMarkerSelect = useCallback(
-    (marker) => {
-      const stops = resolveBookingStops(marker, snapshot?.markers ?? []);
-      if (stops.length > 1) {
-        startLocationTour(stops, marker);
-        return;
-      }
-      clearLocationTour();
-      setSelectedMarker(marker);
-      if (marker?.lat != null && marker?.lng != null) {
-        setMapViewCenter({ lat: marker.lat, lng: marker.lng });
-        setMapZoom(15);
-        setFitToMarkers(false);
-      }
-    },
-    [clearLocationTour, snapshot?.markers, startLocationTour]
-  );
+  const handleMarkerSelect = useCallback((marker) => {
+    clearLocationTour();
+    setSelectedHotspot(null);
+    setSelectedMarker(marker);
+  }, [clearLocationTour]);
+
+  const handleHotspotSelect = useCallback((hotspot) => {
+    clearLocationTour();
+    setSelectedMarker(null);
+    setSelectedHotspot(hotspot);
+  }, [clearLocationTour]);
 
   const handleViewDetails = useCallback(
     (marker) => {
@@ -701,29 +776,34 @@ const Page = () => {
   }
 
   return (
-    <>
+    <LiveOpsThemeProvider>
       <Head>
         <title>Live Operations | Highland Care Admin</title>
       </Head>
 
       <Box
+        data-live-ops-theme={mapTheme}
         sx={{
-          position: "fixed",
-          top: {
-            xs: isMapFullscreen ? 0 : TOP_NAV_HEIGHT,
-            lg: 0,
-          },
-          left: {
-            xs: 0,
-            lg: isMapFullscreen ? 0 : SIDE_NAV_WIDTH,
-          },
-          right: 0,
-          bottom: 0,
           display: "flex",
           flexDirection: "column",
+          flex: 1,
+          minHeight: 0,
+          width: "100%",
+          height: "100%",
+          maxHeight: "100%",
+          overflow: "hidden",
           bgcolor: "background.default",
           color: "text.primary",
-          zIndex: isMapFullscreen ? 1400 : 1,
+          ...(isMapFullscreen
+            ? {
+                position: "fixed",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 1400,
+              }
+            : {}),
         }}
       >
         {!isMapFullscreen ? (
@@ -761,6 +841,32 @@ const Page = () => {
                   {" MAP"}
                 </Box>
               </Typography>
+              <Stack direction="row" alignItems="center" spacing={0.75} sx={{ display: { xs: "none", sm: "flex" } }}>
+                <Box
+                  sx={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    bgcolor: "#22c55e",
+                    boxShadow: "0 0 10px rgba(34,197,94,.7)",
+                    animation: "pulse 2s infinite",
+                    "@keyframes pulse": {
+                      "0%, 100%": { opacity: 1 },
+                      "50%": { opacity: 0.35 },
+                    },
+                  }}
+                />
+                <Typography
+                  sx={{
+                    color: "#22c55e",
+                    fontSize: 11,
+                    fontWeight: 800,
+                    letterSpacing: "0.12em",
+                  }}
+                >
+                  LIVE
+                </Typography>
+              </Stack>
             </Stack>
 
             <Stack
@@ -778,6 +884,22 @@ const Page = () => {
               >
                 {clock}
               </Typography>
+              <Tooltip title={mapTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
+                <IconButton
+                  onClick={toggleMapTheme}
+                  aria-label={mapTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                  sx={{
+                    width: 40,
+                    height: 40,
+                    color: "text.primary",
+                    border: "1px solid",
+                    borderColor: "divider",
+                    borderRadius: "10px",
+                  }}
+                >
+                  {mapTheme === "dark" ? <SunIcon width={18} /> : <MoonIcon width={18} />}
+                </IconButton>
+              </Tooltip>
               <Button
                 onClick={() => setIsSignupsOpen(true)}
                 aria-label="Open live signups"
@@ -808,8 +930,8 @@ const Page = () => {
 
         {viewMode === "map" ? (
           <>
-            <Box sx={{ flex: 1, display: "flex", minHeight: 0 }}>
-              <Box sx={{ flex: 1, position: "relative", minWidth: 0 }}>
+            <Box sx={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}>
+              <Box sx={{ flex: 1, position: "relative", minWidth: 0, minHeight: 0, height: "100%" }}>
                 {loading && !snapshot ? (
                   <Loader minHeight="100%" />
                 ) : (
@@ -818,16 +940,27 @@ const Page = () => {
                       center={mapCenter}
                       zoom={mapZoom ?? snapshot?.region?.zoom ?? DEFAULT_MAP_ZOOM}
                       markers={filteredMarkers}
+                      hotspots={filteredHotspots}
+                      showHotspots={showHotspots}
                       selectedMarker={selectedMarker}
+                      selectedHotspot={selectedHotspot}
                       userLocation={userLocation}
                       fitToMarkers={fitToMarkers}
                       mapFitKey={mapFitKey}
                       mapZoom={mapZoom}
                       onFitComplete={handleMapFitComplete}
                       onMarkerSelect={handleMarkerSelect}
+                      onHotspotSelect={handleHotspotSelect}
                     />
                     <LiveOpsMapOverlays
                       legend={filteredLegend}
+                      hotspots={filteredHotspots}
+                      activeHotspotCount={activeHotspotCount}
+                      activeHotspot={primaryActiveHotspot}
+                      showHotspots={showHotspots}
+                      onShowHotspotsChange={setShowHotspots}
+                      selectedHotspot={selectedHotspot}
+                      onCloseHotspot={() => setSelectedHotspot(null)}
                       locationSearch={locationSearch}
                       onLocationSearchChange={setLocationSearch}
                       onPlaceSelect={handlePlaceSelect}
@@ -935,7 +1068,7 @@ const Page = () => {
           </Box>
         )}
       </Box>
-    </>
+    </LiveOpsThemeProvider>
   );
 };
 

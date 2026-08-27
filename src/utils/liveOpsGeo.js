@@ -76,3 +76,17 @@ export function filterMarkersByGeo(markers = [], geoFilter = {}) {
 
   return markers;
 }
+
+export function filterHotspotsByGeo(hotspots = [], geoFilter = {}) {
+  const asMarkers = (hotspots || [])
+    .filter((hotspot) => hotspot?.active !== false)
+    .map((hotspot) => ({
+      id: hotspot.id,
+      lat: hotspot.lat,
+      lng: hotspot.lng,
+      title: hotspot.label,
+    }));
+  const filtered = filterMarkersByGeo(asMarkers, geoFilter);
+  const allowedIds = new Set(filtered.map((item) => item.id));
+  return hotspots.filter((hotspot) => allowedIds.has(hotspot.id));
+}

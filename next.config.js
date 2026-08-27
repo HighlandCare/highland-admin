@@ -28,6 +28,26 @@ module.exports = {
   env: {
     NEXT_PUBLIC_BASE_URL: apiBaseUrl,
   },
+  async rewrites() {
+    const socketTarget = (
+      process.env.NEXT_PUBLIC_SOCKET_URL ||
+      process.env.NEXT_PUBLIC_SOCKET_CONNECTION_URL ||
+      "https://highland.prodservers.com:9180"
+    )
+      .trim()
+      .replace(/\/$/, "");
+
+    if (!socketTarget) {
+      return [];
+    }
+
+    return [
+      {
+        source: "/socket.io/:path*",
+        destination: `${socketTarget}/socket.io/:path*`,
+      },
+    ];
+  },
   exportPathMap: async function (defaultPathMap) {
     return {
       "/users/index": { page: "/users" },

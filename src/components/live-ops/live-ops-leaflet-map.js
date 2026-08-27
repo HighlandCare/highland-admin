@@ -1,60 +1,46 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import PropTypes from "prop-types";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM, sanitizeLiveOpsMarkers } from "../../utils/googleMaps";
 import { buildLeafletMarkerIcon } from "../../utils/liveOpsMarkerIcons";
+import { useLiveOpsUi } from "../../contexts/live-ops-ui-context";
+import { clusterLiveOpsMarkers, markerDisplaySize } from "../../utils/liveOpsClusters";
 import {
-  clusterColor,
-  clusterDisplaySize,
-  clusterLiveOpsMarkers,
-  findZoomToSplit,
-  markerDisplaySize,
-} from "../../utils/liveOpsClusters";
+  getHotspotDisplayRadiusMeters,
+  normalizeHotspotCoords,
+} from "../../utils/liveOpsHotspots";
 
-const DEFAULT_TILE_URL = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+const LIGHT_TILE_URL = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+const DARK_TILE_URL = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
 const TRAFFIC_TILE_URL = "https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png";
 const TILE_ATTRIBUTION = "&copy; OpenStreetMap &copy; CARTO";
-
-function buildLeafletClusterIcon(L, cluster) {
-  const size = clusterDisplaySize(cluster.count);
-  const color = clusterColor(cluster.members);
-  return L.divIcon({
-    className: "live-ops-leaflet-marker",
-    html: `<button type="button" class="live-ops-cluster-marker" style="width:${size}px;height:${size}px;border:3px solid #fff;border-radius:50%;background:${color};color:#fff;font-size:${
-      cluster.count > 99 ? 11 : 13
-    }px;font-weight:800;box-shadow:0 6px 16px rgba(15,23,42,.28)">${cluster.count}</button>`,
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2],
-  });
-}
 
 export default function LiveOpsLeafletMap({
   center,
   zoom,
   mapZoom,
   markers,
+  hotspots = [],
+  showHotspots = true,
   showTraffic,
   userLocation,
   fitToMarkers,
   mapFitKey = 0,
   onFitComplete,
   onMarkerSelect,
+  onHotspotSelect,
 }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const tileLayerRef = useRef(null);
   const markerLayerRef = useRef(null);
+  const hotspotLayerRef = useRef(null);
   const lastFitKeyRef = useRef(null);
   const lastCameraRef = useRef("");
-  const [viewZoom, setViewZoom] = useState(mapZoom ?? zoom ?? DEFAULT_MAP_ZOOM);
-  const [expandedIds, setExpandedIds] = useState([]);
+  const { mapTheme } = useLiveOpsUi();
   const sanitizedMarkers = useMemo(() => sanitizeLiveOpsMarkers(markers), [markers]);
-  const expandedIdSet = useMemo(() => new Set(expandedIds), [expandedIds]);
-  const clusteredItems = useMemo(
-    () => clusterLiveOpsMarkers(sanitizedMarkers, viewZoom, { expandedIds: expandedIdSet }),
-    [expandedIdSet, sanitizedMarkers, viewZoom]
-  );
+  const mapItems = useMemo(() => clusterLiveOpsMarkers(sanitizedMarkers), [sanitizedMarkers]);
   const centerLat = center?.lat ?? DEFAULT_MAP_CENTER.lat;
   const centerLng = center?.lng ?? DEFAULT_MAP_CENTER.lng;
 
@@ -67,19 +53,12 @@ export default function LiveOpsLeafletMap({
     }).setView([DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng], DEFAULT_MAP_ZOOM);
 
     L.control.zoom({ position: "bottomleft" }).addTo(map);
-    tileLayerRef.current = L.tileLayer(DEFAULT_TILE_URL, {
+    tileLayerRef.current = L.tileLayer(mapTheme === "dark" ? DARK_TILE_URL : LIGHT_TILE_URL, {
       attribution: TILE_ATTRIBUTION,
     }).addTo(map);
     markerLayerRef.current = L.layerGroup().addTo(map);
+    hotspotLayerRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
-    map.on("zoomend", () => {
-      const nextZoom = map.getZoom();
-      setViewZoom((current) => {
-        if (current !== nextZoom) setExpandedIds((ids) => (ids.length ? [] : ids));
-        return nextZoom;
-      });
-    });
-    map.on("click", () => setExpandedIds((ids) => (ids.length ? [] : ids)));
 
     const resizeFrame = requestAnimationFrame(() => map.invalidateSize());
 
@@ -89,6 +68,7 @@ export default function LiveOpsLeafletMap({
       mapRef.current = null;
       tileLayerRef.current = null;
       markerLayerRef.current = null;
+      hotspotLayerRef.current = null;
     };
   }, []);
 
@@ -97,10 +77,40 @@ export default function LiveOpsLeafletMap({
     if (!map) return;
 
     tileLayerRef.current?.remove();
-    tileLayerRef.current = L.tileLayer(showTraffic ? TRAFFIC_TILE_URL : DEFAULT_TILE_URL, {
-      attribution: TILE_ATTRIBUTION,
-    }).addTo(map);
-  }, [showTraffic]);
+    tileLayerRef.current = L.tileLayer(
+      showTraffic ? TRAFFIC_TILE_URL : mapTheme === "dark" ? DARK_TILE_URL : LIGHT_TILE_URL,
+      {
+        attribution: TILE_ATTRIBUTION,
+      }
+    ).addTo(map);
+  }, [mapTheme, showTraffic]);
+
+  useEffect(() => {
+    const layer = hotspotLayerRef.current;
+    if (!layer) return;
+
+    layer.clearLayers();
+    if (!showHotspots) return;
+
+    (hotspots || []).forEach((hotspot) => {
+      if (hotspot?.active === false) return;
+      const coords = normalizeHotspotCoords(hotspot);
+      if (!coords) return;
+
+      const displayRadius = getHotspotDisplayRadiusMeters(hotspot.radiusMeters);
+
+      L.circle([coords.lat, coords.lng], {
+        radius: displayRadius,
+        color: "#ef4444",
+        fillColor: "#ef4444",
+        fillOpacity: hotspot.intensity === "high" ? 0.22 : 0.18,
+        weight: hotspot.intensity === "high" ? 3 : 2,
+        className: "live-ops-demand-hotspot-pulse",
+      })
+        .on("click", () => onHotspotSelect?.(hotspot))
+        .addTo(layer);
+    });
+  }, [hotspots, onHotspotSelect, showHotspots]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -109,39 +119,17 @@ export default function LiveOpsLeafletMap({
 
     layer.clearLayers();
 
-    clusteredItems.forEach((item) => {
-      if (item.kind === "cluster") {
-        L.marker([item.lat, item.lng], {
-          icon: buildLeafletClusterIcon(L, item),
-          zIndexOffset: 600 + Math.min(item.count, 40),
-        })
-          .on("click", (event) => {
-            L.DomEvent.stopPropagation(event);
-            const members = item.members || [];
-            if (members.length <= 1) {
-              onMarkerSelect?.(members[0]);
-              return;
-            }
-            const currentZoom = map.getZoom() || viewZoom;
-            const splitZoom = findZoomToSplit(members, currentZoom);
-            if (splitZoom != null) {
-              setExpandedIds([]);
-              map.setView([item.lat, item.lng], splitZoom);
-              return;
-            }
-            setExpandedIds(members.map((marker) => marker.id).filter(Boolean));
-            map.panTo([item.lat, item.lng]);
-          })
-          .addTo(layer);
-        return;
-      }
-
+    mapItems.forEach((item) => {
       const marker = item.marker;
-      const size = markerDisplaySize(marker.type, viewZoom);
-      L.marker([marker.lat, marker.lng], {
+      const size = markerDisplaySize(marker.type);
+      L.marker([item.lat ?? marker.lat, item.lng ?? marker.lng], {
         icon: buildLeafletMarkerIcon(L, marker.type, marker.color, size),
         zIndexOffset:
-          marker.type === "emergency" ? 500 : marker.type === "online_driver" ? 400 : 200,
+          marker.type === "emergency" || marker.type === "dispute"
+            ? 500
+            : marker.type === "online_driver"
+              ? 400
+              : 200,
       })
         .on("click", () => onMarkerSelect?.(marker))
         .addTo(layer);
@@ -153,9 +141,8 @@ export default function LiveOpsLeafletMap({
         zIndexOffset: 999,
       }).addTo(layer);
     }
-  }, [clusteredItems, onMarkerSelect, userLocation, viewZoom]);
+  }, [mapItems, onMarkerSelect, userLocation]);
 
-  // Fit once per intentional request — not on every live marker update.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !fitToMarkers || !sanitizedMarkers.length) return;
@@ -175,8 +162,6 @@ export default function LiveOpsLeafletMap({
     onFitComplete?.();
   }, [fitToMarkers, mapFitKey, onFitComplete, sanitizedMarkers, userLocation]);
 
-  // Pan/zoom only for explicit search / current-location / tour (mapZoom set).
-  // After a fit, leave the viewport alone so live updates don't re-zoom.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || fitToMarkers || mapZoom == null || centerLat == null || centerLng == null) {
@@ -193,7 +178,11 @@ export default function LiveOpsLeafletMap({
   return (
     <div
       ref={containerRef}
-      style={{ height: "100%", width: "100%", background: "#f8fafb" }}
+      style={{
+        height: "100%",
+        width: "100%",
+        background: mapTheme === "dark" ? "#0b1220" : "#f8fafb",
+      }}
     />
   );
 }
@@ -203,10 +192,13 @@ LiveOpsLeafletMap.propTypes = {
   zoom: PropTypes.number,
   mapZoom: PropTypes.number,
   markers: PropTypes.array,
+  hotspots: PropTypes.array,
+  showHotspots: PropTypes.bool,
   showTraffic: PropTypes.bool,
   userLocation: PropTypes.object,
   fitToMarkers: PropTypes.bool,
   mapFitKey: PropTypes.number,
   onFitComplete: PropTypes.func,
   onMarkerSelect: PropTypes.func,
+  onHotspotSelect: PropTypes.func,
 };

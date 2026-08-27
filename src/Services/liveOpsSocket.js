@@ -1,5 +1,6 @@
 import { io } from "socket.io-client";
 import { parseCoordinateQuery } from "../utils/googleMaps";
+import { getSocketIoClientOptions, normalizeSocketIoUrl } from "../utils/socketClient";
 
 const LIVE_OPS_EVENTS = [
   "live-ops:driver.location",
@@ -9,15 +10,28 @@ const LIVE_OPS_EVENTS = [
   "live-ops:feed.event",
   "live-ops:stats.patch",
   "live-ops:legend.patch",
+  "live-ops:hotspots.patch",
   "live-ops:refresh",
 ];
 
 export function getLiveOpsSocketUrl() {
-  return (
+  if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+    // Same-origin proxy in next.config.js avoids CORS when hitting prod socket from localhost.
+    return window.location.origin;
+  }
+
+  const raw =
     process.env.NEXT_PUBLIC_SOCKET_URL ||
     process.env.NEXT_PUBLIC_SOCKET_CONNECTION_URL ||
-    ""
-  );
+    "";
+  const url = normalizeSocketIoUrl(raw);
+  if (url.includes(":1120") && !url.includes("/api")) {
+    console.warn(
+      "[live-ops] NEXT_PUBLIC_SOCKET_URL points to port 1120 (API). " +
+        "Use cura-driver port 9180 instead, e.g. https://highland.prodservers.com:9180"
+    );
+  }
+  return url;
 }
 
 /**
@@ -36,17 +50,12 @@ export function connectLiveOpsSocket({
     return { disconnect: () => {}, setRegion: () => {}, syncNow: () => {} };
   }
 
-  const socket = io(url, {
-    transports: ["websocket", "polling"],
-    reconnection: true,
-    reconnectionAttempts: Infinity,
-    reconnectionDelay: 1500,
-  });
+  const socket = io(url, getSocketIoClientOptions());
 
-  let activeRegion = region || "all";
+  let activeRegion = region || "texas";
 
   const joinRoom = (nextRegion) => {
-    activeRegion = nextRegion || "all";
+    activeRegion = nextRegion || "texas";
     socket.emit("adminJoinLiveOps", { region: activeRegion }, () => {});
   };
 
@@ -80,7 +89,7 @@ export function connectLiveOpsSocket({
   return {
     setRegion: (nextRegion) => {
       if (socket.connected) joinRoom(nextRegion);
-      else activeRegion = nextRegion || "all";
+      else activeRegion = nextRegion || "texas";
     },
     syncNow,
     disconnect: () => {
@@ -189,6 +198,7 @@ export function mergeLiveOpsSnapshot(prev, incoming) {
     return {
       ...incoming,
       markers,
+      hotspots: incoming.hotspots ?? [],
       legend: recountLegend(markers),
     };
   }
@@ -211,8 +221,11 @@ export function mergeLiveOpsSnapshot(prev, incoming) {
     if (!m?.id) return;
     const existing = byId.get(m.id);
     if (!existing) {
-      // Keep briefly-seen live drivers until the next poll includes them.
-      if (m._fromSocket && m.type === "online_driver") {
+      // Keep live socket markers until the next HTTP snapshot includes them.
+      if (
+        m._fromSocket &&
+        (m.type === "online_driver" || m.type === "ride_request" || m.type === "chaperoneride")
+      ) {
         byId.set(m.id, m);
       }
       return;
@@ -234,6 +247,12 @@ export function mergeLiveOpsSnapshot(prev, incoming) {
   return {
     ...incoming,
     markers,
+    hotspots:
+      incoming.hotspots?.length > 0
+        ? incoming.hotspots
+        : prev.hotspots?.length > 0
+          ? prev.hotspots
+          : incoming.hotspots ?? prev.hotspots ?? [],
     legend: recountLegend(markers),
     // Prefer API totals, but never drop below what live socket markers already show
     stats: patchStatsFromMarkers(mergedStats, markers, { allowShrink: false }),
@@ -244,10 +263,11 @@ export function mergeLiveOpsSnapshot(prev, incoming) {
 function emptySnapshot() {
   return {
     markers: [],
+    hotspots: [],
     feed: [],
     stats: {},
     legend: recountLegend([]),
-    region: { key: "all", center: { lat: 39.8283, lng: -98.5795 }, zoom: 4 },
+    region: { key: "texas", center: { lat: 31.0, lng: -99.0 }, zoom: 6 },
   };
 }
 
@@ -265,7 +285,7 @@ export function applyLiveOpsSocketEvent(snapshot, eventName, payload) {
     case "live-ops:marker.upsert": {
       const marker = payload?.marker;
       if (!marker?.id) break;
-      next.markers = upsertMarker(next.markers, marker);
+      next.markers = upsertMarker(next.markers, { ...marker, _fromSocket: true });
       next.legend = recountLegend(next.markers);
       next.stats = patchStatsFromMarkers(next.stats, next.markers);
       break;
@@ -374,6 +394,12 @@ export function applyLiveOpsSocketEvent(snapshot, eventName, payload) {
     case "live-ops:legend.patch": {
       next.legend = { ...next.legend, ...(payload || {}) };
       delete next.legend.at;
+      break;
+    }
+    case "live-ops:hotspots.patch": {
+      if (Array.isArray(payload?.hotspots) && payload.hotspots.length > 0) {
+        next.hotspots = payload.hotspots;
+      }
       break;
     }
     default:

@@ -1,28 +1,33 @@
 import { useCallback, useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { useRouter } from "next/router";
 import { styled } from "@mui/material/styles";
 import { useMediaQuery } from "@mui/material";
 
 import { SideNav } from "./side-nav";
 import { TopNav } from "./top-nav";
 import { LiveOpsUiProvider, useLiveOpsUi } from "../../contexts/live-ops-ui-context";
+import {
+  DashboardLayoutProvider,
+  useDashboardLayout,
+} from "../../contexts/dashboard-layout-context";
 
-const SIDE_NAV_WIDTH = 280;
+const TOP_NAV_HEIGHT = 64;
 
 const LayoutRoot = styled("div", {
-  shouldForwardProp: (prop) => prop !== "hideSideNav",
-})(({ theme, hideSideNav }) => ({
+  shouldForwardProp: (prop) => prop !== "hideSideNav" && prop !== "sideNavWidth",
+})(({ theme, hideSideNav, sideNavWidth }) => ({
   display: "flex",
   flex: "1 1 auto",
   maxWidth: "100%",
   minWidth: 0,
   overflowX: "hidden",
+  transition: theme.transitions.create("padding-left", {
+    duration: theme.transitions.duration.shorter,
+  }),
   [theme.breakpoints.up("lg")]: {
-    paddingLeft: hideSideNav ? 0 : SIDE_NAV_WIDTH,
+    paddingLeft: hideSideNav ? 0 : sideNavWidth,
   },
 }));
-
-const TOP_NAV_HEIGHT = 64;
 
 const LayoutContainer = styled("div", {
   shouldForwardProp: (prop) => prop !== "isLiveOps" && prop !== "isLargeScreen",
@@ -34,6 +39,12 @@ const LayoutContainer = styled("div", {
     isLiveOps && isLargeScreen
       ? "100vh"
       : `calc(100vh - ${TOP_NAV_HEIGHT}px)`,
+  ...(isLiveOps && isLargeScreen
+    ? {
+        height: "100vh",
+        maxHeight: "100vh",
+      }
+    : {}),
   minWidth: 0,
   maxWidth: "100%",
   overflowX: "hidden",
@@ -47,9 +58,11 @@ const LayoutContainer = styled("div", {
 }));
 
 function DashboardLayoutInner({ children }) {
-  const pathname = usePathname();
+  const router = useRouter();
+  const pathname = router.pathname || "";
   const lgUp = useMediaQuery((theme) => theme.breakpoints.up("lg"));
   const { isMapFullscreen, setMapFullscreen } = useLiveOpsUi();
+  const { sideNavCollapsed, sideNavWidth, toggleSideNav } = useDashboardLayout();
   const isLiveOps = pathname === "/live-operations";
   const hideSideNav = isLiveOps && isMapFullscreen;
   const hideTopNav = (isLiveOps && lgUp) || hideSideNav;
@@ -63,8 +76,7 @@ function DashboardLayoutInner({ children }) {
 
   useEffect(() => {
     handlePathnameChange();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+  }, [pathname, handlePathnameChange]);
 
   useEffect(() => {
     setMapFullscreen(false);
@@ -72,11 +84,16 @@ function DashboardLayoutInner({ children }) {
 
   return (
     <>
-      {!hideTopNav ? <TopNav onNavOpen={() => setOpenNav(true)} /> : null}
+      {!hideTopNav ? <TopNav onNavOpen={() => setOpenNav(true)} sideNavWidth={sideNavWidth} /> : null}
       {!hideSideNav ? (
-        <SideNav onClose={() => setOpenNav(false)} open={openNav} />
+        <SideNav
+          collapsed={sideNavCollapsed}
+          onClose={() => setOpenNav(false)}
+          onToggleCollapse={toggleSideNav}
+          open={openNav}
+        />
       ) : null}
-      <LayoutRoot hideSideNav={hideSideNav}>
+      <LayoutRoot hideSideNav={hideSideNav} sideNavWidth={sideNavWidth}>
         <LayoutContainer isLiveOps={isLiveOps} isLargeScreen={lgUp}>
           {children}
         </LayoutContainer>
@@ -89,8 +106,10 @@ export const Layout = (props) => {
   const { children } = props;
 
   return (
-    <LiveOpsUiProvider>
-      <DashboardLayoutInner>{children}</DashboardLayoutInner>
-    </LiveOpsUiProvider>
+    <DashboardLayoutProvider>
+      <LiveOpsUiProvider>
+        <DashboardLayoutInner>{children}</DashboardLayoutInner>
+      </LiveOpsUiProvider>
+    </DashboardLayoutProvider>
   );
 };
