@@ -71,6 +71,7 @@ export const SideNavItem = (props) => {
     disabled,
     external,
     icon,
+    onNavigate,
     open: openProp,
     path,
     title,
@@ -79,6 +80,10 @@ export const SideNavItem = (props) => {
   const hasChildren = Array.isArray(childrenItems) && childrenItems.length > 0;
   const [open, setOpen] = useState(Boolean(openProp) || active);
   const [menuAnchor, setMenuAnchor] = useState(null);
+
+  const handleNavigate = () => {
+    onNavigate?.();
+  };
 
   useEffect(() => {
     if (openProp || active) {
@@ -142,7 +147,10 @@ export const SideNavItem = (props) => {
               component={child.path ? NextLink : "div"}
               href={child.path || undefined}
               selected={Boolean(child.active)}
-              onClick={() => setMenuAnchor(null)}
+              onClick={() => {
+                setMenuAnchor(null);
+                handleNavigate();
+              }}
               sx={{ fontSize: 14, fontWeight: child.active ? 700 : 500 }}
             >
               {child.title}
@@ -200,6 +208,7 @@ export const SideNavItem = (props) => {
               return (
                 <li key={child.title}>
                   <ButtonBase
+                    onClick={handleNavigate}
                     sx={itemButtonSx(Boolean(child.active), { nested: true })}
                     {...childLinkProps}
                   >
@@ -220,7 +229,11 @@ export const SideNavItem = (props) => {
   }
 
   const itemButton = (
-    <ButtonBase sx={itemButtonSx(active, { collapsed })} {...linkProps}>
+    <ButtonBase
+      onClick={handleNavigate}
+      sx={itemButtonSx(active, { collapsed })}
+      {...linkProps}
+    >
       {icon ? (
         <Box component="span" sx={{ ...iconBoxSx(active), mr: collapsed ? 0 : 2 }}>
           {icon}
@@ -254,6 +267,7 @@ SideNavItem.propTypes = {
   disabled: PropTypes.bool,
   external: PropTypes.bool,
   icon: PropTypes.node,
+  onNavigate: PropTypes.func,
   open: PropTypes.bool,
   path: PropTypes.string,
   title: PropTypes.string.isRequired,

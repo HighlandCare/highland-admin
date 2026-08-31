@@ -101,7 +101,7 @@ const Page = () => {
             ) : (
               <DataTable
                 empty={!rows.length}
-                minWidth={900}
+                minWidth={800}
                 pagination={getServerPaginationProps({
                   currentPage: page,
                   onPageChange: setPage,
@@ -111,7 +111,7 @@ const Page = () => {
                 toolbar={
                   <DataTableToolbar
                     actions={
-                      <FormControl size="small" sx={{ minWidth: 180 }}>
+                      <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 180 }, width: { xs: "100%", sm: "auto" } }}>
                         <Select
                           displayEmpty
                           value={status}

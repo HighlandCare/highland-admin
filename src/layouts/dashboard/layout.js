@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { styled } from "@mui/material/styles";
 import { useMediaQuery } from "@mui/material";
@@ -8,6 +8,7 @@ import { TopNav } from "./top-nav";
 import { LiveOpsUiProvider, useLiveOpsUi } from "../../contexts/live-ops-ui-context";
 import {
   DashboardLayoutProvider,
+  SIDE_NAV_WIDTH_EXPANDED,
   useDashboardLayout,
 } from "../../contexts/dashboard-layout-context";
 
@@ -18,9 +19,12 @@ const LayoutRoot = styled("div", {
 })(({ theme, hideSideNav, sideNavWidth }) => ({
   display: "flex",
   flex: "1 1 auto",
+  flexDirection: "column",
   maxWidth: "100%",
+  minHeight: 0,
   minWidth: 0,
   overflowX: "hidden",
+  width: "100%",
   transition: theme.transitions.create("padding-left", {
     duration: theme.transitions.duration.shorter,
   }),
@@ -38,29 +42,32 @@ const LayoutContainer = styled("div", {
   minHeight:
     isLiveOps && isLargeScreen
       ? "100vh"
-      : `calc(100vh - ${TOP_NAV_HEIGHT}px)`,
+      : `calc(100dvh - ${TOP_NAV_HEIGHT}px)`,
   ...(isLiveOps && isLargeScreen
     ? {
         height: "100vh",
         maxHeight: "100vh",
+        overflow: "hidden",
+        bgcolor: theme.palette.background.default,
       }
-    : {}),
+    : {
+        // Allow page content to grow and scroll on mobile / tablet.
+        height: "auto",
+        overflow: "visible",
+        paddingBottom: "10px",
+      }),
   minWidth: 0,
   maxWidth: "100%",
-  overflowX: "hidden",
   width: "100%",
-  ...(isLiveOps && isLargeScreen
-    ? {
-        bgcolor: theme.palette.background.default,
-        overflow: "hidden",
-      }
-    : {}),
 }));
 
 function DashboardLayoutInner({ children }) {
   const router = useRouter();
   const pathname = router.pathname || "";
-  const lgUp = useMediaQuery((theme) => theme.breakpoints.up("lg"));
+  const lgUp = useMediaQuery((theme) => theme.breakpoints.up("lg"), {
+    defaultMatches: false,
+    noSsr: true,
+  });
   const { isMapFullscreen, setMapFullscreen } = useLiveOpsUi();
   const { sideNavCollapsed, sideNavWidth, toggleSideNav } = useDashboardLayout();
   const isLiveOps = pathname === "/live-operations";
@@ -68,32 +75,33 @@ function DashboardLayoutInner({ children }) {
   const hideTopNav = (isLiveOps && lgUp) || hideSideNav;
   const [openNav, setOpenNav] = useState(false);
 
-  const handlePathnameChange = useCallback(() => {
-    if (openNav) {
-      setOpenNav(false);
-    }
-  }, [openNav]);
-
   useEffect(() => {
-    handlePathnameChange();
-  }, [pathname, handlePathnameChange]);
+    setOpenNav(false);
+  }, [pathname]);
 
   useEffect(() => {
     setMapFullscreen(false);
   }, [pathname, setMapFullscreen]);
 
+  // Mobile / tablet always get an expanded temporary drawer; collapse is desktop-only.
+  const mobileNavOpen = !lgUp && openNav;
+  const sideNavCollapsedForViewport = lgUp ? sideNavCollapsed : false;
+  const sideNavWidthForViewport = lgUp ? sideNavWidth : SIDE_NAV_WIDTH_EXPANDED;
+
   return (
     <>
-      {!hideTopNav ? <TopNav onNavOpen={() => setOpenNav(true)} sideNavWidth={sideNavWidth} /> : null}
+      {!hideTopNav ? (
+        <TopNav onNavOpen={() => setOpenNav(true)} sideNavWidth={sideNavWidthForViewport} />
+      ) : null}
       {!hideSideNav ? (
         <SideNav
-          collapsed={sideNavCollapsed}
+          collapsed={sideNavCollapsedForViewport}
           onClose={() => setOpenNav(false)}
           onToggleCollapse={toggleSideNav}
-          open={openNav}
+          open={mobileNavOpen}
         />
       ) : null}
-      <LayoutRoot hideSideNav={hideSideNav} sideNavWidth={sideNavWidth}>
+      <LayoutRoot hideSideNav={hideSideNav} sideNavWidth={sideNavWidthForViewport}>
         <LayoutContainer isLiveOps={isLiveOps} isLargeScreen={lgUp}>
           {children}
         </LayoutContainer>

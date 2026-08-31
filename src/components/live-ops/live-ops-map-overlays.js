@@ -258,9 +258,11 @@ export default function LiveOpsMapOverlays({
           sx: {
             ...glass,
             p: 2,
-            width: 340,
+            width: { xs: "calc(100vw - 24px)", sm: 340 },
+            maxWidth: "calc(100vw - 24px)",
             mt: 1,
-            overflow: "visible",
+            overflow: "auto",
+            maxHeight: "calc(100vh - 96px)",
           },
         }}
       >

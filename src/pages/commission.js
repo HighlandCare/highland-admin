@@ -561,24 +561,40 @@ const Page = () => {
               direction={{ xs: "column", sm: "row" }}
               justifyContent="space-between"
               spacing={2}
+              sx={{ width: "100%" }}
             >
-              <Stack spacing={1}>
+              <Stack spacing={1} sx={{ minWidth: 0 }}>
                 <Typography sx={pageTitleSx} variant="h4">
                   {pageHeading}
                 </Typography>
               </Stack>
               {activeTab === TAB_COMMISSION && !bootLoading ? (
-                <Button color="primary" onClick={handleOpenCreate} variant="contained">
+                <Button
+                  color="primary"
+                  onClick={handleOpenCreate}
+                  sx={{ width: { xs: "100%", sm: "auto" }, flexShrink: 0 }}
+                  variant="contained"
+                >
                   Set platform commission
                 </Button>
               ) : null}
               {activeTab === TAB_FARE && !fareBootLoading ? (
-                <Button color="primary" onClick={handleOpenFareCreate} variant="contained">
+                <Button
+                  color="primary"
+                  onClick={handleOpenFareCreate}
+                  sx={{ width: { xs: "100%", sm: "auto" }, flexShrink: 0 }}
+                  variant="contained"
+                >
                   Set transportation fare
                 </Button>
               ) : null}
               {activeTab === TAB_WAITING && !waitingBootLoading ? (
-                <Button color="primary" onClick={handleOpenWaitingCreate} variant="contained">
+                <Button
+                  color="primary"
+                  onClick={handleOpenWaitingCreate}
+                  sx={{ width: { xs: "100%", sm: "auto" }, flexShrink: 0 }}
+                  variant="contained"
+                >
                   Set stop waiting rate
                 </Button>
               ) : null}
@@ -586,18 +602,25 @@ const Page = () => {
 
             {showRateTabs ? (
               <Tabs
+                allowScrollButtonsMobile
                 onChange={handleTabChange}
+                scrollButtons="auto"
                 sx={{
                   borderBottom: 1,
                   borderColor: "divider",
                   minHeight: 42,
+                  width: "100%",
+                  maxWidth: "100%",
                   "& .MuiTab-root": {
                     minHeight: 42,
+                    minWidth: "auto",
+                    px: { xs: 1.5, sm: 2 },
                     textTransform: "none",
                     fontWeight: 600,
                   },
                 }}
                 value={activeTab}
+                variant="scrollable"
               >
                 <Tab label="Commission" value={TAB_COMMISSION} />
                 <Tab label="Fare" value={TAB_FARE} />

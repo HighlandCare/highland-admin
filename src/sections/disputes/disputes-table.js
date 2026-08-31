@@ -403,7 +403,15 @@ export const DisputesTable = (props) => {
             value={actionNotes}
           />
         </DialogContent>
-        <DialogActions>
+        <DialogActions
+          sx={{
+            flexDirection: { xs: "column-reverse", sm: "row" },
+            gap: 1,
+            px: { xs: 2, sm: 3 },
+            pb: { xs: 2, sm: 2 },
+            "& .MuiButton-root": { width: { xs: "100%", sm: "auto" } },
+          }}
+        >
           <Button disabled={isSubmitting} onClick={closeActionDialog}>
             Cancel
           </Button>

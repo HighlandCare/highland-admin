@@ -11,7 +11,6 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { Scrollbar } from "./scrollbar";
 
 export const dataTableScrollSx = {
   maxWidth: "100%",
@@ -21,7 +20,7 @@ export const dataTableScrollSx = {
 };
 
 export const getResponsiveTableMinWidth = (minWidth = 800) => ({
-  xs: Math.min(minWidth, 560),
+  xs: Math.min(minWidth, 640),
   sm: Math.min(minWidth, 720),
   md: minWidth,
 });
@@ -145,13 +144,14 @@ export const DataTableToolbar = ({
         direction={{ xs: "column", sm: "row" }}
         flexShrink={0}
         spacing={1.5}
-        sx={{ width: { xs: "100%", md: "auto" } }}
+        sx={{
+          width: { xs: "100%", md: "auto" },
+          "& > *": { width: { xs: "100%", sm: "auto" } },
+          "& .MuiFormControl-root": { width: { xs: "100%", sm: "auto" }, minWidth: { xs: "100%", sm: 160 } },
+          "& .MuiButton-root": { width: { xs: "100%", sm: "auto" } },
+        }}
       >
-        {actions && (
-          <Box sx={{ width: { xs: "100%", sm: "auto" }, "& .MuiButton-root": { width: { xs: "100%", sm: "auto" } } }}>
-            {actions}
-          </Box>
-        )}
+        {actions}
       </Stack>
     </Stack>
   </Box>
@@ -251,11 +251,9 @@ export const DataTable = ({
     <Card sx={dataTableCardSx}>
       {toolbar}
       <Box sx={dataTableScrollSx}>
-        <Scrollbar>
-          <Box sx={{ minWidth: getResponsiveTableMinWidth(minWidth), width: "100%" }}>
-            <Table sx={dataTableSx}>{children}</Table>
-          </Box>
-        </Scrollbar>
+        <Box sx={{ minWidth: getResponsiveTableMinWidth(minWidth), width: "100%" }}>
+          <Table sx={dataTableSx}>{children}</Table>
+        </Box>
       </Box>
       {pagination && <DataTablePagination {...pagination} />}
     </Card>

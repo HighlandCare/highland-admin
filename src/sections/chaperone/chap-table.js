@@ -356,6 +356,8 @@ export const ChapTable = (props) => {
       </DataTable>
 
       <Dialog
+        fullWidth
+        maxWidth="sm"
         open={Boolean(driverToDelete)}
         onClose={() => !isDeleting && setDriverToDelete(null)}
       >
@@ -366,7 +368,15 @@ export const ChapTable = (props) => {
             <strong>{getDriverDisplayName(driverToDelete)}</strong>? This action cannot be undone.
           </DialogContentText>
         </DialogContent>
-        <DialogActions>
+        <DialogActions
+          sx={{
+            flexDirection: { xs: "column-reverse", sm: "row" },
+            gap: 1,
+            px: { xs: 2, sm: 3 },
+            pb: { xs: 2, sm: 2 },
+            "& .MuiButton-root": { width: { xs: "100%", sm: "auto" } },
+          }}
+        >
           <Button disabled={isDeleting} onClick={() => setDriverToDelete(null)}>
             Cancel
           </Button>

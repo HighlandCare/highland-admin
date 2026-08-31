@@ -1043,7 +1043,7 @@ const Page = () => {
             {!isMapFullscreen ? <LiveOpsStatsBar stats={rideOnlyStats} /> : null}
           </>
         ) : (
-          <Box sx={{ p: 3, flex: 1, overflow: "auto", bgcolor: "background.default" }}>
+          <Box sx={{ p: { xs: 1.5, sm: 2, md: 3 }, flex: 1, overflow: "auto", bgcolor: "background.default" }}>
             <Stack spacing={3}>
               <Typography variant="h6" sx={{ color: "text.primary", fontWeight: 700 }}>
                 Platform Analytics

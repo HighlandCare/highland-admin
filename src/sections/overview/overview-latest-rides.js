@@ -16,9 +16,9 @@ import {
   TableRow,
   Typography,
 } from "@mui/material";
-import { Scrollbar } from "../../components/scrollbar";
 import { StatusBadge } from "../../components/table-cells";
 import Loader from "../../components/Loader";
+import { dataTableScrollSx } from "../../components/data-table";
 import {
   formatRideCurrency,
   getRideAdminEarning,
@@ -33,8 +33,15 @@ export const OverviewLatestRides = (props) => {
   const latestRides = rides.slice(0, 6);
 
   return (
-    <Card sx={sx}>
-      <CardHeader title="Latest Rides" subheader="Recent rides from ride history" />
+    <Card sx={{ maxWidth: "100%", overflow: "visible", ...sx }}>
+      <CardHeader
+        subheader="Recent rides from ride history"
+        sx={{
+          px: { xs: 2, sm: 3 },
+          "& .MuiCardHeader-title": { fontSize: { xs: "1.1rem", sm: "1.25rem" } },
+        }}
+        title="Latest Rides"
+      />
       {loading ? (
         <Box sx={{ py: 6 }}>
           <Loader minHeight={180} size="md" />
@@ -46,8 +53,8 @@ export const OverviewLatestRides = (props) => {
           </Typography>
         </Box>
       ) : (
-        <Scrollbar sx={{ flexGrow: 1 }}>
-          <Box sx={{ minWidth: 720 }}>
+        <Box sx={{ ...dataTableScrollSx, px: { xs: 0, sm: 0 } }}>
+          <Box sx={{ minWidth: { xs: 560, sm: 720 }, width: "100%" }}>
             <Table>
               <TableHead>
                 <TableRow>
@@ -83,11 +90,11 @@ export const OverviewLatestRides = (props) => {
               </TableBody>
             </Table>
           </Box>
-        </Scrollbar>
+        </Box>
       )}
       <Divider />
-      <CardActions sx={{ justifyContent: "flex-end" }}>
-        <Link href="/ride-history" style={{ color: "inherit", textDecoration: "none" }}>
+      <CardActions sx={{ justifyContent: { xs: "stretch", sm: "flex-end" }, px: { xs: 2, sm: 2 } }}>
+        <Link href="/ride-history" style={{ color: "inherit", textDecoration: "none", width: "100%" }}>
           <Button
             color="inherit"
             endIcon={
@@ -96,6 +103,7 @@ export const OverviewLatestRides = (props) => {
               </SvgIcon>
             }
             size="small"
+            sx={{ width: { xs: "100%", sm: "auto" } }}
           >
             View All Rides
           </Button>

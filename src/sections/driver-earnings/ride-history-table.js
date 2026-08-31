@@ -188,10 +188,16 @@ export const RideHistoryTable = (props) => {
 
   const filterActions = (
     <Stack
-      direction={{ xs: "column", lg: "row" }}
+      direction={{ xs: "column", md: "row" }}
       flexWrap="wrap"
       spacing={1.5}
-      sx={{ width: { xs: "100%", md: "auto" } }}
+      sx={{
+        width: { xs: "100%", md: "auto" },
+        "& .MuiFormControl-root, & .MuiTextField-root": {
+          width: { xs: "100%", sm: "auto" },
+          minWidth: { xs: "100%", sm: 150 },
+        },
+      }}
     >
       <TextField
         InputLabelProps={{ shrink: true }}

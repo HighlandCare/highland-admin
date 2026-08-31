@@ -60,8 +60,13 @@ export const SideNav = (props) => {
   const { open, onClose, collapsed = false, onToggleCollapse } = props;
   const router = useRouter();
   const pathname = router.pathname || "";
-  const lgUp = useMediaQuery((theme) => theme.breakpoints.up("lg"));
-  const drawerWidth = collapsed ? SIDE_NAV_WIDTH_COLLAPSED : SIDE_NAV_WIDTH_EXPANDED;
+  const lgUp = useMediaQuery((theme) => theme.breakpoints.up("lg"), {
+    defaultMatches: false,
+    noSsr: true,
+  });
+  // Collapse is desktop-only; mobile always shows the full temporary drawer.
+  const isCollapsed = lgUp && collapsed;
+  const drawerWidth = isCollapsed ? SIDE_NAV_WIDTH_COLLAPSED : SIDE_NAV_WIDTH_EXPANDED;
 
   const activeCategory = useMemo(() => {
     if (typeof router.query?.category === "string") {
@@ -95,8 +100,8 @@ export const SideNav = (props) => {
           height: "100%",
         }}
       >
-        <Box sx={{ p: collapsed ? 1.5 : 3, pb: collapsed ? 1 : 3 }}>
-          <Stack alignItems="center" spacing={collapsed ? 1 : 1.5}>
+        <Box sx={{ p: isCollapsed ? 1.5 : 3, pb: isCollapsed ? 1 : 3 }}>
+          <Stack alignItems="center" spacing={isCollapsed ? 1 : 1.5}>
             <Box
               component="img"
               alt="Highland"
@@ -104,11 +109,11 @@ export const SideNav = (props) => {
               sx={{
                 display: "block",
                 maxWidth: "100%",
-                width: collapsed ? 40 : 100,
+                width: isCollapsed ? 40 : 100,
                 transition: "width 0.2s ease",
               }}
             />
-            {!collapsed ? (
+            {!isCollapsed ? (
               <Typography
                 data-brand="true"
                 sx={{
@@ -136,7 +141,7 @@ export const SideNav = (props) => {
           component="nav"
           sx={{
             flexGrow: 1,
-            px: collapsed ? 0.75 : 2,
+            px: isCollapsed ? 0.75 : 2,
             py: 2,
           }}
         >
@@ -169,11 +174,12 @@ export const SideNav = (props) => {
                 <SideNavItem
                   active={active}
                   childrenItems={childrenItems}
-                  collapsed={collapsed}
+                  collapsed={isCollapsed}
                   disabled={item.disabled}
                   external={item.external}
                   icon={item.icon}
                   key={item.path || item.title}
+                  onNavigate={onClose}
                   open={childActive || active}
                   path={item.children?.length ? undefined : item.path}
                   title={item.title}
@@ -185,7 +191,7 @@ export const SideNav = (props) => {
         <Divider sx={{ borderColor: "rgba(255,255,255,0.12)" }} />
         <Box
           sx={{
-            px: collapsed ? 1 : 2,
+            px: isCollapsed ? 1 : 2,
             py: 2,
             width: "100%",
             boxSizing: "border-box",
@@ -193,24 +199,24 @@ export const SideNav = (props) => {
           }}
         >
           <Stack
-            direction={collapsed ? "column" : "row"}
+            direction={isCollapsed ? "column" : "row"}
             spacing={0.75}
-            alignItems={collapsed ? "center" : "stretch"}
+            alignItems={isCollapsed ? "center" : "stretch"}
             sx={{ width: "100%" }}
           >
             {lgUp ? (
               <Tooltip
-                title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
                 placement="right"
                 arrow
               >
                 <IconButton
                   onClick={onToggleCollapse}
-                  aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                  aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
                   sx={{
                     flexShrink: 0,
-                    width: collapsed ? 40 : 44,
-                    height: collapsed ? 40 : 44,
+                    width: isCollapsed ? 40 : 44,
+                    height: isCollapsed ? 40 : 44,
                     p: 0,
                     color: "rgba(255,255,255,0.85)",
                     border: "1px solid rgba(255,255,255,0.14)",
@@ -222,13 +228,13 @@ export const SideNav = (props) => {
                   }}
                 >
                   <SvgIcon fontSize="small">
-                    {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+                    {isCollapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
                   </SvgIcon>
                 </IconButton>
               </Tooltip>
             ) : null}
 
-            {collapsed ? (
+            {isCollapsed ? (
               <Tooltip title="Log out" placement="right" arrow>
                 <IconButton
                   onClick={handleSignOut}
@@ -299,11 +305,14 @@ export const SideNav = (props) => {
 
   return (
     <Drawer
+      ModalProps={{
+        keepMounted: true,
+      }}
       anchor="left"
       onClose={onClose}
       open={open}
       PaperProps={{ sx: { ...drawerPaperSx, width: SIDE_NAV_WIDTH_EXPANDED } }}
-      sx={{ zIndex: (theme) => theme.zIndex.appBar + 100 }}
+      sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}
       variant="temporary"
     >
       {content}
