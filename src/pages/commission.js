@@ -155,8 +155,8 @@ const Page = () => {
   const [foodFareLogs, setFoodFareLogs] = useState([]);
   const [foodFareLogsTotal, setFoodFareLogsTotal] = useState(0);
   const [foodFarePage, setFoodFarePage] = useState(1);
-  const [deliveryFee, setDeliveryFee] = useState("");
-  const [minimumOrder, setMinimumOrder] = useState("");
+  const [foodPerMileRate, setFoodPerMileRate] = useState("");
+  const [foodMinimumFare, setFoodMinimumFare] = useState("");
   const [foodFareLoaded, setFoodFareLoaded] = useState(false);
 
   const activeCategory = useMemo(
@@ -626,8 +626,12 @@ const Page = () => {
   };
 
   const handleOpenFoodFareCreate = () => {
-    setDeliveryFee(String(foodFareActive?.deliveryFee ?? DEFAULT_FOOD_DELIVERY_FARE.deliveryFee));
-    setMinimumOrder(String(foodFareActive?.minimumOrder ?? DEFAULT_FOOD_DELIVERY_FARE.minimumOrder));
+    setFoodPerMileRate(
+      String(foodFareActive?.perMileRate ?? DEFAULT_FOOD_DELIVERY_FARE.perMileRate)
+    );
+    setFoodMinimumFare(
+      String(foodFareActive?.minimumFare ?? DEFAULT_FOOD_DELIVERY_FARE.minimumFare)
+    );
     setFoodFareModalOpen(true);
   };
 
@@ -637,7 +641,7 @@ const Page = () => {
   };
 
   const handleSaveFoodFare = async () => {
-    const validationError = validateFoodDeliveryFareDollars(deliveryFee, minimumOrder);
+    const validationError = validateFoodDeliveryFareDollars(foodPerMileRate, foodMinimumFare);
     if (validationError) {
       toast.error(validationError);
       return;
@@ -646,8 +650,8 @@ const Page = () => {
     try {
       setFoodFareSaving(true);
       await publishFoodDeliveryFare({
-        deliveryFee: Number(deliveryFee),
-        minimumOrder: Number(minimumOrder),
+        perMileRate: Number(foodPerMileRate),
+        minimumFare: Number(foodMinimumFare),
       });
       toast.success("Food delivery fare published successfully");
       setFoodFareModalOpen(false);
@@ -708,12 +712,12 @@ const Page = () => {
   const fareValidationError = validateFareDollars(perMileRate, minimumFare);
   const fareSaveDisabled =
     fareSaving || Boolean(fareValidationError) || perMileRate === "" || minimumFare === "";
-  const foodFareValidationError = validateFoodDeliveryFareDollars(deliveryFee, minimumOrder);
+  const foodFareValidationError = validateFoodDeliveryFareDollars(foodPerMileRate, foodMinimumFare);
   const foodFareSaveDisabled =
     foodFareSaving ||
     Boolean(foodFareValidationError) ||
-    deliveryFee === "" ||
-    minimumOrder === "";
+    foodPerMileRate === "" ||
+    foodMinimumFare === "";
   const waitingValidationError = validateWaitingRateDollars(waitingRatePerMinute);
   const waitingSaveDisabled =
     waitingSaving || Boolean(waitingValidationError) || waitingRatePerMinute === "";
@@ -918,8 +922,8 @@ const Page = () => {
                       sx={{ color: "success.main", fontWeight: 600 }}
                       variant="body2"
                     >
-                      Delivery Fee {formatFoodFareDollars(foodFareActive?.deliveryFee)} · Minimum
-                      Order {formatFoodFareDollars(foodFareActive?.minimumOrder)}
+                      Current {formatFoodFareDollars(foodFareActive?.perMileRate)} / mi · Minimum
+                      Fare {formatFoodFareDollars(foodFareActive?.minimumFare)}
                     </Typography>
                   </Stack>
 
@@ -1191,52 +1195,51 @@ const Page = () => {
             Set food delivery fare
           </Typography>
           <Typography color="text.secondary" sx={{ mb: 2.5 }} variant="body2">
-            Publishes global defaults. Restaurants with their own delivery fee or minimum order keep
-            those overrides.
+            Publishes a new food delivery fare version.
           </Typography>
 
           <Stack spacing={2.25}>
             <TextField
               disabled
-              label="Current delivery fee"
-              value={formatFoodFareDollars(foodFareActive?.deliveryFee)}
+              label="Current per-mile rate"
+              value={formatFoodFareDollars(foodFareActive?.perMileRate)}
             />
 
             <TextField
               disabled
-              label="Current minimum order"
-              value={formatFoodFareDollars(foodFareActive?.minimumOrder)}
+              label="Current minimum fare"
+              value={formatFoodFareDollars(foodFareActive?.minimumFare)}
             />
 
             <TextField
               InputProps={{
                 startAdornment: <InputAdornment position="start">$</InputAdornment>,
               }}
-              error={Boolean(foodFareValidationError && deliveryFee !== "")}
+              error={Boolean(foodFareValidationError && foodPerMileRate !== "")}
               fullWidth
-              inputProps={{ min: 0, step: 0.01 }}
-              label="New delivery fee"
-              onChange={(event) => setDeliveryFee(event.target.value)}
+              inputProps={{ min: 0.01, step: 0.01 }}
+              label="New per-mile rate"
+              onChange={(event) => setFoodPerMileRate(event.target.value)}
               type="number"
-              value={deliveryFee}
+              value={foodPerMileRate}
             />
 
             <TextField
               InputProps={{
                 startAdornment: <InputAdornment position="start">$</InputAdornment>,
               }}
-              error={Boolean(foodFareValidationError && minimumOrder !== "")}
+              error={Boolean(foodFareValidationError && foodMinimumFare !== "")}
               fullWidth
               helperText={
-                foodFareValidationError && (deliveryFee !== "" || minimumOrder !== "")
+                foodFareValidationError && (foodPerMileRate !== "" || foodMinimumFare !== "")
                   ? foodFareValidationError
                   : undefined
               }
-              inputProps={{ min: 0, step: 0.01 }}
-              label="New minimum order"
-              onChange={(event) => setMinimumOrder(event.target.value)}
+              inputProps={{ min: 0.01, step: 0.01 }}
+              label="New minimum fare"
+              onChange={(event) => setFoodMinimumFare(event.target.value)}
               type="number"
-              value={minimumOrder}
+              value={foodMinimumFare}
             />
 
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ pt: 0.5 }}>

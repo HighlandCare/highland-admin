@@ -9,10 +9,7 @@ import {
   ROWS_PER_PAGE,
 } from "../../components/data-table";
 import { formatDateTime } from "../../utils/dateUtils";
-import {
-  formatFoodFareDollars,
-  normalizeFoodDeliveryFareLog,
-} from "../../utils/foodDeliveryFareUtils";
+import { formatFoodFareDollars } from "../../utils/foodDeliveryFareUtils";
 
 const toPersonNameCase = (value) => {
   const text = String(value || "").trim();
@@ -45,26 +42,21 @@ export function FoodDeliveryFareLogsTable({
 }) {
   const [search, setSearch] = useState("");
 
-  const normalizedItems = useMemo(
-    () => items.map((item) => normalizeFoodDeliveryFareLog(item)),
-    [items]
-  );
-
   const filteredItems = useMemo(() => {
-    return filterBySearch(normalizedItems, search, (item) =>
+    return filterBySearch(items, search, (item) =>
       [
         item.updatedByName,
         item.updatedByEmail,
-        String(item.previousDeliveryFee ?? ""),
-        String(item.currentDeliveryFee ?? ""),
-        String(item.previousMinimumOrder ?? ""),
-        String(item.currentMinimumOrder ?? ""),
+        String(item.previousPerMileRate ?? ""),
+        String(item.currentPerMileRate ?? ""),
+        String(item.previousMinimumFare ?? ""),
+        String(item.currentMinimumFare ?? ""),
         String(item.version ?? ""),
       ]
         .filter(Boolean)
         .join(" ")
     );
-  }, [normalizedItems, search]);
+  }, [items, search]);
 
   const handleSearchChange = (value) => {
     setSearch(value);
@@ -94,10 +86,10 @@ export function FoodDeliveryFareLogsTable({
     >
       <TableHead>
         <TableRow>
-          <TableCell>Previous delivery fee</TableCell>
-          <TableCell>Updated delivery fee</TableCell>
-          <TableCell>Previous minimum order</TableCell>
-          <TableCell>Updated minimum order</TableCell>
+          <TableCell>Previous $/mi</TableCell>
+          <TableCell>Updated $/mi</TableCell>
+          <TableCell>Previous minimum Fare</TableCell>
+          <TableCell>Updated minimum Fare</TableCell>
           <TableCell>User</TableCell>
           <TableCell>Date / time</TableCell>
         </TableRow>
@@ -117,10 +109,10 @@ export function FoodDeliveryFareLogsTable({
               hover
               key={item._id || `${item.version}-${item.sequence}-${item.updatedAt}-${index}`}
             >
-              <TableCell>{formatFoodFareDollars(item.previousDeliveryFee)}</TableCell>
-              <TableCell>{formatFoodFareDollars(item.currentDeliveryFee)}</TableCell>
-              <TableCell>{formatFoodFareDollars(item.previousMinimumOrder)}</TableCell>
-              <TableCell>{formatFoodFareDollars(item.currentMinimumOrder)}</TableCell>
+              <TableCell>{formatFoodFareDollars(item.previousPerMileRate)}</TableCell>
+              <TableCell>{formatFoodFareDollars(item.currentPerMileRate)}</TableCell>
+              <TableCell>{formatFoodFareDollars(item.previousMinimumFare)}</TableCell>
+              <TableCell>{formatFoodFareDollars(item.currentMinimumFare)}</TableCell>
               <TableCell>
                 <Typography variant="body2">
                   {item.updatedByName ? toPersonNameCase(item.updatedByName) : "—"}

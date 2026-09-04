@@ -1,8 +1,8 @@
 import { formatFareDollars } from "./transportationFareUtils";
 
 export const DEFAULT_FOOD_DELIVERY_FARE = {
-  deliveryFee: 4.99,
-  minimumOrder: 15,
+  perMileRate: 1.45,
+  minimumFare: 4.99,
 };
 
 export const formatFoodFareDollars = formatFareDollars;
@@ -33,8 +33,8 @@ export const getActiveFoodDeliveryFare = (payloadOrResponse) => {
   const source = payload.active || payload.defaults || DEFAULT_FOOD_DELIVERY_FARE;
 
   return {
-    deliveryFee: Number(source.deliveryFee ?? DEFAULT_FOOD_DELIVERY_FARE.deliveryFee),
-    minimumOrder: Number(source.minimumOrder ?? DEFAULT_FOOD_DELIVERY_FARE.minimumOrder),
+    perMileRate: Number(source.perMileRate ?? DEFAULT_FOOD_DELIVERY_FARE.perMileRate),
+    minimumFare: Number(source.minimumFare ?? DEFAULT_FOOD_DELIVERY_FARE.minimumFare),
     pricingConfigVersion: source.pricingConfigVersion ?? null,
   };
 };
@@ -47,29 +47,16 @@ export const getFoodDeliveryFareLogs = (payloadOrResponse) => {
   return payload.logs;
 };
 
-/** Normalize log row field names from API variants. */
-export const normalizeFoodDeliveryFareLog = (item = {}) => ({
-  ...item,
-  previousDeliveryFee:
-    item.previousDeliveryFee ?? item.previousDeliveryFeeDollars ?? item.previous?.deliveryFee ?? null,
-  currentDeliveryFee:
-    item.currentDeliveryFee ?? item.currentDeliveryFeeDollars ?? item.current?.deliveryFee ?? null,
-  previousMinimumOrder:
-    item.previousMinimumOrder ?? item.previousMinimumOrderDollars ?? item.previous?.minimumOrder ?? null,
-  currentMinimumOrder:
-    item.currentMinimumOrder ?? item.currentMinimumOrderDollars ?? item.current?.minimumOrder ?? null,
-});
+export const validateFoodDeliveryFareDollars = (perMileRate, minimumFare) => {
+  const mile = Number(perMileRate);
+  const min = Number(minimumFare);
 
-export const validateFoodDeliveryFareDollars = (deliveryFee, minimumOrder) => {
-  const fee = Number(deliveryFee);
-  const min = Number(minimumOrder);
-
-  if (deliveryFee === "" || minimumOrder === "" || Number.isNaN(fee) || Number.isNaN(min)) {
-    return "Enter both delivery fee and minimum order";
+  if (perMileRate === "" || minimumFare === "" || Number.isNaN(mile) || Number.isNaN(min)) {
+    return "Enter both per-mile rate and minimum fare";
   }
 
-  if (fee < 0 || min < 0) {
-    return "Values cannot be negative";
+  if (mile <= 0 || min <= 0) {
+    return "Rates must be greater than zero";
   }
 
   return null;

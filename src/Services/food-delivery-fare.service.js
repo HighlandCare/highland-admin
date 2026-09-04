@@ -37,11 +37,11 @@ export const getFoodDeliveryFare = async ({ limit = 50 } = {}) => {
 };
 
 /** POST /admin/food-delivery-fare — publish new version (dollars) */
-export const publishFoodDeliveryFare = async ({ deliveryFee, minimumOrder }) => {
+export const publishFoodDeliveryFare = async ({ perMileRate, minimumFare }) => {
   try {
     const payload = {
-      deliveryFee: Number(deliveryFee),
-      minimumOrder: Number(minimumOrder),
+      perMileRate: Number(perMileRate),
+      minimumFare: Number(minimumFare),
     };
 
     const response = await Action.post("admin/food-delivery-fare", payload, {
