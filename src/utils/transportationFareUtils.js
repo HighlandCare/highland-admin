@@ -45,7 +45,6 @@ export const getActiveTransportationFare = (payloadOrResponse) => {
     perMileRate: Number(source.perMileRate ?? DEFAULT_TRANSPORTATION_FARE.perMileRate),
     minimumFare: Number(source.minimumFare ?? DEFAULT_TRANSPORTATION_FARE.minimumFare),
     pricingConfigVersion: source.pricingConfigVersion ?? null,
-    formula: source.formula || FARE_FORMULA_LABEL,
   };
 };
 

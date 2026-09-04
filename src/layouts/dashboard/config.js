@@ -83,6 +83,10 @@ export const items = [
         title: "Transportation",
         path: "/commission?category=transportation",
       },
+      {
+        title: "Food & Beverage",
+        path: "/commission?category=food_beverage&tab=commission",
+      },
     ],
   },
   {

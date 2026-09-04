@@ -10,9 +10,10 @@ export const SERVICE_CATEGORIES = {
   SENIOR_CARE: "senior_care",
 };
 
-/** Categories enabled in the admin UI (Transportation only for now). */
+/** Categories enabled in the admin UI. */
 export const SERVICE_CATEGORY_OPTIONS = [
   { value: SERVICE_CATEGORIES.TRANSPORTATION, label: "Transportation" },
+  { value: SERVICE_CATEGORIES.FOOD_BEVERAGE, label: "Food & Beverage" },
 ];
 
 /** Convert API value (15 or 0.15) to display percent (15). */

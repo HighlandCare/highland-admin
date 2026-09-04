@@ -18,12 +18,17 @@ import { Layout as DashboardLayout } from "../layouts/dashboard/layout";
 import Loader from "../components/Loader";
 import { ROWS_PER_PAGE } from "../components/data-table";
 import { CommissionLogsTable } from "../sections/commission/commission-logs-table";
+import { FoodDeliveryFareLogsTable } from "../sections/commission/food-delivery-fare-logs-table";
 import { StopWaitingRateLogsTable } from "../sections/commission/stop-waiting-rate-logs-table";
 import { TransportationFareLogsTable } from "../sections/commission/transportation-fare-logs-table";
 import {
   createCommissionLog,
   listCommissionLogs,
 } from "../Services/commission.service";
+import {
+  getFoodDeliveryFare,
+  publishFoodDeliveryFare,
+} from "../Services/food-delivery-fare.service";
 import {
   getStopWaitingRate,
   publishStopWaitingRate,
@@ -44,6 +49,14 @@ import {
   toCommissionPercent,
   validateCommissionPercent,
 } from "../utils/commissionUtils";
+import {
+  DEFAULT_FOOD_DELIVERY_FARE,
+  formatFoodFareDollars,
+  getActiveFoodDeliveryFare,
+  getFoodDeliveryFareLogs,
+  getFoodDeliveryFarePayload,
+  validateFoodDeliveryFareDollars,
+} from "../utils/foodDeliveryFareUtils";
 import {
   DEFAULT_STOP_WAITING_RATE,
   formatWaitingRateDollars,
@@ -72,13 +85,20 @@ const resolveCategory = (value) => {
   return match?.value || DEFAULT_CATEGORY;
 };
 
-const resolveTab = (value) => {
+const resolveTab = (value, category) => {
   if (value === TAB_FARE) return TAB_FARE;
-  if (value === TAB_WAITING) return TAB_WAITING;
+  if (value === TAB_WAITING && category === SERVICE_CATEGORIES.TRANSPORTATION) {
+    return TAB_WAITING;
+  }
   return TAB_COMMISSION;
 };
 
-const pageHeadingForTab = (tab) => {
+const pageHeadingForTab = (tab, category) => {
+  if (category === SERVICE_CATEGORIES.FOOD_BEVERAGE) {
+    if (tab === TAB_FARE) return "Food Delivery Fare";
+    return "Food & Beverage Commission";
+  }
+
   if (tab === TAB_FARE) return "Transportation Fare";
   if (tab === TAB_WAITING) return "Stop Waiting Rate";
   return "Platform Commission";
@@ -127,18 +147,32 @@ const Page = () => {
   const [waitingRatePerMinute, setWaitingRatePerMinute] = useState("");
   const [waitingLoaded, setWaitingLoaded] = useState(false);
 
+  const [foodFareBootLoading, setFoodFareBootLoading] = useState(false);
+  const [foodFareTableLoading, setFoodFareTableLoading] = useState(false);
+  const [foodFareSaving, setFoodFareSaving] = useState(false);
+  const [foodFareModalOpen, setFoodFareModalOpen] = useState(false);
+  const [foodFareActive, setFoodFareActive] = useState(DEFAULT_FOOD_DELIVERY_FARE);
+  const [foodFareLogs, setFoodFareLogs] = useState([]);
+  const [foodFareLogsTotal, setFoodFareLogsTotal] = useState(0);
+  const [foodFarePage, setFoodFarePage] = useState(1);
+  const [deliveryFee, setDeliveryFee] = useState("");
+  const [minimumOrder, setMinimumOrder] = useState("");
+  const [foodFareLoaded, setFoodFareLoaded] = useState(false);
+
   const activeCategory = useMemo(
     () => resolveCategory(router.query?.category),
     [router.query?.category]
   );
 
-  const showRateTabs = activeCategory === SERVICE_CATEGORIES.TRANSPORTATION;
+  const isTransportation = activeCategory === SERVICE_CATEGORIES.TRANSPORTATION;
+  const isFoodBeverage = activeCategory === SERVICE_CATEGORIES.FOOD_BEVERAGE;
+  const showRateTabs = isTransportation || isFoodBeverage;
   const activeTab = useMemo(() => {
     if (!showRateTabs) {
       return TAB_COMMISSION;
     }
-    return resolveTab(router.query?.tab);
-  }, [router.query?.tab, showRateTabs]);
+    return resolveTab(router.query?.tab, activeCategory);
+  }, [activeCategory, router.query?.tab, showRateTabs]);
 
   useEffect(() => {
     const isLogin = JSON.parse(typeof window !== "undefined" && localStorage.getItem("isLogin"));
@@ -165,8 +199,9 @@ const Page = () => {
       return;
     }
 
+    const rawTab = router.query?.tab;
+
     if (rawCategory === SERVICE_CATEGORIES.TRANSPORTATION) {
-      const rawTab = router.query?.tab;
       if (rawTab !== TAB_COMMISSION && rawTab !== TAB_FARE && rawTab !== TAB_WAITING) {
         router.replace(
           {
@@ -177,21 +212,53 @@ const Page = () => {
           { shallow: true }
         );
       }
+      return;
+    }
+
+    if (rawCategory === SERVICE_CATEGORIES.FOOD_BEVERAGE) {
+      if (rawTab !== TAB_COMMISSION && rawTab !== TAB_FARE) {
+        router.replace(
+          {
+            pathname: "/commission",
+            query: { category: rawCategory, tab: TAB_COMMISSION },
+          },
+          undefined,
+          { shallow: true }
+        );
+      }
+      return;
+    }
+
+    if (rawTab !== TAB_COMMISSION) {
+      router.replace(
+        {
+          pathname: "/commission",
+          query: { category: rawCategory, tab: TAB_COMMISSION },
+        },
+        undefined,
+        { shallow: true }
+      );
     }
   }, [router, router.isReady, router.query?.category, router.query?.tab]);
 
   useEffect(() => {
     setPage(1);
+    setFoodFareLoaded(false);
+    setFareLoaded(false);
+    setWaitingLoaded(false);
   }, [activeCategory]);
 
   useEffect(() => {
-    if (activeTab === TAB_FARE) {
+    if (activeTab === TAB_FARE && isTransportation) {
       setFarePage(1);
+    }
+    if (activeTab === TAB_FARE && isFoodBeverage) {
+      setFoodFarePage(1);
     }
     if (activeTab === TAB_WAITING) {
       setWaitingPage(1);
     }
-  }, [activeTab]);
+  }, [activeTab, isFoodBeverage, isTransportation]);
 
   const handleTabChange = (_event, value) => {
     router.replace(
@@ -322,6 +389,38 @@ const Page = () => {
     [waitingPage]
   );
 
+  const loadFoodFare = useCallback(
+    async ({ silent = false } = {}) => {
+      if (!silent) {
+        setFoodFareTableLoading(true);
+      }
+
+      try {
+        const response = await getFoodDeliveryFare({
+          limit: Math.max(ROWS_PER_PAGE * 10, 100),
+        });
+        const payload = getFoodDeliveryFarePayload(response);
+        const allLogs = getFoodDeliveryFareLogs(payload);
+        const start = (foodFarePage - 1) * ROWS_PER_PAGE;
+
+        setFoodFareActive(getActiveFoodDeliveryFare(payload));
+        setFoodFareLogs(allLogs.slice(start, start + ROWS_PER_PAGE));
+        setFoodFareLogsTotal(payload.total || allLogs.length);
+        setFoodFareLoaded(true);
+        return response;
+      } catch (error) {
+        setFoodFareLogs([]);
+        setFoodFareLogsTotal(0);
+        throw error;
+      } finally {
+        if (!silent) {
+          setFoodFareTableLoading(false);
+        }
+      }
+    },
+    [foodFarePage]
+  );
+
   useEffect(() => {
     if (!router.isReady || activeTab !== TAB_COMMISSION) {
       return undefined;
@@ -351,7 +450,7 @@ const Page = () => {
   }, [activeTab, loadLogs, router.isReady]);
 
   useEffect(() => {
-    if (!router.isReady || !showRateTabs || activeTab !== TAB_FARE) {
+    if (!router.isReady || !isTransportation || activeTab !== TAB_FARE) {
       return undefined;
     }
 
@@ -378,10 +477,40 @@ const Page = () => {
     return () => {
       active = false;
     };
-  }, [activeTab, fareLoaded, loadFare, router.isReady, showRateTabs]);
+  }, [activeTab, fareLoaded, isTransportation, loadFare, router.isReady]);
 
   useEffect(() => {
-    if (!router.isReady || !showRateTabs || activeTab !== TAB_WAITING) {
+    if (!router.isReady || !isFoodBeverage || activeTab !== TAB_FARE) {
+      return undefined;
+    }
+
+    let active = true;
+
+    const boot = async () => {
+      try {
+        if (!foodFareLoaded) {
+          setFoodFareBootLoading(true);
+        }
+        await loadFoodFare({ silent: foodFareLoaded });
+      } catch (error) {
+        if (active) {
+          toast.error(error.message || "Failed to load food delivery fare");
+        }
+      } finally {
+        if (active) {
+          setFoodFareBootLoading(false);
+        }
+      }
+    };
+
+    boot();
+    return () => {
+      active = false;
+    };
+  }, [activeTab, foodFareLoaded, isFoodBeverage, loadFoodFare, router.isReady]);
+
+  useEffect(() => {
+    if (!router.isReady || !isTransportation || activeTab !== TAB_WAITING) {
       return undefined;
     }
 
@@ -408,7 +537,7 @@ const Page = () => {
     return () => {
       active = false;
     };
-  }, [activeTab, loadWaiting, router.isReady, showRateTabs, waitingLoaded]);
+  }, [activeTab, isTransportation, loadWaiting, router.isReady, waitingLoaded]);
 
   const handleOpenCreate = () => {
     const current =
@@ -438,7 +567,11 @@ const Page = () => {
         serviceCategory: activeCategory,
         commissionPercent: Number(percent),
       });
-      toast.success("Platform commission updated successfully");
+      toast.success(
+        activeCategory === SERVICE_CATEGORIES.FOOD_BEVERAGE
+          ? "Food & beverage commission updated successfully"
+          : "Platform commission updated successfully"
+      );
       setCreateModalOpen(false);
 
       if (page !== 1) {
@@ -492,6 +625,45 @@ const Page = () => {
     }
   };
 
+  const handleOpenFoodFareCreate = () => {
+    setDeliveryFee(String(foodFareActive?.deliveryFee ?? DEFAULT_FOOD_DELIVERY_FARE.deliveryFee));
+    setMinimumOrder(String(foodFareActive?.minimumOrder ?? DEFAULT_FOOD_DELIVERY_FARE.minimumOrder));
+    setFoodFareModalOpen(true);
+  };
+
+  const handleCloseFoodFareCreate = () => {
+    if (foodFareSaving) return;
+    setFoodFareModalOpen(false);
+  };
+
+  const handleSaveFoodFare = async () => {
+    const validationError = validateFoodDeliveryFareDollars(deliveryFee, minimumOrder);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
+    try {
+      setFoodFareSaving(true);
+      await publishFoodDeliveryFare({
+        deliveryFee: Number(deliveryFee),
+        minimumOrder: Number(minimumOrder),
+      });
+      toast.success("Food delivery fare published successfully");
+      setFoodFareModalOpen(false);
+
+      if (foodFarePage !== 1) {
+        setFoodFarePage(1);
+      } else {
+        await loadFoodFare({ silent: true });
+      }
+    } catch (error) {
+      toast.error(error.message || "Failed to publish food delivery fare");
+    } finally {
+      setFoodFareSaving(false);
+    }
+  };
+
   const handleOpenWaitingCreate = () => {
     setWaitingRatePerMinute(
       String(waitingActive?.waitingRatePerMinute ?? DEFAULT_STOP_WAITING_RATE.waitingRatePerMinute)
@@ -536,6 +708,12 @@ const Page = () => {
   const fareValidationError = validateFareDollars(perMileRate, minimumFare);
   const fareSaveDisabled =
     fareSaving || Boolean(fareValidationError) || perMileRate === "" || minimumFare === "";
+  const foodFareValidationError = validateFoodDeliveryFareDollars(deliveryFee, minimumOrder);
+  const foodFareSaveDisabled =
+    foodFareSaving ||
+    Boolean(foodFareValidationError) ||
+    deliveryFee === "" ||
+    minimumOrder === "";
   const waitingValidationError = validateWaitingRateDollars(waitingRatePerMinute);
   const waitingSaveDisabled =
     waitingSaving || Boolean(waitingValidationError) || waitingRatePerMinute === "";
@@ -545,7 +723,7 @@ const Page = () => {
     logs[0]?.currentSetRate ??
     limits.defaultPercent ??
     DEFAULT_COMMISSION_LIMITS.defaultPercent;
-  const pageHeading = pageHeadingForTab(activeTab);
+  const pageHeading = pageHeadingForTab(activeTab, activeCategory);
 
   return (
     <>
@@ -575,10 +753,12 @@ const Page = () => {
                   sx={{ width: { xs: "100%", sm: "auto" }, flexShrink: 0 }}
                   variant="contained"
                 >
-                  Set platform commission
+                  {activeCategory === SERVICE_CATEGORIES.FOOD_BEVERAGE
+                    ? "Set food commission"
+                    : "Set platform commission"}
                 </Button>
               ) : null}
-              {activeTab === TAB_FARE && !fareBootLoading ? (
+              {activeTab === TAB_FARE && isTransportation && !fareBootLoading ? (
                 <Button
                   color="primary"
                   onClick={handleOpenFareCreate}
@@ -588,7 +768,17 @@ const Page = () => {
                   Set transportation fare
                 </Button>
               ) : null}
-              {activeTab === TAB_WAITING && !waitingBootLoading ? (
+              {activeTab === TAB_FARE && isFoodBeverage && !foodFareBootLoading ? (
+                <Button
+                  color="primary"
+                  onClick={handleOpenFoodFareCreate}
+                  sx={{ width: { xs: "100%", sm: "auto" }, flexShrink: 0 }}
+                  variant="contained"
+                >
+                  Set food delivery fare
+                </Button>
+              ) : null}
+              {activeTab === TAB_WAITING && isTransportation && !waitingBootLoading ? (
                 <Button
                   color="primary"
                   onClick={handleOpenWaitingCreate}
@@ -624,7 +814,7 @@ const Page = () => {
               >
                 <Tab label="Commission" value={TAB_COMMISSION} />
                 <Tab label="Fare" value={TAB_FARE} />
-                <Tab label="Stop Waiting" value={TAB_WAITING} />
+                {isTransportation ? <Tab label="Stop Waiting" value={TAB_WAITING} /> : null}
               </Tabs>
             ) : null}
 
@@ -674,7 +864,7 @@ const Page = () => {
               )
             ) : null}
 
-            {activeTab === TAB_FARE ? (
+            {activeTab === TAB_FARE && isTransportation ? (
               fareBootLoading ? (
                 <Loader page />
               ) : (
@@ -718,7 +908,51 @@ const Page = () => {
               )
             ) : null}
 
-            {activeTab === TAB_WAITING ? (
+            {activeTab === TAB_FARE && isFoodBeverage ? (
+              foodFareBootLoading ? (
+                <Loader page />
+              ) : (
+                <>
+                  <Stack spacing={0.5}>
+                    <Typography
+                      sx={{ color: "success.main", fontWeight: 600 }}
+                      variant="body2"
+                    >
+                      Delivery Fee {formatFoodFareDollars(foodFareActive?.deliveryFee)} · Minimum
+                      Order {formatFoodFareDollars(foodFareActive?.minimumOrder)}
+                    </Typography>
+                  </Stack>
+
+                  <Box sx={{ position: "relative" }}>
+                    {foodFareTableLoading ? (
+                      <Box
+                        sx={{
+                          alignItems: "center",
+                          bgcolor: "rgba(255, 255, 255, 0.72)",
+                          display: "flex",
+                          inset: 0,
+                          justifyContent: "center",
+                          position: "absolute",
+                          zIndex: 2,
+                        }}
+                      >
+                        <Loader size="md" />
+                      </Box>
+                    ) : null}
+                    <FoodDeliveryFareLogsTable
+                      items={foodFareLogs}
+                      loading={foodFareTableLoading}
+                      onPageChange={setFoodFarePage}
+                      page={foodFarePage}
+                      title="Food delivery fare change logs"
+                      total={foodFareLogsTotal}
+                    />
+                  </Box>
+                </>
+              )
+            ) : null}
+
+            {activeTab === TAB_WAITING && isTransportation ? (
               waitingBootLoading ? (
                 <Loader page />
               ) : (
@@ -767,10 +1001,12 @@ const Page = () => {
       <Modal open={createModalOpen} onClose={handleCloseCreate}>
         <Box sx={responsiveModalSx}>
           <Typography sx={{ mb: 0.5 }} variant="h6">
-            Set platform commission
+            {activeCategory === SERVICE_CATEGORIES.FOOD_BEVERAGE
+              ? "Set food commission"
+              : "Set platform commission"}
           </Typography>
           <Typography color="text.secondary" sx={{ mb: 2.5 }} variant="body2">
-            Creates a new platform commission rate ({limits.minPercent}% –{" "}
+            Creates a new {categoryLabel.toLowerCase()} commission rate ({limits.minPercent}% –{" "}
             {limits.maxPercent}%).
           </Typography>
 
@@ -943,6 +1179,83 @@ const Page = () => {
                 variant="contained"
               >
                 {waitingSaving ? <Loader color="#fff" inline size="xs" /> : "Set Rate"}
+              </Button>
+            </Stack>
+          </Stack>
+        </Box>
+      </Modal>
+
+      <Modal open={foodFareModalOpen} onClose={handleCloseFoodFareCreate}>
+        <Box sx={responsiveModalSx}>
+          <Typography sx={{ mb: 0.5 }} variant="h6">
+            Set food delivery fare
+          </Typography>
+          <Typography color="text.secondary" sx={{ mb: 2.5 }} variant="body2">
+            Publishes global defaults. Restaurants with their own delivery fee or minimum order keep
+            those overrides.
+          </Typography>
+
+          <Stack spacing={2.25}>
+            <TextField
+              disabled
+              label="Current delivery fee"
+              value={formatFoodFareDollars(foodFareActive?.deliveryFee)}
+            />
+
+            <TextField
+              disabled
+              label="Current minimum order"
+              value={formatFoodFareDollars(foodFareActive?.minimumOrder)}
+            />
+
+            <TextField
+              InputProps={{
+                startAdornment: <InputAdornment position="start">$</InputAdornment>,
+              }}
+              error={Boolean(foodFareValidationError && deliveryFee !== "")}
+              fullWidth
+              inputProps={{ min: 0, step: 0.01 }}
+              label="New delivery fee"
+              onChange={(event) => setDeliveryFee(event.target.value)}
+              type="number"
+              value={deliveryFee}
+            />
+
+            <TextField
+              InputProps={{
+                startAdornment: <InputAdornment position="start">$</InputAdornment>,
+              }}
+              error={Boolean(foodFareValidationError && minimumOrder !== "")}
+              fullWidth
+              helperText={
+                foodFareValidationError && (deliveryFee !== "" || minimumOrder !== "")
+                  ? foodFareValidationError
+                  : undefined
+              }
+              inputProps={{ min: 0, step: 0.01 }}
+              label="New minimum order"
+              onChange={(event) => setMinimumOrder(event.target.value)}
+              type="number"
+              value={minimumOrder}
+            />
+
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ pt: 0.5 }}>
+              <Button
+                color="inherit"
+                disabled={foodFareSaving}
+                fullWidth
+                onClick={handleCloseFoodFareCreate}
+                variant="outlined"
+              >
+                Cancel
+              </Button>
+              <Button
+                disabled={foodFareSaveDisabled}
+                fullWidth
+                onClick={handleSaveFoodFare}
+                variant="contained"
+              >
+                {foodFareSaving ? <Loader color="#fff" inline size="xs" /> : "Set Fare"}
               </Button>
             </Stack>
           </Stack>
