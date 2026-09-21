@@ -237,10 +237,14 @@ const Page = () => {
   }, [attachments]);
 
   const statusMeta = useMemo(() => getSupportStatusMeta(row?.status), [row?.status]);
-  const messages = useMemo(
-    () => (Array.isArray(row?.messages) ? row.messages : []),
-    [row?.messages]
-  );
+  const messages = useMemo(() => {
+    const list = Array.isArray(row?.messages) ? [...row.messages] : [];
+    return list.sort((a, b) => {
+      const timeA = new Date(a?.createdAt || 0).getTime();
+      const timeB = new Date(b?.createdAt || 0).getTime();
+      return timeB - timeA;
+    });
+  }, [row?.messages]);
   const submitter = row?.submitter || {};
 
   const heroStats = useMemo(() => {
@@ -409,13 +413,22 @@ const Page = () => {
                           disabled={isUpdatingStatus || statusOnly === row.status}
                           onClick={handleStatusUpdate}
                           sx={{
+                            color: "primary.main",
                             flexShrink: 0,
                             height: 56,
                             minWidth: { xs: "100%", sm: 140 },
+                            "&.Mui-disabled": {
+                              borderColor: alpha(brand.primary, 0.3),
+                              color: alpha(brand.primary, 0.55),
+                            },
                           }}
                           variant="outlined"
                         >
-                          {isUpdatingStatus ? <Loader color="inherit" inline size="xs" /> : "Update"}
+                          {isUpdatingStatus ? (
+                            <Loader color={brand.primary} inline size="xs" />
+                          ) : (
+                            "Update"
+                          )}
                         </Button>
                       </Stack>
                     </DetailSection>
