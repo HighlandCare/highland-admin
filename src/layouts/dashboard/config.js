@@ -12,6 +12,7 @@ import CurrencyDollarIcon from "@heroicons/react/24/solid/CurrencyDollarIcon";
 import ReceiptPercentIcon from "@heroicons/react/24/solid/ReceiptPercentIcon";
 import ClockIcon from "@heroicons/react/24/solid/ClockIcon";
 import ExclamationTriangleIcon from "@heroicons/react/24/solid/ExclamationTriangleIcon";
+import ChatBubbleLeftRightIcon from "@heroicons/react/24/solid/ChatBubbleLeftRightIcon";
 import BuildingStorefrontIcon from "@heroicons/react/24/solid/BuildingStorefrontIcon";
 import { SvgIcon } from "@mui/material";
 export const items = [
@@ -113,6 +114,15 @@ export const items = [
     icon: (
       <SvgIcon fontSize="small">
         <ExclamationTriangleIcon />
+      </SvgIcon>
+    ),
+  },
+  {
+    title: "Help & Feedback",
+    path: "/help-feedback",
+    icon: (
+      <SvgIcon fontSize="small">
+        <ChatBubbleLeftRightIcon />
       </SvgIcon>
     ),
   },
