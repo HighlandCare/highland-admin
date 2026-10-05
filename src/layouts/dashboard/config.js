@@ -2,7 +2,6 @@ import ChartBarIcon from "@heroicons/react/24/solid/ChartBarIcon";
 import MapIcon from "@heroicons/react/24/solid/MapIcon";
 
 import UsersIcon from "@heroicons/react/24/solid/UsersIcon";
-import ShieldCheckIcon from "@heroicons/react/24/solid/ShieldCheckIcon";
 import NewspaperIcon from "@heroicons/react/24/solid/NewspaperIcon";
 import InformationCircleIcon from "@heroicons/react/24/solid/InformationCircleIcon";
 import Cog6ToothIcon from "@heroicons/react/24/solid/Cog6ToothIcon";
@@ -128,29 +127,38 @@ export const items = [
   },
 
   {
-    title: "About",
-    path: "/about",
-    icon: (
-      <SvgIcon fontSize="small">
-        <InformationCircleIcon />
-      </SvgIcon>
-    ),
-  },
-  {
-    title: "Terms & Condition",
+    title: "Legal Information",
     path: "/terms",
     icon: (
       <SvgIcon fontSize="small">
         <NewspaperIcon />
       </SvgIcon>
     ),
+    children: [
+      {
+        title: "Terms & Conditions",
+        path: "/terms",
+      },
+      {
+        title: "Privacy Policy",
+        path: "/policy",
+      },
+      {
+        title: "Intoxicating Substance Policy",
+        path: "/intoxicating-substance",
+      },
+      {
+        title: "Driver Nondiscrimination Policy",
+        path: "/driver-nondiscrimination",
+      },
+    ],
   },
   {
-    title: "Privacy Policy",
-    path: "/policy",
+    title: "About",
+    path: "/about",
     icon: (
       <SvgIcon fontSize="small">
-        <ShieldCheckIcon />
+        <InformationCircleIcon />
       </SvgIcon>
     ),
   },

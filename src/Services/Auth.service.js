@@ -701,6 +701,112 @@ export const addPrivacy = async (contentType = "privacy", title) => {
   }
 };
 
+export const getIntoxicatingSubstancePolicy = async () => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+
+    const response = await Action.get(`admin/intoxicating-substance-policy`, {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
+export const addIntoxicatingSubstancePolicy = async (
+  contentType = "intoxicating-substance",
+  title
+) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const response = await Action.post(
+      `/admin/intoxicating-substance-policy`,
+      {
+        contentType,
+        title,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
+export const getDriverNondiscriminationPolicy = async () => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+
+    const response = await Action.get(`admin/driver-nondiscrimination-policy`, {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
+export const addDriverNondiscriminationPolicy = async (
+  contentType = "driver-nondiscrimination",
+  title
+) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const response = await Action.post(
+      `/admin/driver-nondiscrimination-policy`,
+      {
+        contentType,
+        title,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
 export const deleteUsers = async (_id) => {
   try {
     const authToken = JSON.parse(localStorage.getItem("token"));
