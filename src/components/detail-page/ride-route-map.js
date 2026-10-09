@@ -241,7 +241,7 @@ const RoutePinMarker = ({ point, hovered, onHover, onLeave }) => {
               sx={{ color: "rgba(255,255,255,0.9)", display: "block", lineHeight: 1.4, mt: 0.25 }}
               variant="caption"
             >
-              {point.address || "Location recorded for this stop"}
+              {point.address || "Location recorded for this pause point"}
             </Typography>
           </Box>
         ) : null}
@@ -512,7 +512,7 @@ export function RideRouteMap({ ride }) {
       <Stack direction="row" flexWrap="wrap" spacing={2} sx={{ mt: 1.25, px: 0.5 }}>
         <LegendDot color={MARKER_COLORS.pickup} label="Pickup" />
         {mappedPoints.some((point) => point.role === "stop") ? (
-          <LegendDot color={MARKER_COLORS.stop} label="Stop" />
+          <LegendDot color={MARKER_COLORS.stop} label="Pause Point" />
         ) : null}
         <LegendDot color={MARKER_COLORS.destination} label="Destination" />
       </Stack>

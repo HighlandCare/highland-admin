@@ -2,13 +2,13 @@ import PropTypes from "prop-types";
 import { Box, Stack, Typography } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { brand } from "../../theme/colors";
-import { formatRideDurationSeconds } from "../../utils/rideUtils";
+import { formatPausePointLabel, formatRideDurationSeconds } from "../../utils/rideUtils";
 
 export function RideRouteStops({ stops = [] }) {
   if (!stops.length) {
     return (
       <Typography color="text.secondary" variant="body2">
-        No stops recorded for this ride.
+        No pause points recorded for this ride.
       </Typography>
     );
   }
@@ -25,6 +25,7 @@ export function RideRouteStops({ stops = [] }) {
           actualWait && `Actual wait ${actualWait}`,
           extraWait && `Extra wait ${extraWait}`,
         ].filter(Boolean);
+        const pauseLabel = formatPausePointLabel(index);
 
         return (
           <Stack direction="row" key={`${stop.sequence ?? index}-${stop.kind || "stop"}`} spacing={2}>
@@ -52,6 +53,9 @@ export function RideRouteStops({ stops = [] }) {
             </Box>
 
             <Box sx={{ flex: 1, minWidth: 0, pb: isLast ? 0 : 2.5 }}>
+              <Typography color="text.secondary" sx={{ display: "block", mb: 0.25 }} variant="caption">
+                {pauseLabel}
+              </Typography>
               <Typography fontWeight={600} variant="body2">
                 {stop.address || "Address unavailable"}
               </Typography>

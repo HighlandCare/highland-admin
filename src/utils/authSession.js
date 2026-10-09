@@ -2,6 +2,8 @@ const AUTH_KEYS = ["isLogin", "user", "token"];
 
 const PUBLIC_PATHS = ["/auth/login", "/404"];
 const SESSION_EXPIRED_TOAST_KEY = "auth:session-expired-toast";
+/** Small skew so near-expiry tokens are treated as expired before the first API call. */
+const EXPIRY_SKEW_MS = 5_000;
 
 let isRedirectingToLogin = false;
 
@@ -26,19 +28,64 @@ export const getAuthToken = () => {
   }
 };
 
-export const isAuthenticated = () => {
-  if (typeof window === "undefined") {
-    return false;
+/** Returns JWT `exp` in milliseconds, or null if the token is not a JWT / has no exp. */
+export const getTokenExpiryMs = (token = getAuthToken()) => {
+  if (!token || typeof token !== "string") {
+    return null;
+  }
+
+  const parts = token.split(".");
+  if (parts.length < 2) {
+    return null;
   }
 
   try {
-    const isLogin = JSON.parse(localStorage.getItem("isLogin"));
-    const token = getAuthToken();
-    return Boolean(isLogin && token);
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
+    const payload = JSON.parse(atob(padded));
+    return typeof payload.exp === "number" ? payload.exp * 1000 : null;
   } catch {
-    return false;
+    return null;
   }
 };
+
+export const isTokenExpired = (token = getAuthToken()) => {
+  const expiryMs = getTokenExpiryMs(token);
+  if (expiryMs == null) {
+    return false;
+  }
+  return Date.now() >= expiryMs - EXPIRY_SKEW_MS;
+};
+
+/**
+ * @returns {"authenticated" | "missing" | "expired"}
+ */
+export const getAuthSessionState = () => {
+  if (typeof window === "undefined") {
+    return "missing";
+  }
+
+  let isLogin = false;
+  try {
+    isLogin = Boolean(JSON.parse(localStorage.getItem("isLogin")));
+  } catch {
+    isLogin = false;
+  }
+
+  const token = getAuthToken();
+
+  if (!isLogin || !token) {
+    return "missing";
+  }
+
+  if (isTokenExpired(token)) {
+    return "expired";
+  }
+
+  return "authenticated";
+};
+
+export const isAuthenticated = () => getAuthSessionState() === "authenticated";
 
 export const isAuthRedirecting = () => isRedirectingToLogin;
 
@@ -88,9 +135,7 @@ export const redirectToLogin = ({ reason, nextPath } = {}) => {
     markSessionExpiredToast();
   }
 
-  const next =
-    nextPath ||
-    `${window.location.pathname}${window.location.search || ""}`;
+  const next = nextPath || `${window.location.pathname}${window.location.search || ""}`;
   const params = new URLSearchParams();
 
   if (next && next !== "/" && !isPublicPath(next)) {

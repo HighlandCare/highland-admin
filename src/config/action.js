@@ -1,7 +1,7 @@
 import { baseURL } from "./config";
 import axios from "axios";
 import { toast } from "react-toastify";
-import { redirectToLogin } from "../utils/authSession";
+import { getAuthSessionState, redirectToLogin } from "../utils/authSession";
 
 // const getAuthToken = () => {
 //   const userData = "0000e6b7bf46a9d485ff211b9b2a2df3bd6eb67aae41";
@@ -18,6 +18,20 @@ export const Action = axios.create({
 //   config.headers["admin-token"] = token;
 //   return config;
 // });
+
+Action.interceptors.request.use(function (config) {
+  // Block outbound API calls once a JWT is known-expired so protected pages
+  // don't briefly load before the login redirect.
+  if (typeof window !== "undefined") {
+    const url = String(config?.url || "");
+    const isLoginRequest = /\/login(?:\?|$)/i.test(url);
+    if (!isLoginRequest && getAuthSessionState() === "expired") {
+      redirectToLogin({ reason: "expired" });
+      return Promise.reject(new Error("Session expired"));
+    }
+  }
+  return config;
+});
 
 Action.interceptors.response.use(
   function (response) {

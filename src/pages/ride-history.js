@@ -7,16 +7,22 @@ import { useRouter } from "next/router";
 import Loader from "../components/Loader";
 import { RideHistoryTable } from "../sections/driver-earnings/ride-history-table";
 import { pageContainerSx, pageMainSx } from "../utils/pageLayout";
-import { defaultRideHistoryFilters, getRideList } from "../utils/rideUtils";
+import {
+  defaultRideHistoryFilters,
+  getRideList,
+  getStoredRideHistoryListState,
+  storeRideHistoryListState,
+} from "../utils/rideUtils";
 
 const RIDE_HISTORY_LIMIT = 20;
 
 const Page = () => {
+  const router = useRouter();
+  const [hydrated, setHydrated] = useState(false);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState(defaultRideHistoryFilters);
   const [isLoading, setIsLoading] = useState(true);
   const [rideHistory, setRideHistory] = useState({});
-  const router = useRouter();
 
   useEffect(() => {
     const islogin = JSON.parse(typeof window !== "undefined" && localStorage.getItem("isLogin"));
@@ -27,6 +33,27 @@ const Page = () => {
   }, [router]);
 
   useEffect(() => {
+    const stored = getStoredRideHistoryListState();
+    if (stored) {
+      setPage(stored.page);
+      setFilters(stored.filters);
+    }
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) {
+      return;
+    }
+
+    storeRideHistoryListState({ page, filters });
+  }, [hydrated, page, filters]);
+
+  useEffect(() => {
+    if (!hydrated) {
+      return undefined;
+    }
+
     let active = true;
 
     const fetchRideHistory = async () => {
@@ -34,6 +61,7 @@ const Page = () => {
         setIsLoading(true);
         const response = await getRideHistory(page, RIDE_HISTORY_LIMIT, {
           ...filters,
+          recordType: "ride",
           type: "ride",
         });
         if (active) {
@@ -53,7 +81,7 @@ const Page = () => {
     return () => {
       active = false;
     };
-  }, [page, filters]);
+  }, [hydrated, page, filters]);
 
   const handlePageChange = (newPage) => {
     setPage(newPage);
@@ -65,6 +93,10 @@ const Page = () => {
   };
 
   const hasData = Boolean(getRideList(rideHistory).length);
+
+  if (!hydrated) {
+    return <Loader page />;
+  }
 
   return (
     <>

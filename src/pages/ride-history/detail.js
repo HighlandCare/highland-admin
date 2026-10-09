@@ -36,6 +36,8 @@ import {
   formatRideCurrency,
   formatRideDurationSeconds,
   formatRideEnumLabel,
+  formatPausePointLabel,
+  formatRideEventLabel,
   formatRideField,
   formatRidePaymentStatus,
   formatRideReason,
@@ -45,12 +47,15 @@ import {
   getRideDriver,
   getRideDriverEarning,
   getRideFromResponse,
+  getRideLifecycleEvents,
   getRidePickupAddress,
   getRideScheduledLabel,
   getRideStatusMeta,
   getRideStops,
   getStoredRideDetail,
   mergeRideDetailRecords,
+  normalizeWaitingTotals,
+  sortRideLifecycleEvents,
   storeRideDetail,
 } from "../../utils/rideUtils";
 
@@ -67,47 +72,11 @@ const hasDetailValue = (value) => {
   return true;
 };
 
-const STOP_KIND_LABELS = {
-  pickup: "Pickup",
-  intermediate: "Stop",
-  dropoff: "Destination",
-  destination: "Destination",
-  final: "Destination",
-};
-
-const stopKindLabel = (kind) => STOP_KIND_LABELS[String(kind || "").toLowerCase()] || "Stop";
-
 const formatStopState = (state) =>
   String(state || "")
     .toLowerCase()
     .replace(/_/g, " ")
     .replace(/^./, (c) => c.toUpperCase());
-
-const formatEventType = (type) =>
-  String(type || "")
-    .toLowerCase()
-    .replace(/_/g, " ")
-    .replace(/^./, (c) => c.toUpperCase());
-
-const getRideEventsList = (response) => {
-  if (Array.isArray(response)) {
-    return response;
-  }
-
-  if (Array.isArray(response?.data)) {
-    return response.data;
-  }
-
-  if (Array.isArray(response?.data?.data)) {
-    return response.data.data;
-  }
-
-  if (Array.isArray(response?.events)) {
-    return response.events;
-  }
-
-  return [];
-};
 
 const formatRideTimestamp = (value) => {
   if (!value || value === "false") {
@@ -172,27 +141,54 @@ const Page = () => {
   }, [id]);
 
   useEffect(() => {
-    if (!id) {
+    if (!id || isLoading || !ride) {
       return;
     }
 
-    // Loaded separately from the ride so a missing event log (every ride booked
-    // before multi-destination support) still renders the rest of the page.
+    const isFood =
+      ride.recordType === "food_order" || ride.type === "food_order" || ride.category === "food";
+
+    if (isFood) {
+      setEvents([]);
+      setIsEventsLoading(false);
+      return;
+    }
+
+    // Prefer events embedded on the booking detail payload; fall back to the
+    // legacy events endpoint when the key is absent (older API / cached rows).
+    if (Array.isArray(ride.events)) {
+      setEvents(sortRideLifecycleEvents(ride.events));
+      setIsEventsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
     const loadEvents = async () => {
       setIsEventsLoading(true);
       try {
-        const response = await getRideEvents(id, 1, 200);
-        setEvents(getRideEventsList(response));
+        const response = await getRideEvents(id, 1, 500);
+        if (!cancelled) {
+          setEvents(sortRideLifecycleEvents(getRideLifecycleEvents(response)));
+        }
       } catch (error) {
         console.error("Error loading ride events:", error);
-        setEvents([]);
+        if (!cancelled) {
+          setEvents([]);
+        }
       } finally {
-        setIsEventsLoading(false);
+        if (!cancelled) {
+          setIsEventsLoading(false);
+        }
       }
     };
 
     loadEvents();
-  }, [id]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, isLoading, ride]);
 
   const statusMeta = ride ? getRideStatusMeta(ride.status) : null;
   const stops = ride ? getRideStops(ride) : [];
@@ -201,7 +197,9 @@ const Page = () => {
   const driver = ride ? getRideDriver(ride) : null;
   const scheduledLabel = ride ? getRideScheduledLabel(ride) : null;
   const payout = ride?.driverPayout;
-  const waitingTotals = ride?.waitingTotals;
+  const waitingTotals = normalizeWaitingTotals(ride?.waitingTotals);
+  const adjustments = Array.isArray(ride?.adjustments) ? ride.adjustments : [];
+  const pricingTimeline = ride?.pricingTimeline;
 
   const scheduleFields = ride
     ? [
@@ -225,17 +223,22 @@ const Page = () => {
     ? [
         {
           label: "Planned Waiting",
-          value: formatRideDurationSeconds(waitingTotals.plannedWaitingSeconds),
+          value: formatRideDurationSeconds(waitingTotals.plannedSeconds),
           hideEmpty: true,
         },
         {
           label: "Actual Waiting",
-          value: formatRideDurationSeconds(waitingTotals.actualWaitingSeconds),
+          value: formatRideDurationSeconds(waitingTotals.actualSeconds),
           hideEmpty: true,
         },
         {
           label: "Extra Waiting",
-          value: formatRideDurationSeconds(waitingTotals.extraWaitingSeconds),
+          value: formatRideDurationSeconds(waitingTotals.extraSeconds),
+          hideEmpty: true,
+        },
+        {
+          label: "Unused Waiting",
+          value: formatRideDurationSeconds(waitingTotals.unusedSeconds),
           hideEmpty: true,
         },
       ].filter((field) => !field.hideEmpty || hasDetailValue(field.value))
@@ -287,13 +290,23 @@ const Page = () => {
                         },
                         { label: "Type", value: formatRideEnumLabel(ride.type) },
                         { label: "Category", value: formatRideEnumLabel(ride.category), hideEmpty: true },
-                        // { label: "Mode", value: formatRideEnumLabel(ride.mode), hideEmpty: true },
+                        { label: "Mode", value: formatRideEnumLabel(ride.mode), hideEmpty: true },
+                        {
+                          label: "Pricing Mode",
+                          value: formatRideEnumLabel(ride.pricingMode),
+                          hideEmpty: true,
+                        },
                         { label: "Status", value: formatRideEnumLabel(ride.status) },
-                        // {
-                        //   label: "Passengers",
-                        //   value: formatRideField(ride.numberOfPassenger),
-                        //   hideEmpty: true,
-                        // },
+                        {
+                          label: "Test Ride",
+                          value:
+                            ride.isTestRide === true
+                              ? "Yes"
+                              : ride.isTestRide === false
+                                ? "No"
+                                : null,
+                          hideEmpty: true,
+                        },
                       ]}
                     />
                   </DetailSection>
@@ -349,12 +362,12 @@ const Page = () => {
 
                   {stops.length ? (
                     <DetailSection
-                      title={`Stops (${stops.length})`}
+                      title={`Pause Points (${stops.length})`}
                     >
                       {stops.map((stop, index) => (
                         <Box key={stop.stopId || `${stop.sequence ?? index}`} sx={{ mb: 2.5 }}>
                           <Typography sx={{ fontWeight: 600, mb: 0.75 }} variant="subtitle2">
-                            {`${index + 1}. ${stopKindLabel(stop.kind)}`}
+                            {formatPausePointLabel(index)}
                             {stop.state ? ` — ${formatStopState(stop.state)}` : ""}
                           </Typography>
                           <DetailFieldGrid
@@ -377,13 +390,38 @@ const Page = () => {
                                 hideEmpty: true,
                               },
                               {
+                                label: "Approaching At",
+                                value: formatRideTimestamp(stop.approachingAt),
+                                hideEmpty: true,
+                              },
+                              {
                                 label: "Arrived At",
                                 value: formatRideTimestamp(stop.arrivedAt),
                                 hideEmpty: true,
                               },
                               {
+                                label: "Waiting Started",
+                                value: formatRideTimestamp(stop.waitingStartedAt),
+                                hideEmpty: true,
+                              },
+                              {
+                                label: "Waiting Ended",
+                                value: formatRideTimestamp(stop.waitingEndedAt),
+                                hideEmpty: true,
+                              },
+                              {
                                 label: "Departed At",
                                 value: formatRideTimestamp(stop.departedAt),
+                                hideEmpty: true,
+                              },
+                              {
+                                label: "Completed At",
+                                value: formatRideTimestamp(stop.completedAt),
+                                hideEmpty: true,
+                              },
+                              {
+                                label: "Skip Reason",
+                                value: formatRideField(stop.skipReason),
                                 hideEmpty: true,
                               },
                             ].filter((field) => !field.hideEmpty || hasDetailValue(field.value))}
@@ -396,6 +434,68 @@ const Page = () => {
                           authorized before the ride.
                         </Typography>
                       ) : null}
+                    </DetailSection>
+                  ) : null}
+
+                  {adjustments.length ? (
+                    <DetailSection title={`Waiting Adjustments (${adjustments.length})`}>
+                      {adjustments.map((adjustment, index) => (
+                        <Box
+                          key={adjustment.adjustmentId || `${adjustment.sequence ?? index}`}
+                          sx={{ mb: 2.5 }}
+                        >
+                          <Typography sx={{ fontWeight: 600, mb: 0.75 }} variant="subtitle2">
+                            {formatRideEnumLabel(adjustment.type) || `Adjustment ${index + 1}`}
+                            {adjustment.status ? ` — ${formatRideEnumLabel(adjustment.status)}` : ""}
+                          </Typography>
+                          <DetailFieldGrid
+                            columns={{ sm: 2, lg: 3 }}
+                            fields={[
+                              {
+                                label: "Planned",
+                                value: formatRideDurationSeconds(adjustment.plannedSeconds),
+                                hideEmpty: true,
+                              },
+                              {
+                                label: "Actual",
+                                value: formatRideDurationSeconds(adjustment.actualSeconds),
+                                hideEmpty: true,
+                              },
+                              {
+                                label: "Delta",
+                                value: formatRideDurationSeconds(adjustment.deltaSeconds),
+                                hideEmpty: true,
+                              },
+                              {
+                                label: "Indicative Amount",
+                                value:
+                                  adjustment.indicativeAmountCents != null
+                                    ? formatRideCurrency(Number(adjustment.indicativeAmountCents) / 100)
+                                    : null,
+                                hideEmpty: true,
+                              },
+                              {
+                                label: "Charged",
+                                value:
+                                  adjustment.charged === true
+                                    ? "Yes"
+                                    : adjustment.charged === false
+                                      ? "No"
+                                      : null,
+                                hideEmpty: true,
+                              },
+                              {
+                                label: "Created At",
+                                value: formatRideTimestamp(adjustment.createdAt),
+                                hideEmpty: true,
+                              },
+                            ].filter((field) => !field.hideEmpty || hasDetailValue(field.value))}
+                          />
+                        </Box>
+                      ))}
+                      <Typography color="text.secondary" variant="caption">
+                        Adjustments are recorded for review only and are not charged to the customer.
+                      </Typography>
                     </DetailSection>
                   ) : null}
 
@@ -445,6 +545,20 @@ const Page = () => {
                         {
                           label: "Currency",
                           value: formatRideField(ride.pricing?.currency)?.toUpperCase(),
+                          hideEmpty: true,
+                        },
+                        {
+                          label: "Quoted At",
+                          value: formatRideTimestamp(
+                            pricingTimeline?.quotedAt || ride.pricing?.quotedAt
+                          ),
+                          hideEmpty: true,
+                        },
+                        {
+                          label: "Locked At",
+                          value: formatRideTimestamp(
+                            pricingTimeline?.lockedAt || ride.pricing?.lockedAt
+                          ),
                           hideEmpty: true,
                         },
                         {
@@ -502,48 +616,60 @@ const Page = () => {
                         Loading timeline…
                       </Typography>
                     ) : events.length ? (
-                      <Box
-                        sx={{
-                          border: "1px solid",
-                          borderColor: "neutral.200",
-                          borderRadius: 2,
-                          overflow: "hidden",
-                        }}
-                      >
-                        <Scrollbar sx={{ maxHeight: 320 }}>
-                          <Box sx={{ minWidth: { xs: 360, md: "100%" } }}>
-                            <Table size="small" stickyHeader>
-                              <TableHead>
-                                <TableRow>
-                                  <TableCell>Event</TableCell>
-                                  <TableCell>Time</TableCell>
-                                </TableRow>
-                              </TableHead>
-                              <TableBody>
-                                {events.map((event, index) => (
-                                  <TableRow
-                                    hover
-                                    key={event._id || `${event.type}-${event.serverTimestamp}-${index}`}
-                                  >
-                                    <TableCell>
-                                      <Typography fontWeight={600} variant="body2">
-                                        {formatEventType(event.type)}
-                                      </Typography>
-                                    </TableCell>
-                                    <TableCell sx={{ whiteSpace: "nowrap" }}>
-                                      {formatRideTimestamp(event.serverTimestamp) || "—"}
-                                    </TableCell>
+                      <>
+                        {ride.eventsTruncated ||
+                        (ride.eventCount != null && Number(ride.eventCount) > events.length) ? (
+                          <Typography color="text.secondary" sx={{ mb: 1.5 }} variant="caption">
+                            Showing {events.length} of {ride.eventCount ?? events.length} events
+                            {ride.eventsTruncated ? " (truncated)" : ""}.
+                          </Typography>
+                        ) : null}
+                        <Box
+                          sx={{
+                            border: "1px solid",
+                            borderColor: "neutral.200",
+                            borderRadius: 2,
+                            overflow: "hidden",
+                          }}
+                        >
+                          <Scrollbar sx={{ maxHeight: 320 }}>
+                            <Box sx={{ minWidth: { xs: 360, md: "100%" } }}>
+                              <Table size="small" stickyHeader>
+                                <TableHead>
+                                  <TableRow>
+                                    <TableCell>Event</TableCell>
+                                    <TableCell>Time</TableCell>
                                   </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </Box>
-                        </Scrollbar>
-                      </Box>
+                                </TableHead>
+                                <TableBody>
+                                  {events.map((event, index) => (
+                                    <TableRow
+                                      hover
+                                      key={
+                                        event.eventId ||
+                                        event._id ||
+                                        `${event.type}-${event.serverTimestamp}-${index}`
+                                      }
+                                    >
+                                      <TableCell>
+                                        <Typography fontWeight={600} variant="body2">
+                                          {formatRideEventLabel(event, ride)}
+                                        </Typography>
+                                      </TableCell>
+                                      <TableCell sx={{ whiteSpace: "nowrap" }}>
+                                        {formatRideTimestamp(event.serverTimestamp) || "—"}
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </Box>
+                          </Scrollbar>
+                        </Box>
+                      </>
                     ) : (
                       <Typography color="text.secondary" variant="body2">
-                        No recorded events. Rides booked before multi-destination support have no event
-                        log.
+                        No recorded events. Legacy rides often have an empty event log.
                       </Typography>
                     )}
                   </DetailSection>

@@ -2,7 +2,12 @@ import { useEffect, useState } from "react";
 import PropTypes from "prop-types";
 import { useRouter } from "next/router";
 import Loader from "./Loader";
-import { clearAuthSession, isAuthenticated, isPublicPath } from "../utils/authSession";
+import {
+  clearAuthSession,
+  getAuthSessionState,
+  isPublicPath,
+  redirectToLogin,
+} from "../utils/authSession";
 
 export default function AuthGuard({ children }) {
   const router = useRouter();
@@ -20,7 +25,18 @@ export default function AuthGuard({ children }) {
       return undefined;
     }
 
-    if (!isAuthenticated()) {
+    const sessionState = getAuthSessionState();
+
+    if (sessionState === "expired") {
+      // Hard-redirect before any protected page (e.g. dashboard) mounts.
+      redirectToLogin({
+        reason: "expired",
+        nextPath: router.asPath && router.asPath !== "/" ? router.asPath : undefined,
+      });
+      return undefined;
+    }
+
+    if (sessionState === "missing") {
       clearAuthSession();
       const next = router.asPath && router.asPath !== "/" ? router.asPath : undefined;
       const query = next ? `?next=${encodeURIComponent(next)}` : "";
@@ -40,7 +56,9 @@ export default function AuthGuard({ children }) {
     return children;
   }
 
-  if (!ready) {
+  // Keep showing the loader while auth is unresolved or while redirecting away.
+  const sessionState = typeof window !== "undefined" ? getAuthSessionState() : "missing";
+  if (!ready || sessionState !== "authenticated") {
     return <Loader />;
   }
 

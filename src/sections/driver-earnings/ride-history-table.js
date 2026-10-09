@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { useRouter } from "next/router";
+import ArrowDownTrayIcon from "@heroicons/react/24/outline/ArrowDownTrayIcon";
 import EyeIcon from "@heroicons/react/24/outline/EyeIcon";
+import { toast } from "react-toastify";
 import {
-  Chip,
+  Button,
   FormControl,
+  Menu,
   MenuItem,
   Select,
   Stack,
-  TextField,
+  SvgIcon,
   TableBody,
   TableCell,
   TableHead,
@@ -16,6 +19,9 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
+import Loader from "../../components/Loader";
+import { DateRangeFilter } from "../../components/date-range-filter";
+import { exportRideHistory } from "../../utils/rideHistoryExport";
 import {
   detailTableHeadSx,
   detailTableRowSx,
@@ -47,6 +53,7 @@ import {
   RIDE_PAYMENT_FILTER_OPTIONS,
   RIDE_STATUS_FILTER_OPTIONS,
   storeRideDetail,
+  storeRideHistoryListState,
   truncateRideAddress,
 } from "../../utils/rideUtils";
 
@@ -96,6 +103,8 @@ export const RideHistoryTable = (props) => {
   const router = useRouter();
   const [items, setItems] = useState(initialItems);
   const [searchInput, setSearchInput] = useState(filters.search ?? "");
+  const [exportAnchorEl, setExportAnchorEl] = useState(null);
+  const [isExporting, setIsExporting] = useState(false);
   const filtersRef = useRef(filters);
 
   filtersRef.current = filters;
@@ -150,6 +159,7 @@ export const RideHistoryTable = (props) => {
   };
 
   const handleViewBooking = (booking) => {
+    storeRideHistoryListState({ page, filters });
     storeRideDetail(booking);
     if (isFoodOrderBooking(booking)) {
       router.push(`/orders/detail?id=${booking.orderId || booking.rideId}`);
@@ -172,18 +182,43 @@ export const RideHistoryTable = (props) => {
     });
   };
 
-  const handleStartDateChange = (event) => {
+  const handleDateRangeChange = ({ startDate, endDate }) => {
     onFiltersChange({
       ...filters,
-      startDate: event.target.value,
+      startDate: startDate || "",
+      endDate: endDate || "",
     });
   };
 
-  const handleEndDateChange = (event) => {
-    onFiltersChange({
-      ...filters,
-      endDate: event.target.value,
-    });
+  const handleExportClick = (event) => {
+    setExportAnchorEl(event.currentTarget);
+  };
+
+  const handleExportClose = () => {
+    setExportAnchorEl(null);
+  };
+
+  const handleExport = async (format) => {
+    handleExportClose();
+
+    try {
+      setIsExporting(true);
+      const count = await exportRideHistory(
+        {
+          ...filters,
+          search: (filters.search ?? searchInput ?? "").trim(),
+        },
+        format
+      );
+      toast.success(
+        `Exported ${count} ride${count === 1 ? "" : "s"} to ${format === "excel" ? "Excel" : "CSV"}`
+      );
+    } catch (error) {
+      console.error("Ride history export failed:", error);
+      toast.error(error.message || "Unable to export ride history");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const filterActions = (
@@ -193,29 +228,17 @@ export const RideHistoryTable = (props) => {
       spacing={1.5}
       sx={{
         width: { xs: "100%", md: "auto" },
-        "& .MuiFormControl-root, & .MuiTextField-root": {
+        "& .MuiFormControl-root": {
           width: { xs: "100%", sm: "auto" },
           minWidth: { xs: "100%", sm: 150 },
         },
       }}
     >
-      <TextField
-        InputLabelProps={{ shrink: true }}
-        label="From"
-        onChange={handleStartDateChange}
-        size="small"
-        type="date"
-        value={filters.startDate ?? ""}
-        sx={filterSelectSx}
-      />
-      <TextField
-        InputLabelProps={{ shrink: true }}
-        label="To"
-        onChange={handleEndDateChange}
-        size="small"
-        type="date"
-        value={filters.endDate ?? ""}
-        sx={filterSelectSx}
+      <DateRangeFilter
+        endDate={filters.endDate ?? ""}
+        label="Date range"
+        onChange={handleDateRangeChange}
+        startDate={filters.startDate ?? ""}
       />
       <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 150 } }}>
         <Select
@@ -231,20 +254,39 @@ export const RideHistoryTable = (props) => {
           ))}
         </Select>
       </FormControl>
-      {/* <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 150 } }}>
-        <Select
-          displayEmpty
-          onChange={handlePaymentFilterChange}
-          sx={filterSelectSx}
-          value={filters.havePaid ?? ""}
-        >
-          {RIDE_PAYMENT_FILTER_OPTIONS.map((option) => (
-            <MenuItem key={option.label} value={option.value}>
-              {option.label}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl> */}
+      <Button
+        disabled={isExporting}
+        onClick={handleExportClick}
+        size="medium"
+        startIcon={
+          isExporting ? null : (
+            <SvgIcon fontSize="small">
+              <ArrowDownTrayIcon />
+            </SvgIcon>
+          )
+        }
+        sx={{
+          color: "#fff",
+          height: 40,
+          minWidth: { xs: "100%", sm: 120 },
+          "&.Mui-disabled": { color: "rgba(255,255,255,0.75)" },
+        }}
+        variant="contained"
+      >
+        {isExporting ? <Loader color="#fff" inline size="xs" /> : "Export"}
+      </Button>
+      <Menu
+        anchorEl={exportAnchorEl}
+        onClose={handleExportClose}
+        open={Boolean(exportAnchorEl)}
+      >
+        <MenuItem disabled={isExporting} onClick={() => handleExport("csv")}>
+          Export as CSV
+        </MenuItem>
+        <MenuItem disabled={isExporting} onClick={() => handleExport("excel")}>
+          Export as Excel
+        </MenuItem>
+      </Menu>
     </Stack>
   );
 

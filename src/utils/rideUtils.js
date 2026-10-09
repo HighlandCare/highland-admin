@@ -109,11 +109,18 @@ export const mergeRideDetailRecords = (cached, incoming) => {
     payment: incoming.payment || cached.payment || null,
     driverPayout: incoming.driverPayout || cached.driverPayout || null,
     pricing: incoming.pricing || cached.pricing || null,
+    pricingTimeline: incoming.pricingTimeline || cached.pricingTimeline || null,
     waitingTotals: incoming.waitingTotals ?? cached.waitingTotals ?? null,
     stops:
       Array.isArray(incoming.stops) && incoming.stops.length
         ? incoming.stops
         : cached.stops || [],
+    events: Array.isArray(incoming.events) ? incoming.events : cached.events || [],
+    adjustments: Array.isArray(incoming.adjustments)
+      ? incoming.adjustments
+      : cached.adjustments || [],
+    eventCount: incoming.eventCount ?? cached.eventCount ?? null,
+    eventsTruncated: incoming.eventsTruncated ?? cached.eventsTruncated ?? false,
     scheduledAt: incoming.scheduledAt ?? cached.scheduledAt ?? null,
     pre_date: incoming.pre_date ?? cached.pre_date ?? null,
     pre_time: incoming.pre_time ?? cached.pre_time ?? null,
@@ -178,7 +185,11 @@ export const getBookingReferenceLabel = (item) => {
     return item?.orderNumber ? `#${item.orderNumber}` : "Food order";
   }
 
-  return item?.mode === "scheduled" ? "Scheduled ride" : "Ride";
+  if (item?.mode === "pre" || item?.mode === "scheduled") {
+    return "Scheduled ride";
+  }
+
+  return "Ride";
 };
 
 export const getBookingDestinationLabel = (item) => {
@@ -202,6 +213,12 @@ export const getRideStatusMeta = (status) => {
       return { color: "success", label: "Completed" };
     case "started":
       return { color: "info", label: "Started" };
+    case "arrived":
+      return { color: "info", label: "Arrived" };
+    case "pending":
+      return { color: "warning", label: "Pending" };
+    case "pending_payment":
+      return { color: "warning", label: "Pending payment" };
     case "cancelled":
       return { color: "neutral", label: "Cancelled" };
     case "rejected":
@@ -219,10 +236,32 @@ export const getRideStatusMeta = (status) => {
     case "arrived_at_restaurant":
     case "picked_up":
     case "out_for_delivery":
-      return { color: "info", label: status.replace(/_/g, " ") };
+      return {
+        color: "info",
+        label: normalized.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()),
+      };
     default:
-      return { color: "neutral", label: status || "Unknown" };
+      return {
+        color: "neutral",
+        label: normalized
+          ? normalized.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase())
+          : "Unknown",
+      };
   }
+};
+
+/** Normalize waitingTotals for legacy (plannedWaitingSeconds) + new (plannedSeconds) shapes. */
+export const normalizeWaitingTotals = (waitingTotals) => {
+  if (!waitingTotals || typeof waitingTotals !== "object") {
+    return null;
+  }
+
+  return {
+    plannedSeconds: waitingTotals.plannedSeconds ?? waitingTotals.plannedWaitingSeconds ?? null,
+    actualSeconds: waitingTotals.actualSeconds ?? waitingTotals.actualWaitingSeconds ?? null,
+    extraSeconds: waitingTotals.extraSeconds ?? waitingTotals.extraWaitingSeconds ?? null,
+    unusedSeconds: waitingTotals.unusedSeconds ?? waitingTotals.unusedWaitingSeconds ?? null,
+  };
 };
 
 export const formatRideReason = (value) => {
@@ -235,9 +274,13 @@ export const formatRideReason = (value) => {
 
 export const RIDE_STATUS_FILTER_OPTIONS = [
   { label: "All Statuses", value: "" },
+  { label: "Pending", value: "pending" },
+  { label: "Pending Payment", value: "pending_payment" },
+  { label: "Accepted", value: "accepted" },
+  { label: "Arrived", value: "arrived" },
+  { label: "Started", value: "started" },
   { label: "Completed", value: "completed" },
   { label: "Cancelled", value: "cancelled" },
-  { label: "Started", value: "started" },
   { label: "Rejected", value: "rejected" },
   { label: "Disputed", value: "disputed" },
 ];
@@ -255,6 +298,54 @@ export const defaultRideHistoryFilters = () => ({
   endDate: "",
   search: "",
 });
+
+const RIDE_HISTORY_LIST_STATE_KEY = "rideHistoryListState";
+
+export const storeRideHistoryListState = ({ page = 1, filters } = {}) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    sessionStorage.setItem(
+      RIDE_HISTORY_LIST_STATE_KEY,
+      JSON.stringify({
+        page: Math.max(Number(page) || 1, 1),
+        filters: {
+          ...defaultRideHistoryFilters(),
+          ...(filters && typeof filters === "object" ? filters : {}),
+        },
+      })
+    );
+  } catch (error) {
+    console.error("storeRideHistoryListState error:", error);
+  }
+};
+
+export const getStoredRideHistoryListState = () => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const raw = sessionStorage.getItem(RIDE_HISTORY_LIST_STATE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw);
+    return {
+      page: Math.max(Number(parsed?.page) || 1, 1),
+      filters: {
+        ...defaultRideHistoryFilters(),
+        ...(parsed?.filters && typeof parsed.filters === "object" ? parsed.filters : {}),
+      },
+    };
+  } catch (error) {
+    console.error("getStoredRideHistoryListState error:", error);
+    return null;
+  }
+};
 
 export const getRideFromResponse = (response) => {
   if (!response) {
@@ -350,6 +441,28 @@ export const formatRideDurationSeconds = (value) => {
 
 const ROUTE_ENDPOINT_KINDS = new Set(["pickup", "final", "dropoff", "destination"]);
 
+/** Normalize legacy flat stop fields + new waiting/timing nested shape. */
+export const normalizeRideStop = (stop = {}) => {
+  const timing = stop?.timing && typeof stop.timing === "object" ? stop.timing : {};
+  const waiting = stop?.waiting && typeof stop.waiting === "object" ? stop.waiting : {};
+
+  return {
+    ...stop,
+    plannedWaitingSeconds: stop.plannedWaitingSeconds ?? waiting.plannedSeconds ?? null,
+    actualWaitingSeconds: stop.actualWaitingSeconds ?? waiting.actualSeconds ?? null,
+    extraWaitingSeconds: stop.extraWaitingSeconds ?? waiting.extraSeconds ?? null,
+    unusedWaitingSeconds: stop.unusedWaitingSeconds ?? waiting.unusedSeconds ?? null,
+    approachingAt: stop.approachingAt ?? timing.approachingAt ?? null,
+    arrivedAt: stop.arrivedAt ?? timing.arrivedAt ?? null,
+    waitingStartedAt: stop.waitingStartedAt ?? timing.waitingStartedAt ?? null,
+    plannedWaitingEndsAt: stop.plannedWaitingEndsAt ?? timing.plannedWaitingEndsAt ?? null,
+    waitingExpiredAt: stop.waitingExpiredAt ?? timing.waitingExpiredAt ?? null,
+    waitingEndedAt: stop.waitingEndedAt ?? timing.waitingEndedAt ?? null,
+    departedAt: stop.departedAt ?? timing.departedAt ?? null,
+    completedAt: stop.completedAt ?? timing.completedAt ?? null,
+  };
+};
+
 export const getRideStops = (ride) => {
   if (!Array.isArray(ride?.stops) || !ride.stops.length) {
     return [];
@@ -378,8 +491,251 @@ export const getRideStops = (ride) => {
       }
 
       return true;
-    });
+    })
+    .map(normalizeRideStop);
 };
+
+/** e.g. index 0 → "Pause Point (1)" */
+export const formatPausePointLabel = (indexZeroBased) => {
+  const n = Math.trunc(Number(indexZeroBased)) + 1;
+  return `Pause Point (${Math.max(n, 1)})`;
+};
+
+const isRouteEndpointKind = (kind) =>
+  ROUTE_ENDPOINT_KINDS.has(String(kind || "").toLowerCase());
+
+/**
+ * Intermediate pause points in route order (from full ride.stops).
+ * Prefer this over getRideStops for event→number mapping so pickup address
+ * filtering does not drop a stop that events still reference.
+ */
+export const getOrderedPausePoints = (rideOrStops) => {
+  const rawStops = Array.isArray(rideOrStops)
+    ? rideOrStops
+    : Array.isArray(rideOrStops?.stops)
+      ? rideOrStops.stops
+      : [];
+
+  return [...rawStops]
+    .sort((a, b) => Number(a?.sequence ?? 0) - Number(b?.sequence ?? 0))
+    .filter((stop) => !isRouteEndpointKind(stop?.kind))
+    .map(normalizeRideStop);
+};
+
+/** 1-based pause-point number for a stopId within intermediate pause points. */
+export const getPausePointNumber = (stopId, pausePoints = []) => {
+  if (stopId == null || !Array.isArray(pausePoints) || !pausePoints.length) {
+    return null;
+  }
+
+  const match = String(stopId);
+  const index = pausePoints.findIndex(
+    (stop) =>
+      String(stop?.stopId ?? "") === match ||
+      String(stop?._id ?? "") === match ||
+      String(stop?.id ?? "") === match
+  );
+
+  return index >= 0 ? index + 1 : null;
+};
+
+const isStopRelatedEventType = (type) => {
+  const normalized = String(type || "").toUpperCase();
+  return (
+    normalized.includes("STOP") ||
+    normalized.includes("WAITING") ||
+    normalized.includes("EXTRA_WAITING") ||
+    normalized.includes("FINAL_DESTINATION")
+  );
+};
+
+const findStopInRide = (ride, stopId) => {
+  if (stopId == null || !Array.isArray(ride?.stops)) {
+    return null;
+  }
+
+  const match = String(stopId);
+  return (
+    ride.stops.find(
+      (stop) =>
+        String(stop?.stopId ?? "") === match ||
+        String(stop?._id ?? "") === match ||
+        String(stop?.id ?? "") === match
+    ) || null
+  );
+};
+
+/**
+ * Resolve which route stop an event refers to (pickup / pause / destination).
+ * Only uses sequence fallback for stop-related event types (not Quote/Payment).
+ */
+export const resolveEventStopContext = (event, ride) => {
+  if (!ride || !Array.isArray(ride.stops) || !ride.stops.length) {
+    return { role: null, pauseNumber: null, stop: null };
+  }
+
+  const pausePoints = getOrderedPausePoints(ride);
+  const stopId = event?.stopId ?? event?.metadata?.stopId ?? event?.metadata?.stop_id;
+  let stop = findStopInRide(ride, stopId);
+
+  if (!stop && isStopRelatedEventType(event?.type)) {
+    const sequence = event?.sequence ?? event?.metadata?.sequence ?? event?.metadata?.stopSequence;
+    if (sequence != null && sequence !== "") {
+      const seqNum = Number(sequence);
+      stop =
+        ride.stops.find((candidate) => Number(candidate?.sequence) === seqNum) || null;
+    }
+  }
+
+  if (!stop) {
+    return { role: null, pauseNumber: null, stop: null };
+  }
+
+  const kind = String(stop.kind || "").toLowerCase();
+
+  if (kind === "pickup") {
+    return { role: "pickup", pauseNumber: null, stop };
+  }
+
+  if (kind === "final" || kind === "dropoff" || kind === "destination") {
+    return { role: "destination", pauseNumber: null, stop };
+  }
+
+  const pauseNumber = getPausePointNumber(stop.stopId ?? stop._id ?? stop.id, pausePoints);
+  if (pauseNumber) {
+    return { role: "pause", pauseNumber, stop };
+  }
+
+  // Intermediate without id match — fall back to position among pause points.
+  const orderedIndex = pausePoints.findIndex(
+    (candidate) =>
+      candidate === stop ||
+      (candidate?.stopId && candidate.stopId === stop.stopId) ||
+      Number(candidate?.sequence) === Number(stop?.sequence)
+  );
+
+  return {
+    role: orderedIndex >= 0 ? "pause" : null,
+    pauseNumber: orderedIndex >= 0 ? orderedIndex + 1 : null,
+    stop,
+  };
+};
+
+/** Resolve 1-based pause point number (null for pickup/destination/non-stop events). */
+export const resolveEventPausePointNumber = (event, rideOrPausePoints) => {
+  if (Array.isArray(rideOrPausePoints)) {
+    if (!isStopRelatedEventType(event?.type)) {
+      return null;
+    }
+    const stopId = event?.stopId ?? event?.metadata?.stopId ?? event?.metadata?.stop_id;
+    return getPausePointNumber(stopId, rideOrPausePoints);
+  }
+
+  return resolveEventStopContext(event, rideOrPausePoints).pauseNumber;
+};
+
+/** Format lifecycle event types for UI/export (STOP_* → Pause Point). */
+export const formatRideEventType = (type) => {
+  const normalized = String(type || "")
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .trim();
+
+  const withPausePoints = normalized
+    .replace(/\bnext stop\b/g, "Next Pause Point")
+    .replace(/\bstops\b/g, "Pause Points")
+    .replace(/\bstop\b/g, "Pause Point");
+
+  return withPausePoints.replace(/^./, (c) => c.toUpperCase());
+};
+
+const applyStopPlaceLabel = (baseLabel, placeLabel) => {
+  if (/\bNext Pause Point\b/.test(baseLabel)) {
+    return baseLabel.replace(/\bNext Pause Point\b/, `Next ${placeLabel}`);
+  }
+
+  if (/\bPause Points\b/.test(baseLabel)) {
+    return baseLabel.replace(/\bPause Points\b/, placeLabel);
+  }
+
+  if (/\bPause Point\b/.test(baseLabel)) {
+    return baseLabel.replace(/\bPause Point\b/, placeLabel);
+  }
+
+  // Append without wrapping parens so we get "Waiting started Pause Point (1)",
+  // not "Waiting started (Pause Point (1))".
+  return `${baseLabel} ${placeLabel}`;
+};
+
+/**
+ * Event label for the timeline Event column.
+ * Pickup/destination stops use those names; intermediate stops use Pause Point (1), (2), …
+ * Pass the full ride object so stopId can be resolved against ride.stops.
+ */
+export const formatRideEventLabel = (event, ride = null) => {
+  const base = formatRideEventType(event?.type);
+
+  if (!ride || typeof ride !== "object" || Array.isArray(ride)) {
+    // Legacy: pause-points array only — number intermediate stops, never non-stop events.
+    if (!isStopRelatedEventType(event?.type)) {
+      return base;
+    }
+
+    const pauseNumber = resolveEventPausePointNumber(event, ride || []);
+    if (!pauseNumber) {
+      return base;
+    }
+
+    return applyStopPlaceLabel(base, `Pause Point (${pauseNumber})`);
+  }
+
+  const { role, pauseNumber } = resolveEventStopContext(event, ride);
+
+  if (role === "pickup") {
+    return applyStopPlaceLabel(base, "Pickup");
+  }
+
+  if (role === "destination") {
+    return applyStopPlaceLabel(base, "Destination");
+  }
+
+  if (role === "pause" && pauseNumber) {
+    return applyStopPlaceLabel(base, `Pause Point (${pauseNumber})`);
+  }
+
+  return base;
+};
+
+export const getRideLifecycleEvents = (rideOrResponse) => {
+  if (Array.isArray(rideOrResponse)) {
+    return rideOrResponse;
+  }
+
+  if (Array.isArray(rideOrResponse?.events)) {
+    return rideOrResponse.events;
+  }
+
+  if (Array.isArray(rideOrResponse?.data?.events)) {
+    return rideOrResponse.data.events;
+  }
+
+  if (Array.isArray(rideOrResponse?.data)) {
+    return rideOrResponse.data;
+  }
+
+  if (Array.isArray(rideOrResponse?.data?.data)) {
+    return rideOrResponse.data.data;
+  }
+
+  return [];
+};
+
+export const sortRideLifecycleEvents = (events = []) =>
+  [...events].sort((a, b) => {
+    const timeA = new Date(a?.serverTimestamp || a?.createdAt || 0).getTime();
+    const timeB = new Date(b?.serverTimestamp || b?.createdAt || 0).getTime();
+    return timeA - timeB;
+  });
 
 export const formatRidePaymentStatus = (havePaid, paymentStatus) => {
   if (paymentStatus && paymentStatus !== "false") {
@@ -520,19 +876,19 @@ export const getRideRoutePoints = (ride) => {
     ? [...ride.stops].sort((a, b) => Number(a?.sequence ?? 0) - Number(b?.sequence ?? 0))
     : [];
 
-  let unlabeledStopCount = 0;
+  let pausePointCount = 0;
   const fromStops = sortedStops.map((stop, index) => {
     const coords = parseRideLatLng(stop);
     const role = roleForStop(stop, index, sortedStops.length);
-    let label = "Stop";
+    let label = "Pause Point";
 
     if (role === "pickup") {
       label = "Pickup";
     } else if (role === "destination") {
       label = "Destination";
     } else {
-      unlabeledStopCount += 1;
-      label = `Stop ${unlabeledStopCount}`;
+      label = formatPausePointLabel(pausePointCount);
+      pausePointCount += 1;
     }
 
     return {

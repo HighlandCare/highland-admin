@@ -242,38 +242,66 @@ export const getDriverTransactions = async (driverId, params = {}) => {
   }
 };
 
-export const getRideHistory = async (page, limit = 20, filters = {}) => {
+const appendRideHistoryParam = (params, key, value) => {
+  if (value == null || value === "") {
+    return;
+  }
+  params.set(key, String(value));
+};
+
+const appendRideHistoryBoolParam = (params, key, value) => {
+  if (value === true || value === "true") {
+    params.set(key, "true");
+  } else if (value === false || value === "false") {
+    params.set(key, "false");
+  }
+};
+
+/** GET /admin/ride-history — query params only (list + export). */
+export const getRideHistory = async (page = 1, limit = 20, filters = {}) => {
   try {
     const authToken = JSON.parse(localStorage.getItem("token"));
+    const isExport = filters.export === true || filters.export === "true" || filters.forExport === true;
+    const safeLimit = isExport
+      ? Math.min(Math.max(Number(limit) || 2000, 1), 2000)
+      : Math.min(Math.max(Number(limit) || 20, 1), 100);
+
     const params = new URLSearchParams({
-      page: String(page),
-      limit: String(limit),
+      page: String(Math.max(Number(page) || 1, 1)),
+      limit: String(safeLimit),
     });
 
-    if (filters.status) {
-      params.set("status", filters.status);
+    if (isExport) {
+      params.set("export", "true");
     }
 
-    if (filters.havePaid === true || filters.havePaid === "true") {
-      params.set("havePaid", "true");
-    } else if (filters.havePaid === false || filters.havePaid === "false") {
-      params.set("havePaid", "false");
-    }
-
-    if (filters.startDate) {
-      params.set("startDate", filters.startDate);
-    }
-
-    if (filters.endDate) {
-      params.set("endDate", filters.endDate);
-    }
+    appendRideHistoryParam(params, "recordType", filters.recordType || filters.service);
+    appendRideHistoryParam(params, "type", filters.type || filters.bookingType);
+    appendRideHistoryParam(params, "category", filters.category);
+    appendRideHistoryParam(params, "status", filters.status);
+    appendRideHistoryParam(params, "mode", filters.mode);
+    appendRideHistoryParam(params, "pricingMode", filters.pricingMode);
+    appendRideHistoryParam(params, "paymentStatus", filters.paymentStatus);
+    appendRideHistoryParam(params, "customerId", filters.customerId || filters.userId);
+    appendRideHistoryParam(params, "driverId", filters.driverId);
+    appendRideHistoryParam(params, "rideId", filters.rideId || filters.bookingId);
+    appendRideHistoryParam(params, "orderId", filters.orderId);
+    appendRideHistoryParam(params, "restaurantId", filters.restaurantId);
+    appendRideHistoryBoolParam(params, "havePaid", filters.havePaid);
+    appendRideHistoryBoolParam(params, "isTestRide", filters.isTestRide);
+    appendRideHistoryParam(
+      params,
+      "stripePaymentIntentId",
+      filters.stripePaymentIntentId || filters.paymentIntentId
+    );
+    appendRideHistoryParam(params, "startDate", filters.startDate || filters.from);
+    appendRideHistoryParam(params, "endDate", filters.endDate || filters.to);
+    appendRideHistoryParam(params, "dateField", filters.dateField);
+    appendRideHistoryParam(params, "sortBy", filters.sortBy);
+    appendRideHistoryParam(params, "sortOrder", filters.sortOrder);
 
     if (filters.search?.trim()) {
       params.set("search", filters.search.trim());
-    }
-
-    if (filters.type) {
-      params.set("type", filters.type);
     }
 
     const response = await Action.get(`admin/ride-history?${params.toString()}`, {
@@ -290,7 +318,9 @@ export const getRideHistory = async (page, limit = 20, filters = {}) => {
     } else {
       console.error("General Error:", error.message);
     }
-    throw error;
+    const message =
+      error?.response?.data?.message || error?.message || "Failed to load booking history";
+    throw new Error(typeof message === "string" ? message : "Failed to load booking history");
   }
 };
 
