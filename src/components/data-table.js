@@ -1,16 +1,45 @@
 import PropTypes from "prop-types";
+import { useEffect, useRef, useState } from "react";
 import {
   Box,
-  Button,
   Card,
   Stack,
   Table,
   Typography,
 } from "@mui/material";
 import { ConsolePagination } from "./console-pagination";
+import Loader from "./Loader";
 import { SearchField } from "./search-field";
 
 export const ROWS_PER_PAGE = 10;
+export const SEARCH_DEBOUNCE_MS = 250;
+
+export const dataTableLoadingOverlaySx = {
+  alignItems: "center",
+  bgcolor: "rgba(255, 255, 255, 0.72)",
+  display: "flex",
+  inset: 0,
+  justifyContent: "center",
+  position: "absolute",
+  zIndex: 2,
+};
+
+/** Keeps filters/table mounted while data loads (overlay instead of full-page spinner). */
+export const DataTableLoadingShell = ({ children, loading = false }) => (
+  <Box sx={{ position: "relative", width: "100%" }}>
+    {loading ? (
+      <Box sx={dataTableLoadingOverlaySx}>
+        <Loader size="md" />
+      </Box>
+    ) : null}
+    {children}
+  </Box>
+);
+
+DataTableLoadingShell.propTypes = {
+  children: PropTypes.node,
+  loading: PropTypes.bool,
+};
 
 export const dataTableScrollSx = {
   maxWidth: "100%",
@@ -138,89 +167,108 @@ const filterControlSx = {
 
 /**
  * Admintory-style filter toolbar.
- * Same props/behavior as before — visual layout only.
+ * Prefer page-level titles (pageTitleSx). Optional `title` is for section cards only.
+ * Search is debounced so tables stay responsive while typing.
  */
 export const DataTableToolbar = ({
   actions,
   onSearchChange,
-  searchLabel = "What are you looking for?",
+  searchDebounceMs = SEARCH_DEBOUNCE_MS,
   searchPlaceholder = "Search",
   searchValue = "",
   title,
-}) => (
-  <Box sx={{ px: { xs: 2, sm: 2.5 }, py: { xs: 2, sm: 2.25 } }}>
-    {title ? (
-      <Typography
-        fontWeight={700}
-        sx={{ mb: 2, fontSize: { xs: "1.15rem", sm: "1.25rem" }, letterSpacing: "-0.01em" }}
-        variant="h5"
-      >
-        {title}
-      </Typography>
-    ) : null}
+}) => {
+  const [localValue, setLocalValue] = useState(searchValue ?? "");
+  const emittedValueRef = useRef(searchValue ?? "");
 
-    <Stack
-      alignItems={{ xs: "stretch", md: "flex-end" }}
-      direction={{ xs: "column", md: "row" }}
-      spacing={1.5}
-      sx={{ width: "100%" }}
-    >
-      <Box sx={{ flex: { md: "1 1 auto" }, minWidth: { md: 0 }, width: "100%" }}>
+  useEffect(() => {
+    const nextValue = searchValue ?? "";
+    if (nextValue === emittedValueRef.current) {
+      return;
+    }
+    emittedValueRef.current = nextValue;
+    setLocalValue(nextValue);
+  }, [searchValue]);
+
+  useEffect(() => {
+    if (localValue === emittedValueRef.current) {
+      return undefined;
+    }
+
+    if (searchDebounceMs <= 0) {
+      emittedValueRef.current = localValue;
+      onSearchChange?.(localValue);
+      return undefined;
+    }
+
+    const timer = setTimeout(() => {
+      emittedValueRef.current = localValue;
+      onSearchChange?.(localValue);
+    }, searchDebounceMs);
+
+    return () => clearTimeout(timer);
+  }, [localValue, onSearchChange, searchDebounceMs]);
+
+  const flushSearch = () => {
+    if (localValue === emittedValueRef.current) {
+      return;
+    }
+    emittedValueRef.current = localValue;
+    onSearchChange?.(localValue);
+  };
+
+  return (
+    <Box sx={{ px: { xs: 2, sm: 2.5 }, py: { xs: 2, sm: 2.25 } }}>
+      {title ? (
         <Typography
-          sx={{ display: "block", fontSize: 12, fontWeight: 700, mb: 0.75 }}
-          variant="caption"
+          fontWeight={700}
+          sx={{ mb: 2, fontSize: { xs: "1.15rem", sm: "1.25rem" }, letterSpacing: "-0.01em" }}
+          variant="h5"
         >
-          {searchLabel}
+          {title}
         </Typography>
-        <SearchField
-          fullWidth
-          onChange={(value) => onSearchChange?.(value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              onSearchChange?.(searchValue);
-            }
-          }}
-          placeholder={searchPlaceholder}
-          value={searchValue}
-        />
-      </Box>
-
-      {actions ? (
-        <Stack
-          alignItems={{ xs: "stretch", sm: "flex-end" }}
-          direction={{ xs: "column", sm: "row" }}
-          flexShrink={0}
-          spacing={1.25}
-          sx={filterControlSx}
-        >
-          {actions}
-        </Stack>
       ) : null}
 
-      <Button
-        onClick={() => onSearchChange?.(searchValue)}
-        sx={{
-          color: "#fff",
-          flexShrink: 0,
-          fontWeight: 700,
-          height: 44,
-          letterSpacing: "0.04em",
-          minWidth: { xs: "100%", md: 112 },
-          px: 2.5,
-          textTransform: "uppercase",
-        }}
-        variant="contained"
+      <Stack
+        alignItems={{ xs: "stretch", md: "flex-end" }}
+        direction={{ xs: "column", md: "row" }}
+        spacing={1.5}
+        sx={{ width: "100%" }}
       >
-        Search
-      </Button>
-    </Stack>
-  </Box>
-);
+        <Box sx={{ flex: { md: "1 1 auto" }, minWidth: { md: 0 }, width: "100%" }}>
+          <SearchField
+            fullWidth
+            onChange={setLocalValue}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                flushSearch();
+              }
+            }}
+            placeholder={searchPlaceholder}
+            value={localValue}
+          />
+        </Box>
+
+        {actions ? (
+          <Stack
+            alignItems={{ xs: "stretch", sm: "flex-end" }}
+            direction={{ xs: "column", sm: "row" }}
+            flexShrink={0}
+            spacing={1.25}
+            sx={filterControlSx}
+          >
+            {actions}
+          </Stack>
+        ) : null}
+      </Stack>
+    </Box>
+  );
+};
 
 DataTableToolbar.propTypes = {
   actions: PropTypes.node,
   onSearchChange: PropTypes.func,
-  searchLabel: PropTypes.string,
+  searchDebounceMs: PropTypes.number,
   searchPlaceholder: PropTypes.string,
   searchValue: PropTypes.string,
   title: PropTypes.string,
@@ -288,22 +336,6 @@ export const DataTable = ({
 }) => {
   const tableCard = (
     <Card sx={dataTableCardSx}>
-      {pagination ? (
-        <Box
-          sx={{
-            alignItems: "center",
-            borderBottom: "1px solid",
-            borderColor: "neutral.100",
-            display: "flex",
-            justifyContent: "flex-end",
-            px: { xs: 1.5, sm: 2 },
-            py: 1.25,
-          }}
-        >
-          <DataTablePagination {...pagination} variant="compact" />
-        </Box>
-      ) : null}
-
       {empty ? (
         <Box
           sx={{

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import PropTypes from "prop-types";
 import EyeIcon from "@heroicons/react/24/outline/EyeIcon";
 import { useRouter } from "next/router";
@@ -47,19 +47,12 @@ export function SupportQueriesTable({
   role = "all",
   search = "",
   status = "all",
-  title = "Help & Feedback",
   total = 0,
   totalPages = 1,
 }) {
   const router = useRouter();
-  const [localSearch, setLocalSearch] = useState(search);
 
   const rows = useMemo(() => (Array.isArray(items) ? items : []), [items]);
-
-  const handleSearchChange = (value) => {
-    setLocalSearch(value);
-    onSearchChange(value);
-  };
 
   const handleView = (item) => {
     storeSupportQueryDetail(item);
@@ -131,17 +124,15 @@ export function SupportQueriesTable({
       toolbar={
         <DataTableToolbar
           actions={filterActions}
-          onSearchChange={handleSearchChange}
+          onSearchChange={onSearchChange}
           searchPlaceholder="Search by subject"
-          searchValue={localSearch}
-          title={title}
+          searchValue={search}
         />
       }
     >
       <TableHead>
         <TableRow>
           <TableCell>Submitter</TableCell>
-          <TableCell>Subject</TableCell>
           <TableCell>Category</TableCell>
           <TableCell>Status</TableCell>
           <TableCell>Last message</TableCell>
@@ -152,7 +143,7 @@ export function SupportQueriesTable({
       <TableBody>
         {loading && rows.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={7}>
+            <TableCell colSpan={6}>
               <Typography color="text.secondary" variant="body2">
                 Loading support queries…
               </Typography>
@@ -173,26 +164,6 @@ export function SupportQueriesTable({
                       formatSupportLabel(item.submitterRole || submitter.userType)
                     }
                   />
-                </TableCell>
-                <TableCell sx={{ maxWidth: { xs: 160, sm: 220, md: 280 } }}>
-                  <Typography fontWeight={600} variant="body2">
-                    {item.subject || "—"}
-                  </Typography>
-                  {item.lastMessagePreview ? (
-                    <Typography
-                      color="text.secondary"
-                      sx={{
-                        display: "-webkit-box",
-                        mt: 0.25,
-                        overflow: "hidden",
-                        WebkitBoxOrient: "vertical",
-                        WebkitLineClamp: 1,
-                      }}
-                      variant="caption"
-                    >
-                      {item.lastMessagePreview}
-                    </Typography>
-                  ) : null}
                 </TableCell>
                 <TableCell>{formatSupportLabel(item.category)}</TableCell>
                 <TableCell>
@@ -239,7 +210,6 @@ SupportQueriesTable.propTypes = {
   role: PropTypes.string,
   search: PropTypes.string,
   status: PropTypes.string,
-  title: PropTypes.string,
   total: PropTypes.number,
   totalPages: PropTypes.number,
 };

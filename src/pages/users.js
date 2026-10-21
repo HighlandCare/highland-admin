@@ -1,13 +1,12 @@
 import { React, useCallback, useEffect, useState } from "react";
 import { Layout as DashboardLayout } from "../layouts/dashboard/layout";
 import Head from "next/head";
-import { Box, Container, Stack } from "@mui/material";
+import { Box, Container, Stack, Typography } from "@mui/material";
 import { getUsers } from "../Services/Auth.service";
 import { useRouter } from "next/router";
-import Loader from "../components/Loader";
+import { DataTableLoadingShell, ROWS_PER_PAGE } from "../components/data-table";
 import { UsersTable } from "../sections/users/users-table";
-import { ROWS_PER_PAGE } from "../components/data-table";
-import { pageContainerSx, pageMainSx } from "../utils/pageLayout";
+import { pageContainerSx, pageMainSx, pageTitleSx } from "../utils/pageLayout";
 import { excludeAdminUsersFromResponse } from "../utils/userUtils";
 
 const Page = () => {
@@ -53,8 +52,6 @@ const Page = () => {
 
   const handleRefresh = () => fetchUsers({ silent: true });
 
-  const hasData = Boolean(users?.data?.length);
-
   return (
     <>
       <Head>
@@ -64,33 +61,18 @@ const Page = () => {
       <Box component="main" sx={pageMainSx}>
         <Container maxWidth="xl" sx={pageContainerSx}>
           <Stack spacing={3} sx={{ flex: 1 }}>
-            {isLoading && !hasData ? (
-              <Loader page />
-            ) : (
-              <Box sx={{ position: "relative" }}>
-                {isLoading && (
-                  <Box
-                    sx={{
-                      alignItems: "center",
-                      bgcolor: "rgba(255, 255, 255, 0.72)",
-                      display: "flex",
-                      inset: 0,
-                      justifyContent: "center",
-                      position: "absolute",
-                      zIndex: 2,
-                    }}
-                  >
-                    <Loader size="md" />
-                  </Box>
-                )}
-                <UsersTable
-                  items={users}
-                  onPageChange={handlePageChange}
-                  onRefresh={handleRefresh}
-                  page={page}
-                />
-              </Box>
-            )}
+            <Typography sx={pageTitleSx} variant="h4">
+              Users List
+            </Typography>
+
+            <DataTableLoadingShell loading={isLoading}>
+              <UsersTable
+                items={users}
+                onPageChange={handlePageChange}
+                onRefresh={handleRefresh}
+                page={page}
+              />
+            </DataTableLoadingShell>
           </Stack>
         </Container>
       </Box>

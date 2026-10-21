@@ -58,7 +58,7 @@ import {
 } from "../../utils/rideUtils";
 
 const rideSortValue = "newest";
-const SEARCH_DEBOUNCE_MS = 400;
+const SEARCH_DEBOUNCE_MS = 250;
 
 const headCellSx = {
   color: "neutral.500",
@@ -130,7 +130,6 @@ export const RideHistoryTable = (props) => {
     onRowsPerPageChange,
     page = 1,
     rowsPerPage = 20,
-    title = "Booking history",
   } = props;
   const router = useRouter();
   const [items, setItems] = useState(initialItems);
@@ -274,13 +273,6 @@ export const RideHistoryTable = (props) => {
     <Stack spacing={2.5} sx={{ width: "100%" }}>
       <Card sx={dataTableFilterCardSx}>
         <Box sx={{ px: { xs: 2, sm: 2.5 }, py: { xs: 2, sm: 2.25 } }}>
-          <Typography
-            fontWeight={700}
-            sx={{ mb: 2, fontSize: { xs: "1.15rem", sm: "1.25rem" }, letterSpacing: "-0.01em" }}
-          >
-            {title}
-          </Typography>
-
           <Stack
             alignItems={{ xs: "stretch", lg: "flex-end" }}
             direction={{ xs: "column", lg: "row" }}
@@ -288,12 +280,6 @@ export const RideHistoryTable = (props) => {
             sx={{ width: "100%" }}
           >
             <Box sx={{ flex: "1 1 240px", minWidth: { xs: "100%", sm: 200 } }}>
-              <Typography
-                sx={{ display: "block", fontSize: 12, fontWeight: 700, mb: 0.75 }}
-                variant="caption"
-              >
-                What are you looking for?
-              </Typography>
               <SearchField
                 fullWidth
                 onChange={setSearchInput}
@@ -397,23 +383,6 @@ export const RideHistoryTable = (props) => {
               {isExporting ? <Loader inline size="xs" /> : "Export"}
             </Button>
 
-            <Button
-              onClick={commitSearch}
-              sx={{
-                color: "#fff",
-                flexShrink: 0,
-                fontWeight: 700,
-                height: 44,
-                letterSpacing: "0.04em",
-                minWidth: 112,
-                px: 2.5,
-                textTransform: "uppercase",
-              }}
-              variant="contained"
-            >
-              Search
-            </Button>
-
             <Menu
               anchorEl={exportAnchorEl}
               onClose={handleExportClose}
@@ -431,20 +400,6 @@ export const RideHistoryTable = (props) => {
       </Card>
 
       <Card sx={dataTableCardSx}>
-        <Box
-          sx={{
-            alignItems: "center",
-            borderBottom: "1px solid",
-            borderColor: "neutral.100",
-            display: "flex",
-            justifyContent: "flex-end",
-            px: { xs: 1.5, sm: 2 },
-            py: 1.25,
-          }}
-        >
-          <DataTablePagination {...paginationProps} variant="compact" />
-        </Box>
-
       {isEmpty ? (
         <Box
           sx={{
@@ -595,5 +550,4 @@ RideHistoryTable.propTypes = {
   onRowsPerPageChange: PropTypes.func,
   page: PropTypes.number,
   rowsPerPage: PropTypes.number,
-  title: PropTypes.string,
 };

@@ -14,10 +14,12 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  MenuItem,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
+  TextField,
   Typography,
 } from "@mui/material";
 import {
@@ -56,18 +58,68 @@ import {
   updateDriverPersonaInList,
 } from "../../utils/driverUtils";
 
+const PERSONA_STATUS_FILTER_OPTIONS = [
+  { label: "All", value: "all" },
+  { label: "Approved", value: "approved" },
+  { label: "Declined", value: "declined" },
+  { label: "Pending Persona Review", value: "pending_persona_review" },
+];
+
+const ACCOUNT_STATUS_FILTER_OPTIONS = [
+  { label: "All", value: "all" },
+  { label: "Active", value: "active" },
+  { label: "Inactive", value: "inactive" },
+  { label: "Blocked", value: "blocked" },
+];
+
+const filterFieldSx = {
+  minWidth: { xs: "100%", sm: 170 },
+  "& .MuiInputBase-root": { bgcolor: "background.paper" },
+};
+
+const matchesPersonaFilter = (driver, filterValue) => {
+  if (filterValue === "all") {
+    return true;
+  }
+
+  const label = getPersonaStatusMeta(driver).label.toLowerCase();
+
+  if (filterValue === "approved") {
+    return label === "approved";
+  }
+
+  if (filterValue === "declined") {
+    return label === "declined";
+  }
+
+  if (filterValue === "pending_persona_review") {
+    return label === "pending persona review";
+  }
+
+  return true;
+};
+
+const matchesAccountFilter = (driver, filterValue) => {
+  if (filterValue === "all") {
+    return true;
+  }
+
+  return getDriverAccountStatusMeta(driver).label.toLowerCase() === filterValue;
+};
+
 export const ChapTable = (props) => {
   const {
     items: initialItems = {},
     onPageChange = () => {},
     onRefresh,
     page = 1,
-    title = "Drivers",
   } = props;
   const router = useRouter();
   const [submittingId, setSubmittingId] = useState(null);
   const [items, setItems] = useState(initialItems);
   const [search, setSearch] = useState("");
+  const [personaStatus, setPersonaStatus] = useState("all");
+  const [accountStatus, setAccountStatus] = useState("all");
   const [driverToDelete, setDriverToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -187,9 +239,14 @@ export const ChapTable = (props) => {
       return [];
     }
 
-    const filtered = filterBySearch(pageDrivers, search, (driver) => {
-      const personaMeta = getPersonaStatusMeta(driver);
+    const byStatus = pageDrivers.filter(
+      (driver) =>
+        matchesPersonaFilter(driver, personaStatus) &&
+        matchesAccountFilter(driver, accountStatus)
+    );
 
+    const filtered = filterBySearch(byStatus, search, (driver) => {
+      const personaMeta = getPersonaStatusMeta(driver);
       const accountMeta = getDriverAccountStatusMeta(driver);
 
       return [
@@ -212,7 +269,7 @@ export const ChapTable = (props) => {
       nameA: getDriverDisplayName(a),
       nameB: getDriverDisplayName(b),
     }));
-  }, [pageDrivers, search]);
+  }, [accountStatus, pageDrivers, personaStatus, search]);
 
   const paginationMeta = useMemo(
     () => getServerPaginationMeta(items, page, pageDrivers.length),
@@ -223,6 +280,51 @@ export const ChapTable = (props) => {
     setSearch(value);
     onPageChange(1);
   };
+
+  const handlePersonaStatusChange = (value) => {
+    setPersonaStatus(value);
+    onPageChange(1);
+  };
+
+  const handleAccountStatusChange = (value) => {
+    setAccountStatus(value);
+    onPageChange(1);
+  };
+
+  const filterActions = (
+    <>
+      <TextField
+        InputLabelProps={{ shrink: true }}
+        label="Persona"
+        onChange={(event) => handlePersonaStatusChange(event.target.value)}
+        select
+        size="small"
+        sx={filterFieldSx}
+        value={personaStatus}
+      >
+        {PERSONA_STATUS_FILTER_OPTIONS.map((option) => (
+          <MenuItem key={option.value} value={option.value}>
+            {option.label}
+          </MenuItem>
+        ))}
+      </TextField>
+      <TextField
+        InputLabelProps={{ shrink: true }}
+        label="Account"
+        onChange={(event) => handleAccountStatusChange(event.target.value)}
+        select
+        size="small"
+        sx={filterFieldSx}
+        value={accountStatus}
+      >
+        {ACCOUNT_STATUS_FILTER_OPTIONS.map((option) => (
+          <MenuItem key={option.value} value={option.value}>
+            {option.label}
+          </MenuItem>
+        ))}
+      </TextField>
+    </>
+  );
 
   return (
     <>
@@ -236,9 +338,10 @@ export const ChapTable = (props) => {
         })}
         toolbar={
           <DataTableToolbar
+            actions={filterActions}
             onSearchChange={handleSearchChange}
+            searchPlaceholder="Search drivers"
             searchValue={search}
-            title={title}
           />
         }
       >
@@ -399,5 +502,4 @@ ChapTable.propTypes = {
   onPageChange: PropTypes.func,
   onRefresh: PropTypes.func,
   page: PropTypes.number,
-  title: PropTypes.string,
 };

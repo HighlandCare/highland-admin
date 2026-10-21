@@ -4,10 +4,9 @@ import { Layout as DashboardLayout } from "../layouts/dashboard/layout";
 import Head from "next/head";
 import { Box, Container, Stack } from "@mui/material";
 import { useRouter } from "next/navigation";
-import Loader from "../components/Loader";
 import { getFeedbacks } from "../Services/Auth.service";
 import { FeedbackTable } from "../sections/feedback/feedback-table";
-import { ROWS_PER_PAGE } from "../components/data-table";
+import { DataTableLoadingShell, ROWS_PER_PAGE } from "../components/data-table";
 import { pageContainerSx, pageMainSx } from "../utils/pageLayout";
 
 const Page = () => {
@@ -53,8 +52,6 @@ const Page = () => {
 
   const handleRefresh = () => fetchFeedback({ silent: true });
 
-  const hasData = Boolean(feedback?.feedbacks?.length);
-
   return (
     <>
       <Head>
@@ -64,33 +61,14 @@ const Page = () => {
       <Box component="main" sx={pageMainSx}>
         <Container maxWidth="xl" sx={pageContainerSx}>
           <Stack spacing={3} sx={{ flex: 1 }}>
-            {isLoading && !hasData ? (
-              <Loader page />
-            ) : (
-              <Box sx={{ position: "relative" }}>
-                {isLoading && (
-                  <Box
-                    sx={{
-                      alignItems: "center",
-                      bgcolor: "rgba(255, 255, 255, 0.72)",
-                      display: "flex",
-                      inset: 0,
-                      justifyContent: "center",
-                      position: "absolute",
-                      zIndex: 2,
-                    }}
-                  >
-                    <Loader size="md" />
-                  </Box>
-                )}
-                <FeedbackTable
-                  items={feedback}
-                  onPageChange={handlePageChange}
-                  onRefresh={handleRefresh}
-                  page={page}
-                />
-              </Box>
-            )}
+            <DataTableLoadingShell loading={isLoading}>
+              <FeedbackTable
+                items={feedback}
+                onPageChange={handlePageChange}
+                onRefresh={handleRefresh}
+                page={page}
+              />
+            </DataTableLoadingShell>
           </Stack>
         </Container>
       </Box>

@@ -3,7 +3,7 @@ import Head from "next/head";
 import { Box, Container, Stack, Typography } from "@mui/material";
 import { useRouter } from "next/router";
 import { Layout as DashboardLayout } from "../layouts/dashboard/layout";
-import Loader from "../components/Loader";
+import { DataTableLoadingShell } from "../components/data-table";
 import { DisputesTable } from "../sections/disputes/disputes-table";
 import { getRideHistory } from "../Services/Auth.service";
 import { getDisputes } from "../Services/Dispute.service";
@@ -83,8 +83,6 @@ const Page = () => {
     setRefreshKey((value) => value + 1);
   };
 
-  const hasData = rows.length > 0;
-
   return (
     <>
       <Head>
@@ -103,34 +101,14 @@ const Page = () => {
               </Typography>
             </Stack>
 
-            {isLoading && !hasData ? (
-              <Loader page />
-            ) : (
-              <Box sx={{ position: "relative" }}>
-                {isLoading && (
-                  <Box
-                    sx={{
-                      alignItems: "center",
-                      bgcolor: "rgba(255, 255, 255, 0.72)",
-                      display: "flex",
-                      inset: 0,
-                      justifyContent: "center",
-                      position: "absolute",
-                      zIndex: 2,
-                    }}
-                  >
-                    <Loader size="md" />
-                  </Box>
-                )}
-                <DisputesTable
-                  items={rows}
-                  onPageChange={handlePageChange}
-                  onRefresh={handleRefresh}
-                  page={page}
-                  title="Disputes"
-                />
-              </Box>
-            )}
+            <DataTableLoadingShell loading={isLoading}>
+              <DisputesTable
+                items={rows}
+                onPageChange={handlePageChange}
+                onRefresh={handleRefresh}
+                page={page}
+              />
+            </DataTableLoadingShell>
           </Stack>
         </Container>
       </Box>

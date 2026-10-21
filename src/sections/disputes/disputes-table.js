@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { useRouter } from "next/router";
 import EyeIcon from "@heroicons/react/24/outline/EyeIcon";
@@ -13,6 +13,7 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  MenuItem,
   TableBody,
   TableCell,
   TableHead,
@@ -24,10 +25,8 @@ import {
 import {
   DataTable,
   DataTableToolbar,
-  filterBySearch,
   getClientPaginationProps,
   paginateItems,
-  sortItems,
 } from "../../components/data-table";
 import { StatusBadge, TableActionsMenu } from "../../components/table-cells";
 import Loader from "../../components/Loader";
@@ -46,13 +45,34 @@ import {
   getDisputeDetailId,
   getDisputeStatusMeta,
   getRideCustomerName,
-  getRideDestinationAddress,
   getRideDriverName,
+  normalizeDisputeWorkflowStatus,
   storeDisputeDetail,
 } from "../../utils/disputeUtils";
-import { truncateRideAddress } from "../../utils/rideUtils";
 
-const disputeSortValue = "newest";
+const PAYMENT_FILTER_OPTIONS = [
+  { label: "All", value: "all" },
+  { label: "Paid", value: "paid" },
+  { label: "Unpaid", value: "unpaid" },
+];
+
+const STATUS_FILTER_OPTIONS = [
+  { label: "All", value: "all" },
+  { label: "Open", value: "open" },
+  { label: "Under Review", value: "under-review" },
+  { label: "Approved", value: "approved" },
+  { label: "Rejected", value: "rejected" },
+  { label: "Resolved", value: "resolved" },
+  { label: "Closed", value: "closed" },
+];
+
+const filterFieldSx = {
+  minWidth: { xs: "100%", sm: 140 },
+  "& .MuiInputBase-root": { bgcolor: "background.paper" },
+};
+
+const formatDisputeTypeLabel = (value) =>
+  value ? String(value).replace(/_/g, " ") : "";
 
 const hideOnSmSx = {
   display: { xs: "none", md: "table-cell" },
@@ -65,19 +85,6 @@ const hideOnXsSx = {
 const nameCellSx = {
   fontWeight: 600,
   maxWidth: { xs: 96, sm: 140, md: 160 },
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
-};
-
-const addressCellSx = {
-  ...hideOnSmSx,
-  maxWidth: { md: 200, lg: 240 },
-  minWidth: 0,
-};
-
-const addressTextSx = {
-  display: "block",
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
@@ -110,39 +117,105 @@ export const DisputesTable = (props) => {
     onPageChange = () => {},
     onRefresh = () => {},
     page = 1,
-    title = "Disputes",
   } = props;
   const router = useRouter();
   const [search, setSearch] = useState("");
+  const [paymentFilter, setPaymentFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
   const [actionState, setActionState] = useState(null);
   const [actionNotes, setActionNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const pageRef = useRef(page);
+  pageRef.current = page;
+
+  const resetToFirstPage = () => {
+    if (pageRef.current !== 1) {
+      onPageChange(1);
+    }
+  };
+
+  const indexedItems = useMemo(
+    () =>
+      items.map((row) => {
+        const typeValue = String(row?.disputeType || "")
+          .trim()
+          .toLowerCase();
+        const statusValue = normalizeDisputeWorkflowStatus(row?.status);
+        const isPaid = Boolean(row?.havePaid);
+        const searchText = [
+          getRideCustomerName(row),
+          getRideDriverName(row),
+          row?.reasonOfDispute,
+          row?.disputeType,
+          statusValue,
+          formatRidePaymentStatus(row?.havePaid),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+        return {
+          row,
+          typeValue,
+          statusValue,
+          isPaid,
+          searchText,
+          sortTime: new Date(row?.createdAt || 0).getTime(),
+        };
+      }),
+    [items]
+  );
+
+  const typeFilterOptions = useMemo(() => {
+    const values = new Set();
+
+    indexedItems.forEach((entry) => {
+      if (entry.typeValue) {
+        values.add(entry.typeValue);
+      }
+    });
+
+    return [
+      { label: "All", value: "all" },
+      ...Array.from(values)
+        .sort((a, b) => a.localeCompare(b))
+        .map((value) => ({
+          label: formatDisputeTypeLabel(value),
+          value,
+        })),
+    ];
+  }, [indexedItems]);
 
   const rows = useMemo(() => {
-    if (!items.length) {
+    if (!indexedItems.length) {
       return [];
     }
 
-    const filtered = filterBySearch(items, search, (row) =>
-      [
-        getRideCustomerName(row),
-        getRideDriverName(row),
-        getRideDestinationAddress(row),
-        row?.reasonOfDispute,
-        row?.status,
-        formatRidePaymentStatus(row?.havePaid),
-      ]
-        .filter(Boolean)
-        .join(" ")
-    );
+    const query = search.trim().toLowerCase();
 
-    return sortItems(filtered, disputeSortValue, (a, b) => ({
-      dateA: new Date(a?.createdAt || 0).getTime(),
-      dateB: new Date(b?.createdAt || 0).getTime(),
-      nameA: getRideCustomerName(a),
-      nameB: getRideCustomerName(b),
-    }));
-  }, [items, search]);
+    const filtered = indexedItems.filter((entry) => {
+      if (paymentFilter === "paid" && !entry.isPaid) {
+        return false;
+      }
+      if (paymentFilter === "unpaid" && entry.isPaid) {
+        return false;
+      }
+      if (statusFilter !== "all" && entry.statusValue !== statusFilter) {
+        return false;
+      }
+      if (typeFilter !== "all" && entry.typeValue !== typeFilter) {
+        return false;
+      }
+      if (query && !entry.searchText.includes(query)) {
+        return false;
+      }
+      return true;
+    });
+
+    filtered.sort((a, b) => b.sortTime - a.sortTime);
+    return filtered.map((entry) => entry.row);
+  }, [indexedItems, paymentFilter, search, statusFilter, typeFilter]);
 
   const pageRows = useMemo(() => paginateItems(rows, page), [rows, page]);
 
@@ -154,9 +227,74 @@ export const DisputesTable = (props) => {
   }, [rows.length, page, onPageChange]);
 
   const handleSearchChange = (value) => {
-    setSearch(value);
-    onPageChange(1);
+    setSearch(value.trim());
+    resetToFirstPage();
   };
+
+  const handlePaymentFilterChange = (value) => {
+    setPaymentFilter(value);
+    resetToFirstPage();
+  };
+
+  const handleStatusFilterChange = (value) => {
+    setStatusFilter(value);
+    resetToFirstPage();
+  };
+
+  const handleTypeFilterChange = (value) => {
+    setTypeFilter(value);
+    resetToFirstPage();
+  };
+
+  const filterActions = (
+    <>
+      <TextField
+        InputLabelProps={{ shrink: true }}
+        label="Payment"
+        onChange={(event) => handlePaymentFilterChange(event.target.value)}
+        select
+        size="small"
+        sx={filterFieldSx}
+        value={paymentFilter}
+      >
+        {PAYMENT_FILTER_OPTIONS.map((option) => (
+          <MenuItem key={option.value} value={option.value}>
+            {option.label}
+          </MenuItem>
+        ))}
+      </TextField>
+      <TextField
+        InputLabelProps={{ shrink: true }}
+        label="Status"
+        onChange={(event) => handleStatusFilterChange(event.target.value)}
+        select
+        size="small"
+        sx={filterFieldSx}
+        value={statusFilter}
+      >
+        {STATUS_FILTER_OPTIONS.map((option) => (
+          <MenuItem key={option.value} value={option.value}>
+            {option.label}
+          </MenuItem>
+        ))}
+      </TextField>
+      <TextField
+        InputLabelProps={{ shrink: true }}
+        label="Type"
+        onChange={(event) => handleTypeFilterChange(event.target.value)}
+        select
+        size="small"
+        sx={filterFieldSx}
+        value={typeFilter}
+      >
+        {typeFilterOptions.map((option) => (
+          <MenuItem key={option.value} value={option.value}>
+            {option.label}
+          </MenuItem>
+        ))}
+      </TextField>
+    </>
+  );
 
   const handleView = (row) => {
     storeDisputeDetail(row);
@@ -244,10 +382,10 @@ export const DisputesTable = (props) => {
         })}
         toolbar={
           <DataTableToolbar
+            actions={filterActions}
             onSearchChange={handleSearchChange}
             searchPlaceholder="Search by customer, driver, or status"
             searchValue={search}
-            title={title}
           />
         }
       >
@@ -257,7 +395,6 @@ export const DisputesTable = (props) => {
             <TableCell>Driver</TableCell>
             <TableCell sx={hideOnSmSx}>Type</TableCell>
             <TableCell sx={hideOnSmSx}>Opened by</TableCell>
-            <TableCell sx={addressCellSx}>Destination</TableCell>
             <TableCell sx={hideOnXsSx}>Fare</TableCell>
             <TableCell sx={hideOnXsSx}>Payment</TableCell>
             <TableCell>Status</TableCell>
@@ -267,7 +404,7 @@ export const DisputesTable = (props) => {
         <TableBody>
           {pageRows.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={9}>
+              <TableCell colSpan={8}>
                 <Typography color="text.secondary" textAlign="center" variant="body2">
                   No matching results found.
                 </Typography>
@@ -275,8 +412,6 @@ export const DisputesTable = (props) => {
             </TableRow>
           ) : (
             pageRows.map((row) => {
-              const destination = getRideDestinationAddress(row);
-              const shortDestination = truncateRideAddress(destination);
               const statusMeta = getDisputeStatusMeta(row.status);
               const canAct = canReviewDispute(row);
 
@@ -340,18 +475,6 @@ export const DisputesTable = (props) => {
                           ? "Driver"
                           : "—"}
                     </Typography>
-                  </TableCell>
-                  <TableCell sx={addressCellSx}>
-                    <Tooltip title={destination}>
-                      <Typography color="text.secondary" sx={addressTextSx} variant="body2">
-                        {shortDestination}
-                      </Typography>
-                    </Tooltip>
-                    {row.distance && (
-                      <Typography color="text.secondary" variant="caption">
-                        {row.distance}
-                      </Typography>
-                    )}
                   </TableCell>
                   <TableCell sx={hideOnXsSx}>
                     <Typography fontWeight={600} variant="body2">
@@ -441,5 +564,4 @@ DisputesTable.propTypes = {
   onPageChange: PropTypes.func,
   onRefresh: PropTypes.func,
   page: PropTypes.number,
-  title: PropTypes.string,
 };

@@ -1,17 +1,17 @@
 import { React, useState, useEffect } from "react";
 import { Layout as DashboardLayout } from "../layouts/dashboard/layout";
 import Head from "next/head";
-import { Box, Container, Stack } from "@mui/material";
+import { Box, Container, Stack, Typography } from "@mui/material";
 import { getRideHistory } from "../Services/Auth.service";
 import { useRouter } from "next/router";
 import Loader from "../components/Loader";
+import { DataTableLoadingShell } from "../components/data-table";
 import { RideHistoryTable } from "../sections/driver-earnings/ride-history-table";
-import { pageContainerSx, pageMainSx } from "../utils/pageLayout";
+import { pageContainerSx, pageMainSx, pageTitleSx } from "../utils/pageLayout";
 import {
   clearRideHistoryListState,
   consumeRideHistoryListState,
   defaultRideHistoryFilters,
-  getRideList,
 } from "../utils/rideUtils";
 
 const DEFAULT_RIDE_HISTORY_LIMIT = 20;
@@ -131,8 +131,6 @@ const Page = () => {
     setPage(1);
   };
 
-  const hasData = Boolean(getRideList(rideHistory).length);
-
   if (!hydrated) {
     return <Loader page />;
   }
@@ -146,37 +144,21 @@ const Page = () => {
       <Box component="main" sx={pageMainSx}>
         <Container maxWidth="xl" sx={pageContainerSx}>
           <Stack spacing={3} sx={{ flex: 1 }}>
-            {isLoading && !hasData ? (
-              <Loader page />
-            ) : (
-              <Box sx={{ position: "relative" }}>
-                {isLoading && (
-                  <Box
-                    sx={{
-                      alignItems: "center",
-                      bgcolor: "rgba(255, 255, 255, 0.72)",
-                      display: "flex",
-                      inset: 0,
-                      justifyContent: "center",
-                      position: "absolute",
-                      zIndex: 2,
-                    }}
-                  >
-                    <Loader size="md" />
-                  </Box>
-                )}
-                <RideHistoryTable
-                  filters={filters}
-                  items={rideHistory}
-                  onFiltersChange={handleFiltersChange}
-                  onPageChange={handlePageChange}
-                  onRowsPerPageChange={handleRowsPerPageChange}
-                  page={page}
-                  rowsPerPage={limit}
-                  title="Booking history"
-                />
-              </Box>
-            )}
+            <Typography sx={pageTitleSx} variant="h4">
+              Booking History
+            </Typography>
+
+            <DataTableLoadingShell loading={isLoading}>
+              <RideHistoryTable
+                filters={filters}
+                items={rideHistory}
+                onFiltersChange={handleFiltersChange}
+                onPageChange={handlePageChange}
+                onRowsPerPageChange={handleRowsPerPageChange}
+                page={page}
+                rowsPerPage={limit}
+              />
+            </DataTableLoadingShell>
           </Stack>
         </Container>
       </Box>

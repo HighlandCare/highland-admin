@@ -8,13 +8,12 @@ import ClockIcon from "@heroicons/react/24/solid/ClockIcon";
 import UsersIcon from "@heroicons/react/24/solid/UsersIcon";
 import { getDriverEarnings } from "../Services/Auth.service";
 import { useRouter } from "next/router";
-import Loader from "../components/Loader";
 import { DriverEarningsTable } from "../sections/driver-earnings/driver-earnings-table";
 import { EarningsAnalytics } from "../sections/driver-earnings/earnings-analytics";
 import { OverviewStatCard } from "../sections/overview/overview-stat-card";
-import { ROWS_PER_PAGE } from "../components/data-table";
+import { DataTableLoadingShell, ROWS_PER_PAGE } from "../components/data-table";
 import { pageContainerSx, pageMainSx, pageTitleSx } from "../utils/pageLayout";
-import { fetchAllPages, getListFromResponse } from "../utils/listUtils";
+import { fetchAllPages } from "../utils/listUtils";
 import {
   formatEarningsCurrency,
   hasEarningsApiTotals,
@@ -121,7 +120,6 @@ const Page = () => {
     setPage(newPage);
   };
 
-  const hasData = Boolean(getListFromResponse(earnings).length);
   const showStats = isLoading || isAnalyticsLoading || analytics.hasEarnings;
   const statsLoading = isLoading || isAnalyticsLoading;
 
@@ -190,33 +188,13 @@ const Page = () => {
               </Grid>
             )}
 
-            {isLoading && !hasData ? (
-              <Loader page />
-            ) : (
-              <Box sx={{ position: "relative" }}>
-                {isLoading && (
-                  <Box
-                    sx={{
-                      alignItems: "center",
-                      bgcolor: "rgba(255, 255, 255, 0.72)",
-                      display: "flex",
-                      inset: 0,
-                      justifyContent: "center",
-                      position: "absolute",
-                      zIndex: 2,
-                    }}
-                  >
-                    <Loader size="md" />
-                  </Box>
-                )}
-                <DriverEarningsTable
-                  items={earnings}
-                  onPageChange={handlePageChange}
-                  page={page}
-                  title="Driver Earnings"
-                />
-              </Box>
-            )}
+            <DataTableLoadingShell loading={isLoading}>
+              <DriverEarningsTable
+                items={earnings}
+                onPageChange={handlePageChange}
+                page={page}
+              />
+            </DataTableLoadingShell>
           </Stack>
         </Container>
       </Box>

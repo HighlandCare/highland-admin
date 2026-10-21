@@ -40,7 +40,6 @@ export const DriverEarningsTable = (props) => {
     items: initialItems = {},
     onPageChange = () => {},
     page = 1,
-    title = "Driver Earnings",
   } = props;
   const router = useRouter();
   const [items, setItems] = useState(initialItems);
@@ -114,7 +113,6 @@ export const DriverEarningsTable = (props) => {
           onSearchChange={handleSearchChange}
           searchPlaceholder="Search drivers"
           searchValue={search}
-          title={title}
         />
       }
     >
@@ -188,5 +186,4 @@ DriverEarningsTable.propTypes = {
   items: PropTypes.object,
   onPageChange: PropTypes.func,
   page: PropTypes.number,
-  title: PropTypes.string,
 };

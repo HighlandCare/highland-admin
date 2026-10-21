@@ -16,9 +16,9 @@ import {
   Typography,
 } from "@mui/material";
 import { Layout as DashboardLayout } from "../layouts/dashboard/layout";
-import Loader from "../components/Loader";
 import {
   DataTable,
+  DataTableLoadingShell,
   DataTableToolbar,
   getServerPaginationMeta,
   getServerPaginationProps,
@@ -31,7 +31,7 @@ import {
   TableQuickActions,
 } from "../components/table-cells";
 import { getRestaurants } from "../Services/Auth.service";
-import { pageContainerSx, pageMainSx } from "../utils/pageLayout";
+import { pageContainerSx, pageMainSx, pageTitleSx } from "../utils/pageLayout";
 
 const STATUS_OPTIONS = [
   { label: "All", value: "" },
@@ -96,9 +96,11 @@ const Page = () => {
       <Box component="main" sx={pageMainSx}>
         <Container maxWidth="xl" sx={pageContainerSx}>
           <Stack spacing={3}>
-            {isLoading && !rows.length ? (
-              <Loader page />
-            ) : (
+            <Typography sx={pageTitleSx} variant="h4">
+              Restaurant Management
+            </Typography>
+
+            <DataTableLoadingShell loading={isLoading}>
               <DataTable
                 empty={!rows.length}
                 minWidth={800}
@@ -134,7 +136,6 @@ const Page = () => {
                     }}
                     searchPlaceholder="Search by business name"
                     searchValue={search}
-                    title="Restaurant Management"
                   />
                 }
               >
@@ -210,7 +211,7 @@ const Page = () => {
                   )}
                 </TableBody>
               </DataTable>
-            )}
+            </DataTableLoadingShell>
           </Stack>
         </Container>
       </Box>
