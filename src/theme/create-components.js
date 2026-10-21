@@ -353,7 +353,7 @@ export function createComponents(config) {
           transition: muiTheme.transitions.create(["background-color"], {
             duration: muiTheme.transitions.duration.shorter,
           }),
-          "&:hover": {
+          "&.MuiTableRow-hover:hover": {
             backgroundColor: palette.neutral[50],
           },
         },
@@ -362,12 +362,29 @@ export function createComponents(config) {
     MuiTableCell: {
       styleOverrides: {
         root: {
-          borderBottom: "none",
+          borderBottom: `1px solid ${palette.neutral[100]}`,
           fontSize: 14,
           lineHeight: 1.5,
+          padding: "16px 20px",
+          verticalAlign: "middle",
         },
         body: {
-          color: palette.neutral[700],
+          color: palette.neutral[800],
+        },
+        head: {
+          backgroundColor: palette.background.paper,
+          borderBottom: `1px solid ${palette.neutral[200]}`,
+          color: palette.neutral[600],
+          fontSize: 11,
+          fontWeight: 700,
+          letterSpacing: "0.06em",
+          lineHeight: 1.4,
+          padding: "14px 18px",
+          textTransform: "uppercase",
+          whiteSpace: "nowrap",
+        },
+        sizeSmall: {
+          padding: "12px 16px",
         },
       },
     },
@@ -377,13 +394,14 @@ export function createComponents(config) {
           [`& .${tableCellClasses.root}`]: {
             backgroundColor: palette.background.paper,
             borderBottom: `1px solid ${palette.neutral[200]}`,
-            color: palette.neutral[500],
-            fontSize: 13,
-            fontWeight: 600,
-            letterSpacing: 0,
+            color: palette.neutral[600],
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: "0.06em",
             lineHeight: 1.4,
-            padding: { xs: "10px 12px", sm: "12px 24px" },
-            textTransform: "capitalize",
+            padding: "14px 18px",
+            textTransform: "uppercase",
+            whiteSpace: "nowrap",
           },
         },
       },

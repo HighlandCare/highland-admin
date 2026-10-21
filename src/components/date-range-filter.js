@@ -6,12 +6,11 @@ import ChevronRightIcon from "@heroicons/react/24/solid/ChevronRightIcon";
 import {
   Box,
   Button,
+  Divider,
   IconButton,
-  InputAdornment,
   Popover,
   Stack,
   SvgIcon,
-  TextField,
   Typography,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
@@ -30,6 +29,8 @@ import {
   startOfDay,
   startOfMonth,
   startOfWeek,
+  subDays,
+  subMonths,
 } from "date-fns";
 import { brand } from "../theme/colors";
 
@@ -59,21 +60,198 @@ const formatRangeLabel = (start, end) => {
   return "";
 };
 
+const getPresetRange = (key) => {
+  const today = startOfDay(new Date());
+
+  switch (key) {
+    case "today":
+      return { start: today, end: today };
+    case "yesterday": {
+      const day = subDays(today, 1);
+      return { start: day, end: day };
+    }
+    case "thisWeek":
+      return { start: startOfWeek(today), end: today };
+    case "lastWeek": {
+      const lastWeekEnd = subDays(startOfWeek(today), 1);
+      return { start: startOfWeek(lastWeekEnd), end: lastWeekEnd };
+    }
+    case "thisMonth":
+      return { start: startOfMonth(today), end: today };
+    case "lastMonth": {
+      const lastMonth = subMonths(today, 1);
+      return { start: startOfMonth(lastMonth), end: endOfMonth(lastMonth) };
+    }
+    default:
+      return { start: null, end: null };
+  }
+};
+
+const PRESETS = [
+  { key: "today", label: "Today" },
+  { key: "yesterday", label: "Yesterday" },
+  { key: "thisWeek", label: "This Week" },
+  { key: "lastWeek", label: "Last Week" },
+  { key: "thisMonth", label: "This Month" },
+  { key: "lastMonth", label: "Last Month" },
+];
+
+const MonthGrid = ({
+  month,
+  draftStart,
+  draftEnd,
+  onDayClick,
+  onPrev,
+  onNext,
+  showPrev,
+  showNext,
+}) => {
+  const days = useMemo(() => {
+    const monthStart = startOfMonth(month);
+    const monthEnd = endOfMonth(month);
+    return eachDayOfInterval({
+      start: startOfWeek(monthStart),
+      end: endOfWeek(monthEnd),
+    });
+  }, [month]);
+
+  const getDayState = (day) => {
+    const inRange =
+      draftStart &&
+      draftEnd &&
+      !isBefore(day, draftStart) &&
+      !isAfter(day, draftEnd);
+    const isStart = Boolean(draftStart && isSameDay(day, draftStart));
+    const isEnd = Boolean(draftEnd && isSameDay(day, draftEnd));
+    const isEndpoint = isStart || isEnd;
+    const outsideMonth = !isSameMonth(day, month);
+
+    return { inRange, isEndpoint, isStart, isEnd, outsideMonth, isRangeMiddle: inRange && !isEndpoint };
+  };
+
+  return (
+    <Box sx={{ flexShrink: 0, minWidth: 280, width: 280 }}>
+      <Stack alignItems="center" direction="row" justifyContent="space-between" sx={{ mb: 1 }}>
+        {showPrev ? (
+          <IconButton aria-label="Previous month" onClick={onPrev} size="small">
+            <SvgIcon fontSize="small">
+              <ChevronLeftIcon />
+            </SvgIcon>
+          </IconButton>
+        ) : (
+          <Box sx={{ width: 34 }} />
+        )}
+        <Typography fontWeight={700} variant="subtitle2">
+          {format(month, "MMMM yyyy")}
+        </Typography>
+        {showNext ? (
+          <IconButton aria-label="Next month" onClick={onNext} size="small">
+            <SvgIcon fontSize="small">
+              <ChevronRightIcon />
+            </SvgIcon>
+          </IconButton>
+        ) : (
+          <Box sx={{ width: 34 }} />
+        )}
+      </Stack>
+
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+          rowGap: 0.25,
+          width: "100%",
+        }}
+      >
+        {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((weekday) => (
+          <Typography
+            align="center"
+            color="text.secondary"
+            key={weekday}
+            sx={{ fontSize: 11, fontWeight: 600, py: 0.5 }}
+            variant="caption"
+          >
+            {weekday}
+          </Typography>
+        ))}
+
+        {days.map((day) => {
+          const { isEndpoint, isStart, isEnd, isRangeMiddle, outsideMonth } = getDayState(day);
+
+          return (
+            <Box
+              key={day.toISOString()}
+              sx={{
+                alignItems: "center",
+                bgcolor: isRangeMiddle ? alpha(brand.primary, 0.12) : "transparent",
+                borderRadius: isStart ? "18px 0 0 18px" : isEnd ? "0 18px 18px 0" : 0,
+                display: "flex",
+                height: 34,
+                justifyContent: "center",
+              }}
+            >
+              <Box
+                component="button"
+                onClick={() => onDayClick(day)}
+                type="button"
+                sx={{
+                  alignItems: "center",
+                  bgcolor: isEndpoint ? brand.primary : "transparent",
+                  border: "none",
+                  borderRadius: "50%",
+                  color: isEndpoint ? "#fff" : outsideMonth ? "neutral.400" : "text.primary",
+                  cursor: "pointer",
+                  display: "flex",
+                  fontSize: 13,
+                  fontWeight: isEndpoint ? 700 : 500,
+                  height: 32,
+                  justifyContent: "center",
+                  p: 0,
+                  width: 32,
+                  "&:hover": {
+                    bgcolor: isEndpoint ? brand.primary : alpha(brand.primary, 0.16),
+                  },
+                }}
+              >
+                {format(day, "d")}
+              </Box>
+            </Box>
+          );
+        })}
+      </Box>
+    </Box>
+  );
+};
+
+MonthGrid.propTypes = {
+  draftEnd: PropTypes.object,
+  draftStart: PropTypes.object,
+  month: PropTypes.object.isRequired,
+  onDayClick: PropTypes.func.isRequired,
+  onNext: PropTypes.func,
+  onPrev: PropTypes.func,
+  showNext: PropTypes.bool,
+  showPrev: PropTypes.bool,
+};
+
 export function DateRangeFilter({
   endDate = "",
   label = "Date range",
   onChange = () => {},
   startDate = "",
   sx = {},
+  variant = "field",
 }) {
   const [anchorEl, setAnchorEl] = useState(null);
-  const [visibleMonth, setVisibleMonth] = useState(() => toDateValue(startDate) || new Date());
+  const [leftMonth, setLeftMonth] = useState(() => toDateValue(startDate) || new Date());
   const [draftStart, setDraftStart] = useState(() => toDateValue(startDate));
   const [draftEnd, setDraftEnd] = useState(() => toDateValue(endDate));
 
   const open = Boolean(anchorEl);
   const selectedStart = toDateValue(startDate);
   const selectedEnd = toDateValue(endDate);
+  const isPill = variant === "pill";
+  const rightMonth = addMonths(startOfMonth(leftMonth), 1);
 
   useEffect(() => {
     if (!open) {
@@ -81,18 +259,12 @@ export function DateRangeFilter({
     }
     setDraftStart(selectedStart);
     setDraftEnd(selectedEnd);
-    setVisibleMonth(selectedStart || selectedEnd || new Date());
+    const base = selectedStart || selectedEnd || new Date();
+    setLeftMonth(startOfMonth(base));
   }, [open, startDate, endDate]);
 
-  const days = useMemo(() => {
-    const monthStart = startOfMonth(visibleMonth);
-    const monthEnd = endOfMonth(visibleMonth);
-    const gridStart = startOfWeek(monthStart);
-    const gridEnd = endOfWeek(monthEnd);
-    return eachDayOfInterval({ start: gridStart, end: gridEnd });
-  }, [visibleMonth]);
-
   const displayValue = formatRangeLabel(selectedStart, selectedEnd);
+  const triggerLabel = displayValue || (isPill ? "All time" : "Select date range");
 
   const handleOpen = (event) => {
     setAnchorEl(event.currentTarget);
@@ -120,19 +292,23 @@ export function DateRangeFilter({
     setDraftEnd(clicked);
   };
 
-  const handleApply = () => {
-    if (!draftStart) {
+  const commitRange = (start, end) => {
+    if (!start) {
       onChange({ startDate: "", endDate: "" });
       handleClose();
       return;
     }
 
-    const end = draftEnd || draftStart;
+    const resolvedEnd = end || start;
     onChange({
-      startDate: toApiDate(draftStart),
-      endDate: toApiDate(end),
+      startDate: toApiDate(start),
+      endDate: toApiDate(resolvedEnd),
     });
     handleClose();
+  };
+
+  const handleApply = () => {
+    commitRange(draftStart, draftEnd || draftStart);
   };
 
   const handleClear = () => {
@@ -142,78 +318,74 @@ export function DateRangeFilter({
     handleClose();
   };
 
-  const getDayState = (day) => {
-    const rangeStart = draftStart;
-    const effectiveEnd = draftEnd;
-    const inRange =
-      rangeStart &&
-      effectiveEnd &&
-      !isBefore(day, rangeStart) &&
-      !isAfter(day, effectiveEnd);
-    const isStart = Boolean(rangeStart && isSameDay(day, rangeStart));
-    const isEnd = Boolean(effectiveEnd && isSameDay(day, effectiveEnd));
-    const isEndpoint = isStart || isEnd;
-    const outsideMonth = !isSameMonth(day, visibleMonth);
-    const isRangeMiddle = inRange && !isEndpoint;
-
-    return { inRange, isEndpoint, isStart, isEnd, isRangeMiddle, outsideMonth };
+  const handlePreset = (key) => {
+    const { start, end } = getPresetRange(key);
+    setDraftStart(start);
+    setDraftEnd(end);
+    if (start) {
+      setLeftMonth(startOfMonth(start));
+    }
+    commitRange(start, end);
   };
 
   return (
     <>
-      <TextField
-        InputLabelProps={{
-          shrink: true,
-          sx: {
+      {isPill ? (
+        <Button
+          onClick={handleOpen}
+          size="small"
+          startIcon={
+            <SvgIcon fontSize="small" sx={{ color: "neutral.500" }}>
+              <CalendarDaysIcon />
+            </SvgIcon>
+          }
+          sx={{
             bgcolor: "background.paper",
-            px: 0.5,
-          },
-        }}
-        InputProps={{
-          readOnly: true,
-          endAdornment: (
-            <InputAdornment position="end" sx={{ ml: 0.5 }}>
-              <SvgIcon fontSize="small" sx={{ color: "neutral.400" }}>
-                <CalendarDaysIcon />
-              </SvgIcon>
-            </InputAdornment>
-          ),
-        }}
-        inputProps={{
-          title: displayValue || undefined,
-        }}
-        label={label}
-        onClick={handleOpen}
-        placeholder="Select date range"
-        size="small"
-        sx={{
-          bgcolor: "background.paper",
-          borderRadius: 2,
-          minWidth: { xs: "100%", sm: 280 },
-          width: { xs: "100%", sm: 300 },
-          "& .MuiOutlinedInput-root": {
-            alignItems: "center",
-            cursor: "pointer",
-            minHeight: 40,
-            pl: 1.5,
-            pr: 1.25,
-          },
-          "& .MuiOutlinedInput-input": {
-            cursor: "pointer",
-            overflow: "hidden",
-            py: 1.125,
-            textOverflow: "ellipsis",
+            border: "1px solid",
+            borderColor: "neutral.200",
+            borderRadius: 999,
+            color: "text.primary",
+            flexShrink: 0,
+            fontSize: 13,
+            fontWeight: 500,
+            height: 40,
+            minWidth: 128,
+            px: 1.75,
+            textTransform: "none",
             whiteSpace: "nowrap",
-          },
-          "& .MuiInputAdornment-root": {
-            height: "auto",
-            maxHeight: "none",
-            marginTop: 0,
-          },
-          ...sx,
-        }}
-        value={displayValue}
-      />
+            "&:hover": { bgcolor: "neutral.50", borderColor: "neutral.300" },
+            ...sx,
+          }}
+          variant="outlined"
+        >
+          {triggerLabel}
+        </Button>
+      ) : (
+        <Button
+          onClick={handleOpen}
+          size="small"
+          startIcon={
+            <SvgIcon fontSize="small">
+              <CalendarDaysIcon />
+            </SvgIcon>
+          }
+          sx={{
+            bgcolor: "background.paper",
+            borderColor: "neutral.200",
+            borderRadius: 2,
+            color: "text.primary",
+            height: 40,
+            justifyContent: "flex-start",
+            minWidth: { xs: "100%", sm: 220 },
+            px: 1.5,
+            textTransform: "none",
+            ...sx,
+          }}
+          variant="outlined"
+        >
+          {displayValue || label}
+        </Button>
+      )}
 
       <Popover
         PaperProps={{
@@ -223,8 +395,10 @@ export function DateRangeFilter({
             borderRadius: 2.5,
             boxShadow: "0 16px 40px rgba(0,0,0,0.12)",
             mt: 1.25,
+            maxWidth: "calc(100vw - 24px)",
             overflow: "visible",
-            width: { xs: "calc(100vw - 32px)", sm: 340 },
+            // Sidebar (~168) + two 260px months + gaps/padding needs ~820px
+            width: { xs: "calc(100vw - 24px)", md: 820 },
           },
         }}
         anchorEl={anchorEl}
@@ -234,128 +408,121 @@ export function DateRangeFilter({
         open={open}
         transformOrigin={{ horizontal: "left", vertical: "top" }}
       >
-        <Box sx={{ p: 2.25, pb: 2 }}>
-          <Stack spacing={1.75}>
-            <Stack alignItems="center" direction="row" justifyContent="space-between">
-              <IconButton
-                aria-label="Previous month"
-                onClick={() => setVisibleMonth((month) => addMonths(month, -1))}
+        <Stack direction={{ xs: "column", md: "row" }} sx={{ width: "100%" }}>
+          <Box
+            sx={{
+              bgcolor: "neutral.50",
+              borderRight: { md: "1px solid" },
+              borderColor: { md: "neutral.200" },
+              flexShrink: 0,
+              minWidth: { md: 168 },
+              p: 1.5,
+            }}
+          >
+            <Stack spacing={0.5}>
+              {PRESETS.map((preset) => (
+                <Button
+                  key={preset.key}
+                  onClick={() => handlePreset(preset.key)}
+                  size="small"
+                  sx={{
+                    color: "text.secondary",
+                    fontWeight: 500,
+                    justifyContent: "flex-start",
+                    px: 1.25,
+                    textTransform: "none",
+                    "&:hover": { bgcolor: alpha(brand.primary, 0.08), color: "text.primary" },
+                  }}
+                >
+                  {preset.label}
+                </Button>
+              ))}
+              <Divider sx={{ my: 0.75 }} />
+              <Button
+                onClick={handleClear}
                 size="small"
+                sx={{
+                  color: "text.secondary",
+                  justifyContent: "flex-start",
+                  px: 1.25,
+                  textTransform: "none",
+                }}
               >
-                <SvgIcon fontSize="small">
-                  <ChevronLeftIcon />
-                </SvgIcon>
-              </IconButton>
-              <Typography fontWeight={700} variant="subtitle1">
-                {format(visibleMonth, "MMMM yyyy")}
-              </Typography>
-              <IconButton
-                aria-label="Next month"
-                onClick={() => setVisibleMonth((month) => addMonths(month, 1))}
-                size="small"
+                All time
+              </Button>
+            </Stack>
+          </Box>
+
+          <Box sx={{ flex: 1, minWidth: 0, p: 2, overflow: "visible" }}>
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={1}
+              sx={{ mb: 2 }}
+            >
+              <Box
+                sx={{
+                  border: "1px solid",
+                  borderColor: "neutral.200",
+                  borderRadius: 1.5,
+                  flex: 1,
+                  px: 1.5,
+                  py: 1,
+                }}
               >
-                <SvgIcon fontSize="small">
-                  <ChevronRightIcon />
-                </SvgIcon>
-              </IconButton>
+                <Typography color="text.secondary" variant="caption">
+                  Start
+                </Typography>
+                <Typography fontWeight={600} variant="body2">
+                  {draftStart ? format(draftStart, "MMM d, yyyy") : "—"}
+                </Typography>
+              </Box>
+              <Box
+                sx={{
+                  border: "1px solid",
+                  borderColor: "neutral.200",
+                  borderRadius: 1.5,
+                  flex: 1,
+                  px: 1.5,
+                  py: 1,
+                }}
+              >
+                <Typography color="text.secondary" variant="caption">
+                  End
+                </Typography>
+                <Typography fontWeight={600} variant="body2">
+                  {draftEnd || draftStart
+                    ? format(draftEnd || draftStart, "MMM d, yyyy")
+                    : "—"}
+                </Typography>
+              </Box>
             </Stack>
 
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns: "repeat(7, 1fr)",
-                rowGap: 0.5,
-              }}
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              spacing={{ xs: 2, md: 3 }}
+              sx={{ justifyContent: "center", width: "100%" }}
             >
-              {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((weekday) => (
-                <Typography
-                  align="center"
-                  color="text.secondary"
-                  key={weekday}
-                  sx={{ fontSize: 12, fontWeight: 600, py: 0.5 }}
-                  variant="caption"
-                >
-                  {weekday}
-                </Typography>
-              ))}
+              <MonthGrid
+                draftEnd={draftEnd}
+                draftStart={draftStart}
+                month={leftMonth}
+                onDayClick={handleDayClick}
+                onPrev={() => setLeftMonth((month) => addMonths(month, -1))}
+                showNext={false}
+                showPrev
+              />
+              <MonthGrid
+                draftEnd={draftEnd}
+                draftStart={draftStart}
+                month={rightMonth}
+                onDayClick={handleDayClick}
+                onNext={() => setLeftMonth((month) => addMonths(month, 1))}
+                showNext
+                showPrev={false}
+              />
+            </Stack>
 
-              {days.map((day) => {
-                const { isEndpoint, isStart, isEnd, isRangeMiddle, outsideMonth } =
-                  getDayState(day);
-
-                return (
-                  <Box
-                    key={day.toISOString()}
-                    sx={{
-                      alignItems: "center",
-                      bgcolor: isRangeMiddle ? alpha(brand.primary, 0.12) : "transparent",
-                      borderRadius: isStart
-                        ? "18px 0 0 18px"
-                        : isEnd
-                          ? "0 18px 18px 0"
-                          : 0,
-                      display: "flex",
-                      height: 36,
-                      justifyContent: "center",
-                      position: "relative",
-                    }}
-                  >
-                    <Box
-                      component="button"
-                      onClick={() => handleDayClick(day)}
-                      type="button"
-                      sx={{
-                        alignItems: "center",
-                        bgcolor: isEndpoint ? brand.primary : "transparent",
-                        border: "none",
-                        borderRadius: "50%",
-                        color: isEndpoint
-                          ? "#fff"
-                          : outsideMonth
-                            ? "neutral.400"
-                            : "text.primary",
-                        cursor: "pointer",
-                        display: "flex",
-                        flexShrink: 0,
-                        fontSize: 13,
-                        fontWeight: isEndpoint ? 700 : 500,
-                        height: 34,
-                        justifyContent: "center",
-                        lineHeight: 1,
-                        p: 0,
-                        width: 34,
-                        "&:hover": {
-                          bgcolor: isEndpoint
-                            ? brand.primary
-                            : alpha(brand.primary, 0.16),
-                        },
-                      }}
-                    >
-                      {format(day, "d")}
-                    </Box>
-                  </Box>
-                );
-              })}
-            </Box>
-
-            <Box
-              sx={{
-                bgcolor: alpha(brand.primary, 0.06),
-                borderRadius: 1.5,
-                px: 1.5,
-                py: 1,
-              }}
-            >
-              <Typography color="text.secondary" variant="caption">
-                {draftStart && draftEnd
-                  ? formatRangeLabel(draftStart, draftEnd)
-                  : draftStart
-                    ? "Select end date"
-                    : "Select start date"}
-              </Typography>
-            </Box>
-
-            <Stack direction="row" justifyContent="flex-end" spacing={1} sx={{ pt: 0.25 }}>
+            <Stack direction="row" justifyContent="flex-end" spacing={1} sx={{ mt: 2 }}>
               <Button color="inherit" onClick={handleClear} size="small">
                 Clear
               </Button>
@@ -373,8 +540,8 @@ export function DateRangeFilter({
                 Apply
               </Button>
             </Stack>
-          </Stack>
-        </Box>
+          </Box>
+        </Stack>
       </Popover>
     </>
   );
@@ -386,4 +553,5 @@ DateRangeFilter.propTypes = {
   onChange: PropTypes.func,
   startDate: PropTypes.string,
   sx: PropTypes.object,
+  variant: PropTypes.oneOf(["field", "pill"]),
 };

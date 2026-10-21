@@ -8,18 +8,26 @@ import Loader from "../components/Loader";
 import { RideHistoryTable } from "../sections/driver-earnings/ride-history-table";
 import { pageContainerSx, pageMainSx } from "../utils/pageLayout";
 import {
+  clearRideHistoryListState,
+  consumeRideHistoryListState,
   defaultRideHistoryFilters,
   getRideList,
-  getStoredRideHistoryListState,
-  storeRideHistoryListState,
 } from "../utils/rideUtils";
 
-const RIDE_HISTORY_LIMIT = 20;
+const DEFAULT_RIDE_HISTORY_LIMIT = 20;
+
+const isRideHistoryDetailPath = (url = "") => {
+  const path = String(url).split("?")[0];
+  return (
+    path.startsWith("/ride-history/detail") || path.startsWith("/orders/detail")
+  );
+};
 
 const Page = () => {
   const router = useRouter();
   const [hydrated, setHydrated] = useState(false);
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(DEFAULT_RIDE_HISTORY_LIMIT);
   const [filters, setFilters] = useState(defaultRideHistoryFilters);
   const [isLoading, setIsLoading] = useState(true);
   const [rideHistory, setRideHistory] = useState({});
@@ -33,21 +41,47 @@ const Page = () => {
   }, [router]);
 
   useEffect(() => {
-    const stored = getStoredRideHistoryListState();
+    // Only restore filters when returning from detail (flag or ?restoreFilters=1).
+    // Visiting from any other page starts with defaults.
+    const forceRestore =
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("restoreFilters") === "1";
+
+    const stored = consumeRideHistoryListState({ forceRestore });
     if (stored) {
       setPage(stored.page);
       setFilters(stored.filters);
+      if (stored.limit) {
+        setLimit(stored.limit);
+      }
     }
+
     setHydrated(true);
+
+    // Strip the restore query without re-running this effect / remounting.
+    if (forceRestore && typeof window !== "undefined") {
+      window.history.replaceState(null, "", "/ride-history");
+    }
   }, []);
 
   useEffect(() => {
     if (!hydrated) {
-      return;
+      return undefined;
     }
 
-    storeRideHistoryListState({ page, filters });
-  }, [hydrated, page, filters]);
+    // Leaving the list for any page other than ride/order detail clears saved filters.
+    const handleRouteChangeStart = (url) => {
+      if (isRideHistoryDetailPath(url) || String(url).split("?")[0] === "/ride-history") {
+        return;
+      }
+      clearRideHistoryListState();
+    };
+
+    router.events.on("routeChangeStart", handleRouteChangeStart);
+    return () => {
+      router.events.off("routeChangeStart", handleRouteChangeStart);
+    };
+  }, [hydrated, router.events]);
 
   useEffect(() => {
     if (!hydrated) {
@@ -59,7 +93,7 @@ const Page = () => {
     const fetchRideHistory = async () => {
       try {
         setIsLoading(true);
-        const response = await getRideHistory(page, RIDE_HISTORY_LIMIT, {
+        const response = await getRideHistory(page, limit, {
           ...filters,
           recordType: "ride",
           type: "ride",
@@ -81,10 +115,15 @@ const Page = () => {
     return () => {
       active = false;
     };
-  }, [hydrated, page, filters]);
+  }, [hydrated, page, limit, filters]);
 
   const handlePageChange = (newPage) => {
     setPage(newPage);
+  };
+
+  const handleRowsPerPageChange = (nextLimit) => {
+    setLimit(nextLimit);
+    setPage(1);
   };
 
   const handleFiltersChange = (nextFilters) => {
@@ -131,8 +170,10 @@ const Page = () => {
                   items={rideHistory}
                   onFiltersChange={handleFiltersChange}
                   onPageChange={handlePageChange}
+                  onRowsPerPageChange={handleRowsPerPageChange}
                   page={page}
-                  title="Booking History"
+                  rowsPerPage={limit}
+                  title="Booking history"
                 />
               </Box>
             )}

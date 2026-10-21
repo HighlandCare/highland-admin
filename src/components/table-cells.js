@@ -47,11 +47,12 @@ export const StatusBadge = ({ color = "neutral", label }) => (
       alignItems: "center",
       borderRadius: "999px",
       display: "inline-flex",
-      fontSize: 13,
-      fontWeight: 500,
-      lineHeight: 1.4,
-      px: 1.5,
-      py: 0.5,
+      fontSize: 12,
+      fontWeight: 600,
+      letterSpacing: "0.01em",
+      lineHeight: 1.35,
+      px: 1.35,
+      py: 0.45,
       textTransform: "capitalize",
       whiteSpace: "nowrap",
       ...badgeColors[color],
@@ -212,9 +213,15 @@ export const TableQuickActions = ({ actions }) => (
             onClick={onClick}
             size="small"
             sx={{
+              border: "1px solid",
+              borderColor: "transparent",
+              borderRadius: 999,
               color,
+              height: 32,
+              width: 32,
               "&:hover": {
-                bgcolor: hasActionColor ? alpha(brand.primary, 0.06) : "neutral.50",
+                bgcolor: hasActionColor ? alpha(brand.primary, 0.08) : "neutral.50",
+                borderColor: "neutral.200",
                 color: hasActionColor ? color : "neutral.800",
               },
             }}

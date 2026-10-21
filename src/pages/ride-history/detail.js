@@ -32,6 +32,7 @@ const RideRouteMap = dynamic(
 import { formatDateTime, formatRelativeDate } from "../../utils/dateUtils";
 import { pageContainerSx, pageMainSx } from "../../utils/pageLayout";
 import {
+  clearRideHistoryListState,
   formatRideCommissionRate,
   formatRideCurrency,
   formatRideDurationSeconds,
@@ -101,6 +102,22 @@ const Page = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [events, setEvents] = useState([]);
   const [isEventsLoading, setIsEventsLoading] = useState(false);
+
+  useEffect(() => {
+    // Leaving detail for anywhere except the list clears saved list filters.
+    const handleRouteChangeStart = (url) => {
+      const path = String(url).split("?")[0];
+      if (path === "/ride-history") {
+        return;
+      }
+      clearRideHistoryListState();
+    };
+
+    router.events.on("routeChangeStart", handleRouteChangeStart);
+    return () => {
+      router.events.off("routeChangeStart", handleRouteChangeStart);
+    };
+  }, [router.events]);
 
   useEffect(() => {
     if (!id) {
@@ -252,7 +269,10 @@ const Page = () => {
 
       <Box component="main" sx={pageMainSx}>
         <Container maxWidth="xl" sx={pageContainerSx}>
-          <DetailPageFrame backHref="/ride-history" backLabel="Back to Ride History">
+          <DetailPageFrame
+            backHref="/ride-history?restoreFilters=1"
+            backLabel="Back to Ride History"
+          >
             <DetailPageState
               loading={isLoading}
               notFoundMessage="The selected ride could not be loaded."

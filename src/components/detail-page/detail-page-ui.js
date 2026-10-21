@@ -402,21 +402,29 @@ DetailPageState.propTypes = {
 };
 
 export const detailTableRowSx = {
-  "&:hover": { bgcolor: alpha(brand.primary, 0.03) },
-  "& td": { borderBottom: "1px solid", borderColor: "neutral.100", py: 1.75 },
+  transition: "background-color 120ms ease",
+  "&:hover": { bgcolor: "neutral.50" },
+  "& td": {
+    borderBottom: "1px solid",
+    borderColor: "neutral.100",
+    fontSize: 14,
+    py: 1.75,
+    verticalAlign: "middle",
+  },
 };
 
 export const detailTableHeadSx = {
   "& th": {
-    bgcolor: "neutral.50",
+    bgcolor: "background.paper",
     borderBottom: "1px solid",
     borderColor: "neutral.200",
-    color: "text.secondary",
-    fontSize: 12,
+    color: "neutral.500",
+    fontSize: 11,
     fontWeight: 700,
-    letterSpacing: 0.3,
+    letterSpacing: "0.06em",
     py: 1.5,
     textTransform: "uppercase",
+    whiteSpace: "nowrap",
   },
 };
 

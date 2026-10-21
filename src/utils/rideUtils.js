@@ -300,8 +300,9 @@ export const defaultRideHistoryFilters = () => ({
 });
 
 const RIDE_HISTORY_LIST_STATE_KEY = "rideHistoryListState";
+const RIDE_HISTORY_RESTORE_FLAG_KEY = "rideHistoryRestoreOnce";
 
-export const storeRideHistoryListState = ({ page = 1, filters } = {}) => {
+export const storeRideHistoryListState = ({ page = 1, limit = 20, filters } = {}) => {
   if (typeof window === "undefined") {
     return;
   }
@@ -311,6 +312,7 @@ export const storeRideHistoryListState = ({ page = 1, filters } = {}) => {
       RIDE_HISTORY_LIST_STATE_KEY,
       JSON.stringify({
         page: Math.max(Number(page) || 1, 1),
+        limit: Math.max(Number(limit) || 20, 1),
         filters: {
           ...defaultRideHistoryFilters(),
           ...(filters && typeof filters === "object" ? filters : {}),
@@ -319,6 +321,32 @@ export const storeRideHistoryListState = ({ page = 1, filters } = {}) => {
     );
   } catch (error) {
     console.error("storeRideHistoryListState error:", error);
+  }
+};
+
+/** Mark that the next visit to the list should restore saved filters (detail → back). */
+export const markRideHistoryListRestore = () => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    sessionStorage.setItem(RIDE_HISTORY_RESTORE_FLAG_KEY, "1");
+  } catch (error) {
+    console.error("markRideHistoryListRestore error:", error);
+  }
+};
+
+export const clearRideHistoryListState = () => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    sessionStorage.removeItem(RIDE_HISTORY_LIST_STATE_KEY);
+    sessionStorage.removeItem(RIDE_HISTORY_RESTORE_FLAG_KEY);
+  } catch (error) {
+    console.error("clearRideHistoryListState error:", error);
   }
 };
 
@@ -336,6 +364,7 @@ export const getStoredRideHistoryListState = () => {
     const parsed = JSON.parse(raw);
     return {
       page: Math.max(Number(parsed?.page) || 1, 1),
+      limit: Math.max(Number(parsed?.limit) || 20, 1),
       filters: {
         ...defaultRideHistoryFilters(),
         ...(parsed?.filters && typeof parsed.filters === "object" ? parsed.filters : {}),
@@ -343,6 +372,34 @@ export const getStoredRideHistoryListState = () => {
     };
   } catch (error) {
     console.error("getStoredRideHistoryListState error:", error);
+    return null;
+  }
+};
+
+/**
+ * Restore list filters only after returning from detail.
+ * Visiting ride history from any other page clears saved state and returns null.
+ */
+export const consumeRideHistoryListState = ({ forceRestore = false } = {}) => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const shouldRestore =
+      forceRestore || sessionStorage.getItem(RIDE_HISTORY_RESTORE_FLAG_KEY) === "1";
+    sessionStorage.removeItem(RIDE_HISTORY_RESTORE_FLAG_KEY);
+
+    if (!shouldRestore) {
+      sessionStorage.removeItem(RIDE_HISTORY_LIST_STATE_KEY);
+      return null;
+    }
+
+    const stored = getStoredRideHistoryListState();
+    sessionStorage.removeItem(RIDE_HISTORY_LIST_STATE_KEY);
+    return stored;
+  } catch (error) {
+    console.error("consumeRideHistoryListState error:", error);
     return null;
   }
 };

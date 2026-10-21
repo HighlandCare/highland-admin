@@ -5,9 +5,6 @@ import {
   formatPausePointLabel,
   formatRideEventLabel,
   getBookingDestinationLabel,
-  getBookingReferenceLabel,
-  getBookingTypeMeta,
-  getOrderedPausePoints,
   getRideAdminEarning,
   getRideCustomerName,
   getRideDriverEarning,
@@ -16,7 +13,6 @@ import {
   getRideList,
   getRidePickupAddress,
   getRideStatusMeta,
-  getRideStops,
   normalizeRideStop,
   sortRideLifecycleEvents,
 } from "./rideUtils";
@@ -24,23 +20,15 @@ import {
 /** API max when export=true */
 const EXPORT_PAGE_SIZE = 2000;
 
-export const RIDE_HISTORY_EXPORT_COLUMNS = [
+/** Core booking columns (stops are appended dynamically per export). */
+export const RIDE_HISTORY_BASE_EXPORT_COLUMNS = [
   { key: "recordType", label: "Record Type" },
-  { key: "bookingLabel", label: "Booking Label" },
   { key: "rideId", label: "Booking / Ride ID" },
-  { key: "orderNumber", label: "Order Number" },
-  { key: "reference", label: "Reference" },
-  { key: "type", label: "Type" },
-  { key: "category", label: "Category" },
-  { key: "mode", label: "Mode" },
-  { key: "pricingMode", label: "Pricing Mode" },
   { key: "status", label: "Status" },
   { key: "paymentStatus", label: "Payment Status" },
   { key: "havePaid", label: "Have Paid" },
-  { key: "isTestRide", label: "Test Ride" },
   { key: "date", label: "Created At" },
   { key: "paidAt", label: "Paid At" },
-  { key: "scheduledAt", label: "Scheduled At" },
   { key: "rideStartTime", label: "Ride Start" },
   { key: "rideEndTime", label: "Ride End" },
   { key: "driver", label: "Driver" },
@@ -52,11 +40,28 @@ export const RIDE_HISTORY_EXPORT_COLUMNS = [
   { key: "fare", label: "Fare / Total" },
   { key: "driverEarning", label: "Driver Earning" },
   { key: "adminEarning", label: "Admin Earning" },
-  { key: "pausePointCount", label: "Pause Point Count" },
-  { key: "pausePointsTimeline", label: "Pause Points Timeline" },
-  { key: "eventCount", label: "Event Count" },
-  { key: "eventsTruncated", label: "Events Truncated" },
+  { key: "stopsCount", label: "Stops Count" },
+];
+
+export const RIDE_HISTORY_TAIL_EXPORT_COLUMNS = [
   { key: "eventsTimeline", label: "Events Timeline" },
+];
+
+/** Per-stop fields expanded as Stop 1 … Stop N columns. */
+const STOP_EXPORT_FIELDS = [
+  { key: "Label", label: "Label" },
+  { key: "Address", label: "Address" },
+  { key: "State", label: "State" },
+  { key: "PlannedWaiting", label: "Planned Waiting" },
+  { key: "ActualWaiting", label: "Actual Waiting" },
+  { key: "ExtraWaiting", label: "Extra Waiting" },
+  { key: "ApproachingAt", label: "Approaching At" },
+  { key: "ArrivedAt", label: "Arrived At" },
+  { key: "WaitingStartedAt", label: "Waiting Started" },
+  { key: "WaitingEndedAt", label: "Waiting Ended" },
+  { key: "DepartedAt", label: "Departed At" },
+  { key: "CompletedAt", label: "Completed At" },
+  { key: "SkipReason", label: "Skip Reason" },
 ];
 
 const formatMoneyForExport = (value) => {
@@ -107,59 +112,91 @@ const formatSecondsForExport = (seconds) => {
   return secs ? `${mins}m ${secs}s` : `${mins}m`;
 };
 
-const formatStopStateLabel = (state) =>
-  String(state || "")
-    .toLowerCase()
-    .replace(/_/g, " ")
-    .replace(/^./, (c) => c.toUpperCase());
-
-/**
- * Build a readable pause-point timeline from booking.stops
- * (supports legacy flat fields + nested timing/waiting).
- */
-export const formatPausePointsTimeline = (stops = [], booking = null) => {
-  if (!Array.isArray(stops) || !stops.length) {
+const formatStopStateLabel = (state) => {
+  if (!state) {
     return "";
   }
 
-  // Prefer filtered intermediate pause points when a booking is available so
-  // numbers match the detail UI (Pause Point (1), (2), …).
-  const pausePoints = booking ? getRideStops(booking) : null;
-  const sorted =
-    pausePoints && pausePoints.length
-      ? pausePoints
-      : [...stops]
-          .map(normalizeRideStop)
-          .sort((a, b) => Number(a?.sequence ?? 0) - Number(b?.sequence ?? 0));
-
-  return sorted
-    .map((stop, index) => {
-      const parts = [
-        formatPausePointLabel(index),
-        stop?.state ? formatStopStateLabel(stop.state) : null,
-        stop?.address ? `Address: ${stop.address}` : null,
-        stop?.plannedWaitingSeconds != null
-          ? `Planned wait: ${formatSecondsForExport(stop.plannedWaitingSeconds)}`
-          : null,
-        stop?.actualWaitingSeconds != null
-          ? `Actual wait: ${formatSecondsForExport(stop.actualWaitingSeconds)}`
-          : null,
-        stop?.extraWaitingSeconds != null && Number(stop.extraWaitingSeconds) > 0
-          ? `Extra wait: ${formatSecondsForExport(stop.extraWaitingSeconds)}`
-          : null,
-        stop?.approachingAt ? `Approaching: ${formatDateTime(stop.approachingAt)}` : null,
-        stop?.arrivedAt ? `Arrived: ${formatDateTime(stop.arrivedAt)}` : null,
-        stop?.waitingStartedAt ? `Waiting started: ${formatDateTime(stop.waitingStartedAt)}` : null,
-        stop?.waitingEndedAt ? `Waiting ended: ${formatDateTime(stop.waitingEndedAt)}` : null,
-        stop?.departedAt ? `Departed: ${formatDateTime(stop.departedAt)}` : null,
-        stop?.completedAt ? `Completed: ${formatDateTime(stop.completedAt)}` : null,
-        stop?.skipReason ? `Skip reason: ${stop.skipReason}` : null,
-      ].filter(Boolean);
-
-      return parts.join(" | ");
-    })
-    .join(" || ");
+  return String(state)
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/^./, (c) => c.toUpperCase());
 };
+
+const formatStopExportLabel = (stop, pausePointIndexRef) => {
+  const kind = String(stop?.kind || "").toLowerCase();
+
+  if (kind === "pickup") {
+    return "Pickup";
+  }
+
+  if (kind === "final" || kind === "dropoff" || kind === "destination") {
+    return "Destination";
+  }
+
+  const label = formatPausePointLabel(pausePointIndexRef.current);
+  pausePointIndexRef.current += 1;
+  return label;
+};
+
+const getSortedStops = (stops = []) =>
+  [...stops]
+    .map(normalizeRideStop)
+    .sort((a, b) => Number(a?.sequence ?? 0) - Number(b?.sequence ?? 0));
+
+/** Flatten each stop into Stop N * field keys on the row. */
+export const flattenStopsForExport = (stops = []) => {
+  const sorted = getSortedStops(stops);
+  const pausePointIndexRef = { current: 0 };
+  const fields = {};
+
+  sorted.forEach((stop, index) => {
+    const n = index + 1;
+    const prefix = `stop${n}`;
+
+    fields[`${prefix}Label`] = formatStopExportLabel(stop, pausePointIndexRef);
+    fields[`${prefix}Address`] = cleanDisplayValue(stop?.address);
+    fields[`${prefix}State`] = formatStopStateLabel(stop?.state);
+    fields[`${prefix}PlannedWaiting`] = formatSecondsForExport(stop?.plannedWaitingSeconds);
+    fields[`${prefix}ActualWaiting`] = formatSecondsForExport(stop?.actualWaitingSeconds);
+    fields[`${prefix}ExtraWaiting`] = formatSecondsForExport(stop?.extraWaitingSeconds);
+    fields[`${prefix}ApproachingAt`] = cleanDisplayValue(formatDateTime(stop?.approachingAt));
+    fields[`${prefix}ArrivedAt`] = cleanDisplayValue(formatDateTime(stop?.arrivedAt));
+    fields[`${prefix}WaitingStartedAt`] = cleanDisplayValue(
+      formatDateTime(stop?.waitingStartedAt)
+    );
+    fields[`${prefix}WaitingEndedAt`] = cleanDisplayValue(formatDateTime(stop?.waitingEndedAt));
+    fields[`${prefix}DepartedAt`] = cleanDisplayValue(formatDateTime(stop?.departedAt));
+    fields[`${prefix}CompletedAt`] = cleanDisplayValue(formatDateTime(stop?.completedAt));
+    fields[`${prefix}SkipReason`] = cleanDisplayValue(stop?.skipReason);
+  });
+
+  return { fields, stopsCount: sorted.length };
+};
+
+export const buildStopExportColumns = (maxStops = 0) => {
+  const columns = [];
+
+  for (let n = 1; n <= maxStops; n += 1) {
+    STOP_EXPORT_FIELDS.forEach((field) => {
+      columns.push({
+        key: `stop${n}${field.key}`,
+        label: `Stop ${n} ${field.label}`,
+      });
+    });
+  }
+
+  return columns;
+};
+
+export const buildRideHistoryExportColumns = (maxStops = 0) => [
+  ...RIDE_HISTORY_BASE_EXPORT_COLUMNS,
+  ...buildStopExportColumns(maxStops),
+  ...RIDE_HISTORY_TAIL_EXPORT_COLUMNS,
+];
+
+/** @deprecated Prefer buildRideHistoryExportColumns(maxStops) for dynamic stop columns. */
+export const RIDE_HISTORY_EXPORT_COLUMNS = buildRideHistoryExportColumns(0);
 
 /** Flatten chronological events[] for CSV/Excel. */
 export const formatEventsTimeline = (events = [], booking = null) => {
@@ -178,30 +215,19 @@ export const formatEventsTimeline = (events = [], booking = null) => {
 
 export const mapRideToExportRow = (booking) => {
   const statusMeta = getRideStatusMeta(booking?.status);
-  const typeMeta = getBookingTypeMeta(booking);
-  const recordType = booking?.recordType || (booking?.type === "food_order" ? "food_order" : "ride");
-  const pausePoints = getOrderedPausePoints(booking);
+  const stops = Array.isArray(booking?.stops) ? booking.stops : [];
+  const { fields: stopFields, stopsCount } = flattenStopsForExport(stops);
   const events = getRideLifecycleEvents(booking);
-  const eventCount =
-    booking?.eventCount != null ? Number(booking.eventCount) : events.length || "";
 
   return {
-    recordType,
-    bookingLabel: cleanDisplayValue(booking?.bookingLabel) || typeMeta.label,
+    recordType:
+      booking?.recordType || (booking?.type === "food_order" ? "food_order" : "ride"),
     rideId: booking?.rideId || booking?.orderId || booking?._id || "",
-    orderNumber: cleanDisplayValue(booking?.orderNumber),
-    reference: getBookingReferenceLabel(booking),
-    type: typeMeta.label,
-    category: cleanDisplayValue(booking?.category),
-    mode: cleanDisplayValue(booking?.mode),
-    pricingMode: cleanDisplayValue(booking?.pricingMode),
     status: statusMeta.label,
     paymentStatus: cleanDisplayValue(booking?.paymentStatus),
     havePaid: formatYesNo(booking?.havePaid),
-    isTestRide: formatYesNo(booking?.isTestRide),
     date: cleanDisplayValue(formatDateTime(booking?.createdAt)),
     paidAt: cleanDisplayValue(formatDateTime(booking?.paidAt)),
-    scheduledAt: cleanDisplayValue(formatDateTime(booking?.scheduledAt)),
     rideStartTime: cleanDisplayValue(formatDateTime(booking?.rideStartTime)),
     rideEndTime: cleanDisplayValue(formatDateTime(booking?.rideEndTime)),
     driver: cleanDisplayValue(getRideDriverName(booking)),
@@ -217,13 +243,8 @@ export const mapRideToExportRow = (booking) => {
     adminEarning: formatMoneyForExport(
       booking?.adminEarned ?? booking?.payment?.adminCommission ?? getRideAdminEarning(booking)
     ),
-    pausePointCount: pausePoints.length || "",
-    pausePointsTimeline: formatPausePointsTimeline(
-      Array.isArray(booking?.stops) ? booking.stops : [],
-      booking
-    ),
-    eventCount: eventCount === 0 ? "" : eventCount,
-    eventsTruncated: formatYesNo(booking?.eventsTruncated),
+    stopsCount: stopsCount || "",
+    ...stopFields,
     eventsTimeline: formatEventsTimeline(events, booking),
   };
 };
@@ -301,6 +322,12 @@ const buildExportFilename = (filters = {}, extension) => {
   return `${parts.join("_")}.${extension}`;
 };
 
+const getMaxStopsCount = (rows = []) =>
+  rows.reduce((max, row) => {
+    const count = Number(row?.stopsCount) || 0;
+    return count > max ? count : max;
+  }, 0);
+
 export const exportRideHistory = async (filters = {}, format = "csv") => {
   const rows = await fetchRideHistoryForExport(filters);
 
@@ -308,10 +335,12 @@ export const exportRideHistory = async (filters = {}, format = "csv") => {
     throw new Error("No ride history data found for the selected filters");
   }
 
+  const columns = buildRideHistoryExportColumns(getMaxStopsCount(rows));
+
   if (format === "excel") {
-    downloadExcel(RIDE_HISTORY_EXPORT_COLUMNS, rows, buildExportFilename(filters, "xls"));
+    downloadExcel(columns, rows, buildExportFilename(filters, "xls"));
   } else {
-    downloadCsv(RIDE_HISTORY_EXPORT_COLUMNS, rows, buildExportFilename(filters, "csv"));
+    downloadCsv(columns, rows, buildExportFilename(filters, "csv"));
   }
 
   return rows.length;
