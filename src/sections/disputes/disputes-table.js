@@ -49,6 +49,12 @@ import {
   normalizeDisputeWorkflowStatus,
   storeDisputeDetail,
 } from "../../utils/disputeUtils";
+import {
+  LIST_FILTER_KEYS,
+  consumeListFilterState,
+  markListFilterRestore,
+  storeListFilterState,
+} from "../../utils/listFilterState";
 
 const PAYMENT_FILTER_OPTIONS = [
   { label: "All", value: "all" },
@@ -134,6 +140,22 @@ export const DisputesTable = (props) => {
       onPageChange(1);
     }
   };
+
+  useEffect(() => {
+    const stored = consumeListFilterState(LIST_FILTER_KEYS.disputes);
+    if (!stored) {
+      return;
+    }
+
+    setSearch(stored.filters?.search ?? "");
+    setPaymentFilter(stored.filters?.paymentFilter ?? "all");
+    setStatusFilter(stored.filters?.statusFilter ?? "all");
+    setTypeFilter(stored.filters?.typeFilter ?? "all");
+    if (stored.page) {
+      onPageChange(stored.page);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- restore once on mount
+  }, []);
 
   const indexedItems = useMemo(
     () =>
@@ -297,6 +319,11 @@ export const DisputesTable = (props) => {
   );
 
   const handleView = (row) => {
+    storeListFilterState(LIST_FILTER_KEYS.disputes, {
+      page,
+      filters: { search, paymentFilter, statusFilter, typeFilter },
+    });
+    markListFilterRestore(LIST_FILTER_KEYS.disputes);
     storeDisputeDetail(row);
     const detailId = getDisputeDetailId(row);
     if (!detailId) {

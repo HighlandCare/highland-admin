@@ -49,7 +49,9 @@ export default function Loader({
   sx,
 }) {
   const isPageLoader = page || size === "page";
-  const loader = <RiseLoader color={color} size={resolveSize(size, page)} />;
+  const loader = (
+    <RiseLoader color={color} size={resolveSize(size, page)} speedMultiplier={2.25} />
+  );
 
   if (inline) {
     const inlineMinHeight =

@@ -33,6 +33,10 @@ import {
   normalizeDriverEarningsByIdResponse,
   normalizeDriverTransactions,
 } from "../../utils/earningsUtils";
+import {
+  LIST_FILTER_KEYS,
+  createDetailFilterRouteGuard,
+} from "../../utils/listFilterState";
 
 const DATE_FIELD_KEYS = new Set([
   "createdAt",
@@ -79,6 +83,17 @@ const Page = () => {
   const [driver, setDriver] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const handleRouteChangeStart = createDetailFilterRouteGuard(LIST_FILTER_KEYS.driverEarnings, {
+      listPath: "/driver-earnings",
+    });
+
+    router.events.on("routeChangeStart", handleRouteChangeStart);
+    return () => {
+      router.events.off("routeChangeStart", handleRouteChangeStart);
+    };
+  }, [router.events]);
 
   useEffect(() => {
     if (!id) {
@@ -228,7 +243,7 @@ const Page = () => {
         <Container maxWidth="xl" sx={pageContainerSx}>
           <DetailPageFrame backHref="/driver-earnings" backLabel="Back to Driver Earnings">
             <DetailPageState
-              loading={isLoading}
+              loading={isLoading && !driver}
               notFoundMessage="The selected driver earnings could not be loaded."
               notFoundTitle={!isLoading && !driver ? "Driver earnings not found" : undefined}
             >

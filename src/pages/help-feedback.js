@@ -12,6 +12,11 @@ import {
   getSupportQueriesFromResponse,
   getSupportQueriesPagination,
 } from "../utils/supportQueryUtils";
+import {
+  LIST_FILTER_KEYS,
+  consumeListFilterState,
+  createListFilterRouteGuard,
+} from "../utils/listFilterState";
 
 const Page = () => {
   const router = useRouter();
@@ -25,6 +30,7 @@ const Page = () => {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     const islogin = JSON.parse(typeof window !== "undefined" && localStorage.getItem("isLogin"));
@@ -34,6 +40,30 @@ const Page = () => {
     }
   }, [router]);
 
+  useEffect(() => {
+    const stored = consumeListFilterState(LIST_FILTER_KEYS.helpFeedback);
+    if (stored) {
+      setPage(stored.page || 1);
+      setStatus(stored.filters?.status ?? "all");
+      setRole(stored.filters?.role ?? "all");
+      setCategory(stored.filters?.category ?? "all");
+      setSearch(stored.filters?.search ?? "");
+    }
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    const handleRouteChangeStart = createListFilterRouteGuard(LIST_FILTER_KEYS.helpFeedback, {
+      listPath: "/help-feedback",
+      detailPaths: ["/help-feedback/detail"],
+    });
+
+    router.events.on("routeChangeStart", handleRouteChangeStart);
+    return () => {
+      router.events.off("routeChangeStart", handleRouteChangeStart);
+    };
+  }, [router.events]);
+
   const loadQueries = useCallback(
     async ({ silent = false } = {}) => {
       try {
@@ -41,13 +71,14 @@ const Page = () => {
           setIsLoading(true);
         }
 
+        // Server-side filters (incl. submitter role) — one page request, no full dump.
         const response = await listSupportQueries({
           page,
           limit: ROWS_PER_PAGE,
           status,
-          role,
           category,
           search,
+          role,
         });
 
         const list = getSupportQueriesFromResponse(response);
@@ -72,8 +103,11 @@ const Page = () => {
   );
 
   useEffect(() => {
+    if (!hydrated) {
+      return;
+    }
     loadQueries();
-  }, [loadQueries]);
+  }, [hydrated, loadQueries]);
 
   const handlePageChange = (newPage) => {
     setPage(newPage);
@@ -107,7 +141,7 @@ const Page = () => {
               </Typography>
             </Stack>
 
-            <DataTableLoadingShell loading={isLoading}>
+            <DataTableLoadingShell hasData={rows.length > 0} loading={isLoading}>
               <SupportQueriesTable
                 category={category}
                 items={rows}

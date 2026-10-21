@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Box,
   Card,
+  LinearProgress,
   Stack,
   Table,
   Typography,
@@ -12,7 +13,7 @@ import Loader from "./Loader";
 import { SearchField } from "./search-field";
 
 export const ROWS_PER_PAGE = 10;
-export const SEARCH_DEBOUNCE_MS = 250;
+export const SEARCH_DEBOUNCE_MS = 150;
 
 export const dataTableLoadingOverlaySx = {
   alignItems: "center",
@@ -24,12 +25,33 @@ export const dataTableLoadingOverlaySx = {
   zIndex: 2,
 };
 
-/** Keeps filters/table mounted while data loads (overlay instead of full-page spinner). */
-export const DataTableLoadingShell = ({ children, loading = false }) => (
+/**
+ * Blocking overlay only on the first empty load.
+ * When hasData is true, keep the table visible and show a thin top progress bar.
+ */
+export const DataTableLoadingShell = ({
+  children,
+  loading = false,
+  hasData = false,
+}) => (
   <Box sx={{ position: "relative", width: "100%" }}>
-    {loading ? (
-      <Box sx={dataTableLoadingOverlaySx}>
-        <Loader size="md" />
+    {loading && hasData ? (
+      <LinearProgress
+        color="primary"
+        sx={{
+          borderRadius: 0,
+          height: 3,
+          left: 0,
+          position: "absolute",
+          right: 0,
+          top: 0,
+          zIndex: 3,
+        }}
+      />
+    ) : null}
+    {loading && !hasData ? (
+      <Box sx={{ ...dataTableLoadingOverlaySx, minHeight: 220 }}>
+        <Loader size="sm" />
       </Box>
     ) : null}
     {children}
@@ -38,6 +60,7 @@ export const DataTableLoadingShell = ({ children, loading = false }) => (
 
 DataTableLoadingShell.propTypes = {
   children: PropTypes.node,
+  hasData: PropTypes.bool,
   loading: PropTypes.bool,
 };
 

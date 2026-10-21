@@ -8,10 +8,15 @@ import { DisputesTable } from "../sections/disputes/disputes-table";
 import { getRideHistory } from "../Services/Auth.service";
 import { getDisputes } from "../Services/Dispute.service";
 import { pageContainerSx, pageMainSx, pageTitleSx } from "../utils/pageLayout";
-import { fetchAllPages } from "../utils/listUtils";
+import { fetchAllPages, getListFromResponse, getResponseTotalPages } from "../utils/listUtils";
 import { mergeDisputeSources } from "../utils/disputeUtils";
+import {
+  LIST_FILTER_KEYS,
+  createListFilterRouteGuard,
+} from "../utils/listFilterState";
 
-const DISPUTE_PAGE_SIZE = 20;
+/** Larger chunks = fewer round-trips on big dispute lists. */
+const DISPUTE_FETCH_SIZE = 100;
 
 const Page = () => {
   const router = useRouter();
@@ -32,25 +37,57 @@ const Page = () => {
     let active = true;
 
     const loadDisputes = async () => {
+      setIsLoading(true);
+
       try {
-        setIsLoading(true);
+        // Paint first chunk ASAP, then fill remaining pages in the background.
+        const [ridesPage1, disputesPage1] = await Promise.all([
+          getRideHistory(1, DISPUTE_FETCH_SIZE, {
+            status: "disputed",
+            havePaid: false,
+          }),
+          getDisputes(1, DISPUTE_FETCH_SIZE).catch((error) => {
+            console.error("Error fetching disputes:", error);
+            return null;
+          }),
+        ]);
+
+        if (!active) {
+          return;
+        }
+
+        const unpaidFirst = getListFromResponse(ridesPage1);
+        const disputesFirst = disputesPage1 ? getListFromResponse(disputesPage1) : [];
+        setRows(mergeDisputeSources(unpaidFirst, disputesFirst));
+        setIsLoading(false);
+
+        const ridePages = Math.max(Number(getResponseTotalPages(ridesPage1)) || 1, 1);
+        const disputePages = disputesPage1
+          ? Math.max(Number(getResponseTotalPages(disputesPage1)) || 1, 1)
+          : 1;
+
+        if (ridePages <= 1 && disputePages <= 1) {
+          return;
+        }
 
         const [unpaidRides, disputes] = await Promise.all([
           fetchAllPages(
             (pageNumber) =>
-              getRideHistory(pageNumber, DISPUTE_PAGE_SIZE, {
+              getRideHistory(pageNumber, DISPUTE_FETCH_SIZE, {
                 status: "disputed",
                 havePaid: false,
               }),
-            { pageSize: DISPUTE_PAGE_SIZE }
+            { pageSize: DISPUTE_FETCH_SIZE, seedResponse: ridesPage1 }
           ),
-          fetchAllPages(
-            (pageNumber) => getDisputes(pageNumber, DISPUTE_PAGE_SIZE),
-            { pageSize: DISPUTE_PAGE_SIZE }
-          ).catch((error) => {
-            console.error("Error fetching disputes:", error);
-            return [];
-          }),
+          disputesPage1
+            ? fetchAllPages(
+                (pageNumber) => getDisputes(pageNumber, DISPUTE_FETCH_SIZE),
+                { pageSize: DISPUTE_FETCH_SIZE, seedResponse: disputesPage1 }
+              ).catch((error) => {
+                console.error("Error fetching disputes:", error);
+                return disputesFirst;
+              })
+            : Promise.resolve([]),
         ]);
 
         if (active) {
@@ -73,7 +110,20 @@ const Page = () => {
     return () => {
       active = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refreshKey drives reloads; rows.length only gates first paint
   }, [refreshKey]);
+
+  useEffect(() => {
+    const handleRouteChangeStart = createListFilterRouteGuard(LIST_FILTER_KEYS.disputes, {
+      listPath: "/disputes",
+      detailPaths: ["/disputes/detail"],
+    });
+
+    router.events.on("routeChangeStart", handleRouteChangeStart);
+    return () => {
+      router.events.off("routeChangeStart", handleRouteChangeStart);
+    };
+  }, [router.events]);
 
   const handlePageChange = (newPage) => {
     setPage(newPage);
@@ -101,7 +151,7 @@ const Page = () => {
               </Typography>
             </Stack>
 
-            <DataTableLoadingShell loading={isLoading}>
+            <DataTableLoadingShell hasData={rows.length > 0} loading={isLoading}>
               <DisputesTable
                 items={rows}
                 onPageChange={handlePageChange}

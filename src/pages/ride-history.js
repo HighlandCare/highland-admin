@@ -4,10 +4,10 @@ import Head from "next/head";
 import { Box, Container, Stack, Typography } from "@mui/material";
 import { getRideHistory } from "../Services/Auth.service";
 import { useRouter } from "next/router";
-import Loader from "../components/Loader";
 import { DataTableLoadingShell } from "../components/data-table";
 import { RideHistoryTable } from "../sections/driver-earnings/ride-history-table";
 import { pageContainerSx, pageMainSx, pageTitleSx } from "../utils/pageLayout";
+import { listHasRows } from "../utils/listUtils";
 import {
   clearRideHistoryListState,
   consumeRideHistoryListState,
@@ -131,10 +131,6 @@ const Page = () => {
     setPage(1);
   };
 
-  if (!hydrated) {
-    return <Loader page />;
-  }
-
   return (
     <>
       <Head>
@@ -148,7 +144,10 @@ const Page = () => {
               Booking History
             </Typography>
 
-            <DataTableLoadingShell loading={isLoading}>
+            <DataTableLoadingShell
+              hasData={listHasRows(rideHistory)}
+              loading={!hydrated || isLoading}
+            >
               <RideHistoryTable
                 filters={filters}
                 items={rideHistory}

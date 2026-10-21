@@ -22,12 +22,18 @@ import {
   formatSupportLabel,
   getSubmitterImageUrl,
   getSupportQueryId,
+  getSupportQueryRole,
   getSupportStatusMeta,
   storeSupportQueryDetail,
   SUPPORT_QUERY_CATEGORIES,
   SUPPORT_QUERY_ROLES,
   SUPPORT_QUERY_STATUSES,
 } from "../../utils/supportQueryUtils";
+import {
+  LIST_FILTER_KEYS,
+  markListFilterRestore,
+  storeListFilterState,
+} from "../../utils/listFilterState";
 
 const filterFieldSx = {
   minWidth: { xs: "100%", sm: 140 },
@@ -55,6 +61,11 @@ export function SupportQueriesTable({
   const rows = useMemo(() => (Array.isArray(items) ? items : []), [items]);
 
   const handleView = (item) => {
+    storeListFilterState(LIST_FILTER_KEYS.helpFeedback, {
+      page,
+      filters: { search, status, role, category },
+    });
+    markListFilterRestore(LIST_FILTER_KEYS.helpFeedback);
     storeSupportQueryDetail(item);
     const id = getSupportQueryId(item);
     if (id) {
@@ -133,9 +144,9 @@ export function SupportQueriesTable({
       <TableHead>
         <TableRow>
           <TableCell>Submitter</TableCell>
+          <TableCell>Role</TableCell>
           <TableCell>Category</TableCell>
           <TableCell>Status</TableCell>
-          <TableCell>Last message</TableCell>
           <TableCell>Updated</TableCell>
           <TableCell align="right">Actions</TableCell>
         </TableRow>
@@ -153,26 +164,22 @@ export function SupportQueriesTable({
           rows.map((item) => {
             const statusMeta = getSupportStatusMeta(item.status);
             const submitter = item.submitter || {};
+            const roleLabel = formatSupportLabel(getSupportQueryRole(item));
             return (
               <TableRow hover key={getSupportQueryId(item)}>
                 <TableCell>
                   <TablePersonCell
                     imageUrl={getSubmitterImageUrl(submitter)}
                     name={submitter.fullName}
-                    subtitle={
-                      submitter.email ||
-                      formatSupportLabel(item.submitterRole || submitter.userType)
-                    }
+                    subtitle={submitter.email || undefined}
                   />
+                </TableCell>
+                <TableCell>
+                  <Typography variant="body2">{roleLabel}</Typography>
                 </TableCell>
                 <TableCell>{formatSupportLabel(item.category)}</TableCell>
                 <TableCell>
                   <StatusBadge color={statusMeta.color} label={statusMeta.label} />
-                </TableCell>
-                <TableCell>
-                  <Typography variant="body2">
-                    {formatSupportLabel(item.lastMessageByRole)}
-                  </Typography>
                 </TableCell>
                 <TableCell>
                   {formatDateTime(item.lastMessageAt || item.updatedAt || item.createdAt)}

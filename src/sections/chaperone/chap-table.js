@@ -57,6 +57,12 @@ import {
   updateDriverApprovalInList,
   updateDriverPersonaInList,
 } from "../../utils/driverUtils";
+import {
+  LIST_FILTER_KEYS,
+  consumeListFilterState,
+  markListFilterRestore,
+  storeListFilterState,
+} from "../../utils/listFilterState";
 
 const PERSONA_STATUS_FILTER_OPTIONS = [
   { label: "All", value: "all" },
@@ -124,6 +130,21 @@ export const ChapTable = (props) => {
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
+    const stored = consumeListFilterState(LIST_FILTER_KEYS.chaperone);
+    if (!stored) {
+      return;
+    }
+
+    setSearch(stored.filters?.search ?? "");
+    setPersonaStatus(stored.filters?.personaStatus ?? "all");
+    setAccountStatus(stored.filters?.accountStatus ?? "all");
+    if (stored.page) {
+      onPageChange(stored.page);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- restore once on mount
+  }, []);
+
+  useEffect(() => {
     setItems(initialItems);
   }, [initialItems]);
 
@@ -171,6 +192,11 @@ export const ChapTable = (props) => {
   };
 
   const handleOpenViewDetail = (driver) => {
+    storeListFilterState(LIST_FILTER_KEYS.chaperone, {
+      page,
+      filters: { search, personaStatus, accountStatus },
+    });
+    markListFilterRestore(LIST_FILTER_KEYS.chaperone);
     storeDriverDetail(driver);
     router.push(`/chaperone/detail?id=${driver._id}`);
   };

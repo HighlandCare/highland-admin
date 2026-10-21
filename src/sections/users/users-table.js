@@ -54,6 +54,12 @@ import {
   storeUserDetail,
   updateUserBlockInList,
 } from "../../utils/userUtils";
+import {
+  LIST_FILTER_KEYS,
+  consumeListFilterState,
+  markListFilterRestore,
+  storeListFilterState,
+} from "../../utils/listFilterState";
 import Loader from "../../components/Loader";
 
 const ACCOUNT_STATUS_FILTER_OPTIONS = [
@@ -83,6 +89,20 @@ export const UsersTable = (props) => {
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
+    const stored = consumeListFilterState(LIST_FILTER_KEYS.users);
+    if (!stored) {
+      return;
+    }
+
+    setSearch(stored.filters?.search ?? "");
+    setAccountStatus(stored.filters?.accountStatus ?? "all");
+    if (stored.page) {
+      onPageChange(stored.page);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- restore once on mount
+  }, []);
+
+  useEffect(() => {
     setItems(excludeAdminUsersFromResponse(initialItems));
   }, [initialItems]);
 
@@ -99,6 +119,11 @@ export const UsersTable = (props) => {
   const isEmpty = !pageUsers.length && !(items?.total_records ?? items?.totalRecords);
 
   const handleOpenViewDetail = (user) => {
+    storeListFilterState(LIST_FILTER_KEYS.users, {
+      page,
+      filters: { search, accountStatus },
+    });
+    markListFilterRestore(LIST_FILTER_KEYS.users);
     storeUserDetail(user);
     const detailId = user._id || getCustomerAuthId(user);
     router.push(`/users/detail?id=${detailId}`);

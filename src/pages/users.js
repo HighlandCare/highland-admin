@@ -7,7 +7,12 @@ import { useRouter } from "next/router";
 import { DataTableLoadingShell, ROWS_PER_PAGE } from "../components/data-table";
 import { UsersTable } from "../sections/users/users-table";
 import { pageContainerSx, pageMainSx, pageTitleSx } from "../utils/pageLayout";
+import { listHasRows } from "../utils/listUtils";
 import { excludeAdminUsersFromResponse } from "../utils/userUtils";
+import {
+  LIST_FILTER_KEYS,
+  createListFilterRouteGuard,
+} from "../utils/listFilterState";
 
 const Page = () => {
   const [page, setPage] = useState(1);
@@ -46,6 +51,18 @@ const Page = () => {
     fetchUsers();
   }, [fetchUsers]);
 
+  useEffect(() => {
+    const handleRouteChangeStart = createListFilterRouteGuard(LIST_FILTER_KEYS.users, {
+      listPath: "/users",
+      detailPaths: ["/users/detail"],
+    });
+
+    router.events.on("routeChangeStart", handleRouteChangeStart);
+    return () => {
+      router.events.off("routeChangeStart", handleRouteChangeStart);
+    };
+  }, [router.events]);
+
   const handlePageChange = (newPage) => {
     setPage(newPage);
   };
@@ -65,7 +82,7 @@ const Page = () => {
               Users List
             </Typography>
 
-            <DataTableLoadingShell loading={isLoading}>
+            <DataTableLoadingShell hasData={listHasRows(users)} loading={isLoading}>
               <UsersTable
                 items={users}
                 onPageChange={handlePageChange}

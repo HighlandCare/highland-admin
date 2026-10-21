@@ -29,6 +29,10 @@ import {
   getUserProfileImage,
   storeUserDetail,
 } from "../../utils/userUtils";
+import {
+  LIST_FILTER_KEYS,
+  createDetailFilterRouteGuard,
+} from "../../utils/listFilterState";
 
 const TAB_OVERVIEW = "overview";
 const TAB_TRANSACTIONS = "transactions";
@@ -120,6 +124,17 @@ const Page = () => {
   });
   const [txPage, setTxPage] = useState(1);
   const [txLimit, setTxLimit] = useState(20);
+
+  useEffect(() => {
+    const handleRouteChangeStart = createDetailFilterRouteGuard(LIST_FILTER_KEYS.users, {
+      listPath: "/users",
+    });
+
+    router.events.on("routeChangeStart", handleRouteChangeStart);
+    return () => {
+      router.events.off("routeChangeStart", handleRouteChangeStart);
+    };
+  }, [router.events]);
 
   useEffect(() => {
     if (!id) {
@@ -271,7 +286,7 @@ const Page = () => {
         <Container maxWidth="xl" sx={pageContainerSx}>
           <DetailPageFrame backHref="/users" backLabel="Back to Users">
             <DetailPageState
-              loading={isLoading}
+              loading={isLoading && !user}
               notFoundMessage="The selected user could not be loaded."
               notFoundTitle={!isLoading && !user ? "User not found" : undefined}
             >

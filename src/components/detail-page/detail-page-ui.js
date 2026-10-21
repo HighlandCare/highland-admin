@@ -384,7 +384,7 @@ DetailPageFrame.propTypes = {
 
 export function DetailPageState({ loading, notFoundTitle, notFoundMessage, children }) {
   if (loading) {
-    return <Loader page />;
+    return <Loader minHeight={280} size="sm" />;
   }
 
   if (notFoundTitle) {

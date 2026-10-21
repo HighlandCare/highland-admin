@@ -186,7 +186,7 @@ const Page = () => {
         <Container maxWidth="xl" sx={pageContainerSx}>
           <DetailPageFrame backHref="/live-operations" backLabel="Back to Live Operations">
             <DetailPageState
-              loading={isLoading}
+              loading={isLoading && !order}
               notFoundMessage="The selected order could not be loaded."
               notFoundTitle={!isLoading && !order ? "Order not found" : undefined}
             >

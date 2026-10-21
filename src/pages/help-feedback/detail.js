@@ -38,6 +38,10 @@ import { formatDateTime } from "../../utils/dateUtils";
 import { pageContainerSx, pageMainSx } from "../../utils/pageLayout";
 import { brand } from "../../theme/colors";
 import {
+  LIST_FILTER_KEYS,
+  createDetailFilterRouteGuard,
+} from "../../utils/listFilterState";
+import {
   formatFileSize,
   formatSupportLabel,
   getAttachmentLabel,
@@ -46,6 +50,7 @@ import {
   getSubmitterImageUrl,
   getSupportQueryFromResponse,
   getSupportQueryId,
+  getSupportQueryRole,
   getSupportStatusMeta,
   isImageAttachment,
   storeSupportQueryDetail,
@@ -180,6 +185,17 @@ const Page = () => {
   }, [router]);
 
   useEffect(() => {
+    const handleRouteChangeStart = createDetailFilterRouteGuard(LIST_FILTER_KEYS.helpFeedback, {
+      listPath: "/help-feedback",
+    });
+
+    router.events.on("routeChangeStart", handleRouteChangeStart);
+    return () => {
+      router.events.off("routeChangeStart", handleRouteChangeStart);
+    };
+  }, [router.events]);
+
+  useEffect(() => {
     if (!router.isReady || !queryId) {
       return undefined;
     }
@@ -253,7 +269,7 @@ const Page = () => {
     }
     return [
       { label: "Category", value: formatSupportLabel(row.category) },
-      { label: "Role", value: formatSupportLabel(row.submitterRole) },
+      { label: "Role", value: formatSupportLabel(getSupportQueryRole(row)) },
       { label: "Messages", value: String(messages.length) },
     ].filter((item) => item.value && item.value !== "—");
   }, [row, messages.length]);
@@ -264,9 +280,9 @@ const Page = () => {
         { label: "Name", value: submitter.fullName },
         { label: "Email", value: submitter.email },
         { label: "Phone", value: submitter.phone },
-        { label: "Type", value: formatSupportLabel(submitter.userType || row?.submitterRole) },
+        { label: "Role", value: formatSupportLabel(getSupportQueryRole(row)) },
       ].filter((item) => item.value),
-    [submitter, row?.submitterRole]
+    [submitter, row]
   );
 
   const timingItems = useMemo(

@@ -7,6 +7,11 @@ import { useRouter } from "next/router";
 import { ChapTable } from "../sections/chaperone/chap-table";
 import { DataTableLoadingShell, ROWS_PER_PAGE } from "../components/data-table";
 import { pageContainerSx, pageMainSx, pageTitleSx } from "../utils/pageLayout";
+import { listHasRows } from "../utils/listUtils";
+import {
+  LIST_FILTER_KEYS,
+  createListFilterRouteGuard,
+} from "../utils/listFilterState";
 
 const Page = () => {
   const [page, setPage] = useState(1);
@@ -45,6 +50,18 @@ const Page = () => {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    const handleRouteChangeStart = createListFilterRouteGuard(LIST_FILTER_KEYS.chaperone, {
+      listPath: "/chaperone",
+      detailPaths: ["/chaperone/detail"],
+    });
+
+    router.events.on("routeChangeStart", handleRouteChangeStart);
+    return () => {
+      router.events.off("routeChangeStart", handleRouteChangeStart);
+    };
+  }, [router.events]);
+
   const handlePageChange = (newPage) => {
     setPage(newPage);
   };
@@ -64,7 +81,7 @@ const Page = () => {
               Drivers
             </Typography>
 
-            <DataTableLoadingShell loading={isLoading}>
+            <DataTableLoadingShell hasData={listHasRows(chape)} loading={isLoading}>
               <ChapTable
                 items={chape}
                 onPageChange={handlePageChange}

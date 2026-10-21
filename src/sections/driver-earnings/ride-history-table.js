@@ -58,7 +58,7 @@ import {
 } from "../../utils/rideUtils";
 
 const rideSortValue = "newest";
-const SEARCH_DEBOUNCE_MS = 250;
+const SEARCH_DEBOUNCE_MS = 150;
 
 const headCellSx = {
   color: "neutral.500",

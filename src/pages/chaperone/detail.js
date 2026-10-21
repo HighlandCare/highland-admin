@@ -42,6 +42,10 @@ import {
 } from "../../utils/earningsUtils";
 import { pageContainerSx, pageMainSx } from "../../utils/pageLayout";
 import { brand } from "../../theme/colors";
+import {
+  LIST_FILTER_KEYS,
+  createDetailFilterRouteGuard,
+} from "../../utils/listFilterState";
 
 const TAB_OVERVIEW = "overview";
 const TAB_TRANSACTIONS = "transactions";
@@ -171,6 +175,17 @@ const Page = () => {
   });
   const [txPage, setTxPage] = useState(1);
   const [txLimit, setTxLimit] = useState(20);
+
+  useEffect(() => {
+    const handleRouteChangeStart = createDetailFilterRouteGuard(LIST_FILTER_KEYS.chaperone, {
+      listPath: "/chaperone",
+    });
+
+    router.events.on("routeChangeStart", handleRouteChangeStart);
+    return () => {
+      router.events.off("routeChangeStart", handleRouteChangeStart);
+    };
+  }, [router.events]);
 
   useEffect(() => {
     if (!id) {
@@ -339,7 +354,7 @@ const Page = () => {
         <Container maxWidth="xl" sx={pageContainerSx}>
           <DetailPageFrame backHref="/chaperone" backLabel="Back to Drivers">
             <DetailPageState
-              loading={isLoading}
+              loading={isLoading && !detail}
               notFoundMessage="The selected driver could not be loaded."
               notFoundTitle={!isLoading && !detail ? "Driver not found" : undefined}
             >

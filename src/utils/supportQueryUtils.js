@@ -56,6 +56,60 @@ export const formatSupportLabel = (value) => {
   return LABEL_MAP[value] || String(value).replace(/_/g, " ");
 };
 
+const normalizeSupportRole = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+
+/** Submitter role for list/detail display and Role filter (not last-message author). */
+export const getSupportQueryRole = (item) => {
+  const submitter = item?.submitter || {};
+  return (
+    item?.submitterRole ||
+    submitter.userType ||
+    submitter.role ||
+    submitter.type ||
+    ""
+  );
+};
+
+/** True when the ticket submitter matches the Role filter. */
+export const supportQueryMatchesRole = (item, role) => {
+  if (!role || role === "all") {
+    return true;
+  }
+
+  const wanted = normalizeSupportRole(role);
+  if (!wanted) {
+    return true;
+  }
+
+  const actual = normalizeSupportRole(getSupportQueryRole(item));
+  if (!actual) {
+    return false;
+  }
+
+  if (actual === wanted) {
+    return true;
+  }
+
+  // Treat administrator / super_admin variants as admin.
+  if (wanted === "admin") {
+    return actual === "admin" || actual.includes("admin");
+  }
+
+  if (wanted === "user") {
+    return actual === "user" || actual === "customer";
+  }
+
+  if (wanted === "chaperone") {
+    return actual === "chaperone" || actual === "driver";
+  }
+
+  return false;
+};
+
 export const getSupportStatusMeta = (status) => {
   switch (status) {
     case "open":

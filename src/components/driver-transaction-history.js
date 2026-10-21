@@ -2,7 +2,6 @@ import PropTypes from "prop-types";
 import {
   Box,
   FormControl,
-  InputLabel,
   MenuItem,
   Select,
   Stack,
@@ -11,7 +10,6 @@ import {
   TableCell,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from "@mui/material";
 import {
@@ -22,10 +20,51 @@ import {
   detailTableRowSx,
 } from "./detail-page/detail-page-ui";
 import { DataTablePagination } from "./data-table";
+import { DateRangeFilter } from "./date-range-filter";
 import { Scrollbar } from "./scrollbar";
 import Loader from "./Loader";
 import { formatDateTime } from "../utils/dateUtils";
 import { formatEarningsCurrency } from "../utils/earningsUtils";
+
+const filterSelectSx = {
+  bgcolor: "neutral.100",
+  borderRadius: 2.5,
+  flexShrink: 0,
+  fontSize: 13,
+  height: 44,
+  minWidth: 140,
+  "& .MuiOutlinedInput-notchedOutline": { borderColor: "transparent" },
+  "&:hover": { bgcolor: "neutral.50" },
+  "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "neutral.200" },
+  "&.Mui-focused": { bgcolor: "background.paper" },
+  "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+    borderColor: "primary.main",
+    borderWidth: 1,
+  },
+  "& .MuiSelect-select": {
+    alignItems: "center",
+    display: "flex",
+    py: 1.25,
+    pl: 1.75,
+    pr: 3.5,
+  },
+};
+
+const dateRangeSx = {
+  bgcolor: "neutral.100",
+  borderColor: "transparent",
+  borderRadius: 2.5,
+  height: 44,
+  minWidth: 160,
+  "&:hover": { bgcolor: "neutral.50", borderColor: "neutral.200" },
+};
+
+const filterLabelSx = {
+  display: "block",
+  fontSize: 12,
+  fontWeight: 700,
+  mb: 0.75,
+};
 
 const SERVICE_LABELS = {
   transportation: "Rides",
@@ -104,18 +143,21 @@ export const DriverTransactionHistory = ({
       <DetailPanel>
         <DetailSection noBorder title="Transaction history">
           <Stack
+            alignItems={{ xs: "stretch", md: "flex-end" }}
             direction={{ xs: "column", md: "row" }}
             flexWrap="wrap"
             gap={1.5}
             sx={{ mb: 2 }}
           >
-            <FormControl size="small" sx={{ minWidth: 140 }}>
-              <InputLabel id="driver-tx-status">Type</InputLabel>
+            <FormControl size="small" sx={{ flexShrink: 0 }}>
+              <Typography sx={filterLabelSx} variant="caption">
+                Type
+              </Typography>
               <Select
-                label="Type"
-                labelId="driver-tx-status"
-                value={filters.status || ""}
+                displayEmpty
                 onChange={(e) => onFilterChange?.({ status: e.target.value || "" })}
+                sx={filterSelectSx}
+                value={filters.status || ""}
               >
                 <MenuItem value="">All</MenuItem>
                 <MenuItem value="credit">Credit (earned)</MenuItem>
@@ -123,15 +165,17 @@ export const DriverTransactionHistory = ({
               </Select>
             </FormControl>
 
-            <FormControl size="small" sx={{ minWidth: 160 }}>
-              <InputLabel id="driver-tx-service">Service</InputLabel>
+            <FormControl size="small" sx={{ flexShrink: 0 }}>
+              <Typography sx={filterLabelSx} variant="caption">
+                Service
+              </Typography>
               <Select
-                label="Service"
-                labelId="driver-tx-service"
-                value={filters.serviceCategory || ""}
+                displayEmpty
                 onChange={(e) =>
                   onFilterChange?.({ serviceCategory: e.target.value || "" })
                 }
+                sx={filterSelectSx}
+                value={filters.serviceCategory || ""}
               >
                 <MenuItem value="">All</MenuItem>
                 <MenuItem value="transportation">Rides</MenuItem>
@@ -140,22 +184,23 @@ export const DriverTransactionHistory = ({
               </Select>
             </FormControl>
 
-            <TextField
-              InputLabelProps={{ shrink: true }}
-              label="From"
-              size="small"
-              type="date"
-              value={filters.from || ""}
-              onChange={(e) => onFilterChange?.({ from: e.target.value || "" })}
-            />
-            <TextField
-              InputLabelProps={{ shrink: true }}
-              label="To"
-              size="small"
-              type="date"
-              value={filters.to || ""}
-              onChange={(e) => onFilterChange?.({ to: e.target.value || "" })}
-            />
+            <Box sx={{ flexShrink: 0 }}>
+              <Typography sx={filterLabelSx} variant="caption">
+                Date
+              </Typography>
+              <DateRangeFilter
+                endDate={filters.to || ""}
+                onChange={({ startDate, endDate }) =>
+                  onFilterChange?.({
+                    from: startDate || "",
+                    to: endDate || "",
+                  })
+                }
+                startDate={filters.from || ""}
+                sx={dateRangeSx}
+                variant="pill"
+              />
+            </Box>
           </Stack>
 
           {loading ? (

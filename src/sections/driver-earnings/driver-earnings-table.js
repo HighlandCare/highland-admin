@@ -32,6 +32,12 @@ import {
   getEarningsDriverImage,
   storeEarningsDetail,
 } from "../../utils/earningsUtils";
+import {
+  LIST_FILTER_KEYS,
+  consumeListFilterState,
+  markListFilterRestore,
+  storeListFilterState,
+} from "../../utils/listFilterState";
 
 const earningsSortValue = "newest";
 
@@ -46,6 +52,19 @@ export const DriverEarningsTable = (props) => {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
+    const stored = consumeListFilterState(LIST_FILTER_KEYS.driverEarnings);
+    if (!stored) {
+      return;
+    }
+
+    setSearch(stored.filters?.search ?? "");
+    if (stored.page) {
+      onPageChange(stored.page);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- restore once on mount
+  }, []);
+
+  useEffect(() => {
     setItems(initialItems);
   }, [initialItems]);
 
@@ -55,6 +74,11 @@ export const DriverEarningsTable = (props) => {
     !(items?.total_records ?? items?.totalRecords ?? items?.total_drivers);
 
   const handleOpenViewDetail = (driver) => {
+    storeListFilterState(LIST_FILTER_KEYS.driverEarnings, {
+      page,
+      filters: { search },
+    });
+    markListFilterRestore(LIST_FILTER_KEYS.driverEarnings);
     storeEarningsDetail(driver);
     const detailId = getEarningsDriverId(driver);
     if (!detailId) {

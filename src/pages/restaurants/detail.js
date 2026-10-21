@@ -33,6 +33,10 @@ import {
 import { getRestaurantById, updateRestaurantApproval } from "../../Services/Auth.service";
 import { pageContainerSx, pageMainSx } from "../../utils/pageLayout";
 import {
+  LIST_FILTER_KEYS,
+  createDetailFilterRouteGuard,
+} from "../../utils/listFilterState";
+import {
   capitalizeRestaurantLabel,
   formatRestaurantCurrency,
   formatRestaurantDateTime,
@@ -76,6 +80,17 @@ const Page = () => {
       router.push("/auth/login");
     }
   }, [router]);
+
+  useEffect(() => {
+    const handleRouteChangeStart = createDetailFilterRouteGuard(LIST_FILTER_KEYS.restaurants, {
+      listPath: "/restaurants",
+    });
+
+    router.events.on("routeChangeStart", handleRouteChangeStart);
+    return () => {
+      router.events.off("routeChangeStart", handleRouteChangeStart);
+    };
+  }, [router.events]);
 
   useEffect(() => {
     let active = true;
@@ -140,7 +155,7 @@ const Page = () => {
         <Container maxWidth="xl" sx={pageContainerSx}>
           <DetailPageFrame backHref="/restaurants" backLabel="Back to Restaurants">
             <DetailPageState
-              loading={isLoading}
+              loading={isLoading && !restaurant}
               notFoundMessage="The selected restaurant could not be loaded."
               notFoundTitle={!isLoading && !restaurant ? "Restaurant not found" : undefined}
             >

@@ -41,7 +41,9 @@ export const listSupportQueries = async ({
       params.set("status", String(status));
     }
     if (role && role !== "all") {
+      // Backend accepts either name depending on version.
       params.set("role", String(role));
+      params.set("submitterRole", String(role));
     }
     if (category && category !== "all") {
       params.set("category", String(category));

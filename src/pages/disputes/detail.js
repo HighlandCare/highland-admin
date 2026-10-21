@@ -59,6 +59,10 @@ import {
 } from "../../utils/disputeUtils";
 import { formatRideField, getRideFromResponse } from "../../utils/rideUtils";
 import { brand } from "../../theme/colors";
+import {
+  LIST_FILTER_KEYS,
+  createDetailFilterRouteGuard,
+} from "../../utils/listFilterState";
 
 const SOW_OPTIONS = [
   { value: "pay_driver", label: "Pay provider" },
@@ -122,6 +126,17 @@ const Page = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittingAction, setSubmittingAction] = useState(null);
+
+  useEffect(() => {
+    const handleRouteChangeStart = createDetailFilterRouteGuard(LIST_FILTER_KEYS.disputes, {
+      listPath: "/disputes",
+    });
+
+    router.events.on("routeChangeStart", handleRouteChangeStart);
+    return () => {
+      router.events.off("routeChangeStart", handleRouteChangeStart);
+    };
+  }, [router.events]);
 
   const sowResolution = normalizeSowResolution(resolution);
 
@@ -520,7 +535,7 @@ const Page = () => {
         <Container maxWidth="xl" sx={pageContainerSx}>
           <DetailPageFrame backHref="/disputes" backLabel="Back to Disputes">
             <DetailPageState
-              loading={isLoading}
+              loading={isLoading && !row}
               notFoundMessage="The selected dispute could not be loaded."
               notFoundTitle={!isLoading && !row ? "Dispute not found" : undefined}
             >

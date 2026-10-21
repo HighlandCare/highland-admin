@@ -32,6 +32,14 @@ import {
 } from "../components/table-cells";
 import { getRestaurants } from "../Services/Auth.service";
 import { pageContainerSx, pageMainSx, pageTitleSx } from "../utils/pageLayout";
+import { listHasRows } from "../utils/listUtils";
+import {
+  LIST_FILTER_KEYS,
+  consumeListFilterState,
+  createListFilterRouteGuard,
+  markListFilterRestore,
+  storeListFilterState,
+} from "../utils/listFilterState";
 
 const STATUS_OPTIONS = [
   { label: "All", value: "" },
@@ -52,6 +60,7 @@ const Page = () => {
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [items, setItems] = useState({});
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     const isLogin = JSON.parse(typeof window !== "undefined" && localStorage.getItem("isLogin"));
@@ -59,6 +68,32 @@ const Page = () => {
   }, [router]);
 
   useEffect(() => {
+    const stored = consumeListFilterState(LIST_FILTER_KEYS.restaurants);
+    if (stored) {
+      setPage(stored.page || 1);
+      setStatus(stored.filters?.status ?? "");
+      setSearch(stored.filters?.search ?? "");
+    }
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    const handleRouteChangeStart = createListFilterRouteGuard(LIST_FILTER_KEYS.restaurants, {
+      listPath: "/restaurants",
+      detailPaths: ["/restaurants/detail"],
+    });
+
+    router.events.on("routeChangeStart", handleRouteChangeStart);
+    return () => {
+      router.events.off("routeChangeStart", handleRouteChangeStart);
+    };
+  }, [router.events]);
+
+  useEffect(() => {
+    if (!hydrated) {
+      return undefined;
+    }
+
     let active = true;
 
     const load = async () => {
@@ -77,13 +112,18 @@ const Page = () => {
     return () => {
       active = false;
     };
-  }, [page, status, search]);
+  }, [hydrated, page, status, search]);
 
   const rows = getRestaurantList(items);
   const paginationMeta = getServerPaginationMeta(items, page, rows.length);
 
   const handleOpenDetail = (restaurant) => {
     if (!restaurant?._id) return;
+    storeListFilterState(LIST_FILTER_KEYS.restaurants, {
+      page,
+      filters: { status, search },
+    });
+    markListFilterRestore(LIST_FILTER_KEYS.restaurants);
     router.push(`/restaurants/detail?id=${restaurant._id}`);
   };
 
@@ -100,7 +140,7 @@ const Page = () => {
               Restaurant Management
             </Typography>
 
-            <DataTableLoadingShell loading={isLoading}>
+            <DataTableLoadingShell hasData={listHasRows(items) || rows.length > 0} loading={isLoading}>
               <DataTable
                 empty={!rows.length}
                 minWidth={800}

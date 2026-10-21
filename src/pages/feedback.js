@@ -8,6 +8,7 @@ import { getFeedbacks } from "../Services/Auth.service";
 import { FeedbackTable } from "../sections/feedback/feedback-table";
 import { DataTableLoadingShell, ROWS_PER_PAGE } from "../components/data-table";
 import { pageContainerSx, pageMainSx } from "../utils/pageLayout";
+import { listHasRows } from "../utils/listUtils";
 
 const Page = () => {
   const [page, setPage] = useState(1);
@@ -61,7 +62,7 @@ const Page = () => {
       <Box component="main" sx={pageMainSx}>
         <Container maxWidth="xl" sx={pageContainerSx}>
           <Stack spacing={3} sx={{ flex: 1 }}>
-            <DataTableLoadingShell loading={isLoading}>
+            <DataTableLoadingShell hasData={listHasRows(feedback)} loading={isLoading}>
               <FeedbackTable
                 items={feedback}
                 onPageChange={handlePageChange}

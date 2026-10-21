@@ -13,7 +13,11 @@ import { EarningsAnalytics } from "../sections/driver-earnings/earnings-analytic
 import { OverviewStatCard } from "../sections/overview/overview-stat-card";
 import { DataTableLoadingShell, ROWS_PER_PAGE } from "../components/data-table";
 import { pageContainerSx, pageMainSx, pageTitleSx } from "../utils/pageLayout";
-import { fetchAllPages } from "../utils/listUtils";
+import { fetchAllPages, listHasRows } from "../utils/listUtils";
+import {
+  LIST_FILTER_KEYS,
+  createListFilterRouteGuard,
+} from "../utils/listFilterState";
 import {
   formatEarningsCurrency,
   hasEarningsApiTotals,
@@ -99,7 +103,8 @@ const Page = () => {
         }
 
         setEarnings(response);
-        await loadAnalytics(response);
+        // Don't block the table loader on analytics (can walk many pages).
+        void loadAnalytics(response);
       } catch (error) {
         console.error("Error fetching driver earnings:", error);
       } finally {
@@ -115,6 +120,18 @@ const Page = () => {
       active = false;
     };
   }, [page]);
+
+  useEffect(() => {
+    const handleRouteChangeStart = createListFilterRouteGuard(LIST_FILTER_KEYS.driverEarnings, {
+      listPath: "/driver-earnings",
+      detailPaths: ["/driver-earnings/detail"],
+    });
+
+    router.events.on("routeChangeStart", handleRouteChangeStart);
+    return () => {
+      router.events.off("routeChangeStart", handleRouteChangeStart);
+    };
+  }, [router.events]);
 
   const handlePageChange = (newPage) => {
     setPage(newPage);
@@ -188,7 +205,7 @@ const Page = () => {
               </Grid>
             )}
 
-            <DataTableLoadingShell loading={isLoading}>
+            <DataTableLoadingShell hasData={listHasRows(earnings)} loading={isLoading}>
               <DriverEarningsTable
                 items={earnings}
                 onPageChange={handlePageChange}
