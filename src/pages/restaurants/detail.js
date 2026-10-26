@@ -155,7 +155,7 @@ const Page = () => {
         <Container maxWidth="xl" sx={pageContainerSx}>
           <DetailPageFrame backHref="/restaurants" backLabel="Back to Restaurants">
             <DetailPageState
-              loading={isLoading && !restaurant}
+              loading={isLoading}
               notFoundMessage="The selected restaurant could not be loaded."
               notFoundTitle={!isLoading && !restaurant ? "Restaurant not found" : undefined}
             >

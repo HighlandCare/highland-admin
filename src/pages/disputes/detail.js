@@ -535,7 +535,7 @@ const Page = () => {
         <Container maxWidth="xl" sx={pageContainerSx}>
           <DetailPageFrame backHref="/disputes" backLabel="Back to Disputes">
             <DetailPageState
-              loading={isLoading && !row}
+              loading={isLoading}
               notFoundMessage="The selected dispute could not be loaded."
               notFoundTitle={!isLoading && !row ? "Dispute not found" : undefined}
             >

@@ -22,38 +22,18 @@ export const getListFromResponse = (response, keys = ["data", "feedbacks"]) => {
   return [];
 };
 
-/** True when a list response (or array) already has rows to keep on screen. */
-export const listHasRows = (value) => {
-  if (Array.isArray(value)) {
-    return value.length > 0;
-  }
-
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-
-  return getListFromResponse(value).length > 0;
-};
-
-export const getResponseTotalPages = (response) =>
+const getResponseTotalPages = (response) =>
   response?.total_pages ??
   response?.totalPages ??
   response?.data?.total_pages ??
   response?.data?.totalPages;
 
-/**
- * Loads every page. Fetches page 1 first (unless seedResponse is passed),
- * then remaining pages in parallel.
- */
+const FETCH_ALL_CONCURRENCY = 8;
+
+/** Loads every page. Page 1 first, then remaining pages in parallel batches. */
 export const fetchAllPages = async (
   fetchPage,
-  {
-    getItems,
-    listKeys,
-    pageSize = ROWS_PER_PAGE,
-    maxPages = 100,
-    seedResponse = null,
-  } = {}
+  { getItems, listKeys, pageSize = ROWS_PER_PAGE, maxPages = 100, seedResponse } = {}
 ) => {
   const resolveItems = getItems || ((response) => getListFromResponse(response, listKeys));
 
@@ -67,11 +47,17 @@ export const fetchAllPages = async (
       return firstItems;
     }
 
-    const rest = await Promise.all(
-      Array.from({ length: totalPages - 1 }, (_, index) => fetchPage(index + 2))
-    );
+    let allItems = firstItems;
 
-    return firstItems.concat(...rest.map(resolveItems));
+    for (let start = 2; start <= totalPages; start += FETCH_ALL_CONCURRENCY) {
+      const end = Math.min(start + FETCH_ALL_CONCURRENCY - 1, totalPages);
+      const batch = await Promise.all(
+        Array.from({ length: end - start + 1 }, (_, index) => fetchPage(start + index))
+      );
+      allItems = allItems.concat(...batch.map(resolveItems));
+    }
+
+    return allItems;
   }
 
   // Fallback when API omits total pages: walk sequentially until a short page.

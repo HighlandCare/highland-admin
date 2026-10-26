@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Head from "next/head";
 import { Box, Container, Stack, Typography } from "@mui/material";
 import { useRouter } from "next/router";
@@ -8,15 +8,14 @@ import { DisputesTable } from "../sections/disputes/disputes-table";
 import { getRideHistory } from "../Services/Auth.service";
 import { getDisputes } from "../Services/Dispute.service";
 import { pageContainerSx, pageMainSx, pageTitleSx } from "../utils/pageLayout";
-import { fetchAllPages, getListFromResponse, getResponseTotalPages } from "../utils/listUtils";
-import { mergeDisputeSources } from "../utils/disputeUtils";
+import { fetchAllPages, getListFromResponse } from "../utils/listUtils";
+import { getDisputeList, mergeDisputeSources } from "../utils/disputeUtils";
 import {
   LIST_FILTER_KEYS,
   createListFilterRouteGuard,
 } from "../utils/listFilterState";
 
-/** Larger chunks = fewer round-trips on big dispute lists. */
-const DISPUTE_FETCH_SIZE = 100;
+const DISPUTE_PAGE_SIZE = 20;
 
 const Page = () => {
   const router = useRouter();
@@ -24,6 +23,7 @@ const Page = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [rows, setRows] = useState([]);
   const [refreshKey, setRefreshKey] = useState(0);
+  const loadedOnceRef = useRef(false);
 
   useEffect(() => {
     const islogin = JSON.parse(typeof window !== "undefined" && localStorage.getItem("isLogin"));
@@ -37,16 +37,19 @@ const Page = () => {
     let active = true;
 
     const loadDisputes = async () => {
-      setIsLoading(true);
-
+      const block = !loadedOnceRef.current;
       try {
-        // Paint first chunk ASAP, then fill remaining pages in the background.
+        if (block) {
+          setIsLoading(true);
+        }
+
+        // Show first page ASAP, then fill the rest in the background.
         const [ridesPage1, disputesPage1] = await Promise.all([
-          getRideHistory(1, DISPUTE_FETCH_SIZE, {
+          getRideHistory(1, DISPUTE_PAGE_SIZE, {
             status: "disputed",
             havePaid: false,
           }),
-          getDisputes(1, DISPUTE_FETCH_SIZE).catch((error) => {
+          getDisputes(1, DISPUTE_PAGE_SIZE).catch((error) => {
             console.error("Error fetching disputes:", error);
             return null;
           }),
@@ -56,38 +59,33 @@ const Page = () => {
           return;
         }
 
-        const unpaidFirst = getListFromResponse(ridesPage1);
-        const disputesFirst = disputesPage1 ? getListFromResponse(disputesPage1) : [];
-        setRows(mergeDisputeSources(unpaidFirst, disputesFirst));
+        const firstMerge = mergeDisputeSources(
+          getListFromResponse(ridesPage1),
+          disputesPage1 ? getDisputeList(disputesPage1) : []
+        );
+        setRows(firstMerge);
+        loadedOnceRef.current = true;
         setIsLoading(false);
-
-        const ridePages = Math.max(Number(getResponseTotalPages(ridesPage1)) || 1, 1);
-        const disputePages = disputesPage1
-          ? Math.max(Number(getResponseTotalPages(disputesPage1)) || 1, 1)
-          : 1;
-
-        if (ridePages <= 1 && disputePages <= 1) {
-          return;
-        }
 
         const [unpaidRides, disputes] = await Promise.all([
           fetchAllPages(
             (pageNumber) =>
-              getRideHistory(pageNumber, DISPUTE_FETCH_SIZE, {
+              getRideHistory(pageNumber, DISPUTE_PAGE_SIZE, {
                 status: "disputed",
                 havePaid: false,
               }),
-            { pageSize: DISPUTE_FETCH_SIZE, seedResponse: ridesPage1 }
+            { pageSize: DISPUTE_PAGE_SIZE, seedResponse: ridesPage1 }
           ),
-          disputesPage1
-            ? fetchAllPages(
-                (pageNumber) => getDisputes(pageNumber, DISPUTE_FETCH_SIZE),
-                { pageSize: DISPUTE_FETCH_SIZE, seedResponse: disputesPage1 }
-              ).catch((error) => {
-                console.error("Error fetching disputes:", error);
-                return disputesFirst;
-              })
-            : Promise.resolve([]),
+          fetchAllPages(
+            (pageNumber) => getDisputes(pageNumber, DISPUTE_PAGE_SIZE),
+            {
+              pageSize: DISPUTE_PAGE_SIZE,
+              seedResponse: disputesPage1 || undefined,
+            }
+          ).catch((error) => {
+            console.error("Error fetching disputes:", error);
+            return [];
+          }),
         ]);
 
         if (active) {
@@ -110,7 +108,6 @@ const Page = () => {
     return () => {
       active = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- refreshKey drives reloads; rows.length only gates first paint
   }, [refreshKey]);
 
   useEffect(() => {
@@ -151,7 +148,7 @@ const Page = () => {
               </Typography>
             </Stack>
 
-            <DataTableLoadingShell hasData={rows.length > 0} loading={isLoading}>
+            <DataTableLoadingShell loading={isLoading}>
               <DisputesTable
                 items={rows}
                 onPageChange={handlePageChange}

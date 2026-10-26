@@ -354,7 +354,7 @@ const Page = () => {
         <Container maxWidth="xl" sx={pageContainerSx}>
           <DetailPageFrame backHref="/chaperone" backLabel="Back to Drivers">
             <DetailPageState
-              loading={isLoading && !detail}
+              loading={isLoading}
               notFoundMessage="The selected driver could not be loaded."
               notFoundTitle={!isLoading && !detail ? "Driver not found" : undefined}
             >

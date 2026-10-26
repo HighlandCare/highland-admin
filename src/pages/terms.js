@@ -134,7 +134,7 @@ const Page = () => {
               </Stack>
             </Stack>
             {isLoading ? (
-              <Loader page />
+              <Loader minHeight={220} size="md" />
             ) : (
               <Stack sx={richTextFormSx}>
                 <Box sx={richTextEditorSx}>

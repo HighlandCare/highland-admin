@@ -1,4 +1,4 @@
-import { React, useCallback, useEffect, useState } from "react";
+import { React, useCallback, useEffect, useRef, useState } from "react";
 import { Layout as DashboardLayout } from "../layouts/dashboard/layout";
 import Head from "next/head";
 import { Box, Container, Stack, Typography } from "@mui/material";
@@ -7,7 +7,6 @@ import { useRouter } from "next/router";
 import { ChapTable } from "../sections/chaperone/chap-table";
 import { DataTableLoadingShell, ROWS_PER_PAGE } from "../components/data-table";
 import { pageContainerSx, pageMainSx, pageTitleSx } from "../utils/pageLayout";
-import { listHasRows } from "../utils/listUtils";
 import {
   LIST_FILTER_KEYS,
   createListFilterRouteGuard,
@@ -17,6 +16,7 @@ const Page = () => {
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [chape, setChape] = useState({});
+  const loadedOnceRef = useRef(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -29,18 +29,18 @@ const Page = () => {
 
   const fetchData = useCallback(
     async ({ silent = false } = {}) => {
+      const block = !silent && !loadedOnceRef.current;
       try {
-        if (!silent) {
+        if (block) {
           setIsLoading(true);
         }
         const response = await getChap(page, ROWS_PER_PAGE);
         setChape(response);
+        loadedOnceRef.current = true;
       } catch (error) {
         console.error("Error fetching drivers:", error);
       } finally {
-        if (!silent) {
-          setIsLoading(false);
-        }
+        setIsLoading(false);
       }
     },
     [page]
@@ -81,7 +81,7 @@ const Page = () => {
               Drivers
             </Typography>
 
-            <DataTableLoadingShell hasData={listHasRows(chape)} loading={isLoading}>
+            <DataTableLoadingShell loading={isLoading}>
               <ChapTable
                 items={chape}
                 onPageChange={handlePageChange}

@@ -1,34 +1,35 @@
 import PropTypes from "prop-types";
-import { RiseLoader } from "react-spinners";
+import { ClipLoader } from "react-spinners";
 import Box from "@mui/material/Box";
 import { brand } from "../theme/colors";
 
 const LOADER_COLOR = brand.primary;
 const TOP_NAV_HEIGHT = 64;
 const PAGE_VERTICAL_PADDING = 32;
+const SPEED_MULTIPLIER = 2.4;
 
 export const PAGE_LOADER_MIN_HEIGHT = `calc(100vh - ${TOP_NAV_HEIGHT + PAGE_VERTICAL_PADDING}px)`;
 
 const SIZE_MAP = {
-  xs: 6,
-  sm: 10,
-  md: 14,
-  lg: 18,
-  xl: 24,
+  xs: 14,
+  sm: 20,
+  md: 28,
+  lg: 36,
+  xl: 44,
 };
 
 const INLINE_MIN_HEIGHT_MAP = {
-  xs: 24,
-  sm: 28,
-  md: 32,
+  xs: 22,
+  sm: 26,
+  md: 30,
 };
 
 const MIN_HEIGHT_MAP = {
   xs: undefined,
-  sm: 36,
-  md: 240,
-  lg: 360,
-  xl: "60vh",
+  sm: 28,
+  md: 120,
+  lg: 200,
+  xl: "40vh",
   page: PAGE_LOADER_MIN_HEIGHT,
 };
 
@@ -50,12 +51,17 @@ export default function Loader({
 }) {
   const isPageLoader = page || size === "page";
   const loader = (
-    <RiseLoader color={color} size={resolveSize(size, page)} speedMultiplier={2.25} />
+    <ClipLoader
+      color={color}
+      loading
+      size={resolveSize(size, page)}
+      speedMultiplier={SPEED_MULTIPLIER}
+    />
   );
 
   if (inline) {
     const inlineMinHeight =
-      typeof size === "number" ? size * 3 : INLINE_MIN_HEIGHT_MAP[size] ?? INLINE_MIN_HEIGHT_MAP.xs;
+      typeof size === "number" ? size * 2 : INLINE_MIN_HEIGHT_MAP[size] ?? INLINE_MIN_HEIGHT_MAP.xs;
 
     return (
       <Box

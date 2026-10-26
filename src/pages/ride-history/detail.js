@@ -274,7 +274,7 @@ const Page = () => {
             backLabel="Back to Ride History"
           >
             <DetailPageState
-              loading={isLoading && !ride}
+              loading={isLoading}
               notFoundMessage="The selected ride could not be loaded."
               notFoundTitle={!isLoading && !ride ? "Ride not found" : undefined}
             >

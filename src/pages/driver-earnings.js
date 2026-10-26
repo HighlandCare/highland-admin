@@ -13,7 +13,7 @@ import { EarningsAnalytics } from "../sections/driver-earnings/earnings-analytic
 import { OverviewStatCard } from "../sections/overview/overview-stat-card";
 import { DataTableLoadingShell, ROWS_PER_PAGE } from "../components/data-table";
 import { pageContainerSx, pageMainSx, pageTitleSx } from "../utils/pageLayout";
-import { fetchAllPages, listHasRows } from "../utils/listUtils";
+import { fetchAllPages } from "../utils/listUtils";
 import {
   LIST_FILTER_KEYS,
   createListFilterRouteGuard,
@@ -43,6 +43,7 @@ const Page = () => {
   const [earnings, setEarnings] = useState({});
   const [analytics, setAnalytics] = useState(emptyAnalytics);
   const analyticsLoadedRef = useRef(false);
+  const loadedOnceRef = useRef(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -95,14 +96,18 @@ const Page = () => {
     };
 
     const fetchEarnings = async () => {
+      const block = !loadedOnceRef.current;
       try {
-        setIsLoading(true);
+        if (block) {
+          setIsLoading(true);
+        }
         const response = await getDriverEarnings(page, ROWS_PER_PAGE);
         if (!active) {
           return;
         }
 
         setEarnings(response);
+        loadedOnceRef.current = true;
         // Don't block the table loader on analytics (can walk many pages).
         void loadAnalytics(response);
       } catch (error) {
@@ -205,7 +210,7 @@ const Page = () => {
               </Grid>
             )}
 
-            <DataTableLoadingShell hasData={listHasRows(earnings)} loading={isLoading}>
+            <DataTableLoadingShell loading={isLoading}>
               <DriverEarningsTable
                 items={earnings}
                 onPageChange={handlePageChange}

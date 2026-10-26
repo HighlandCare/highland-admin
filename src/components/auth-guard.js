@@ -49,7 +49,7 @@ export default function AuthGuard({ children }) {
   }, [router, router.isReady, router.pathname, router.asPath]);
 
   if (!router.isReady) {
-    return <Loader />;
+    return <Loader minHeight={120} size="sm" />;
   }
 
   if (isPublicPath(router.pathname)) {
@@ -59,7 +59,7 @@ export default function AuthGuard({ children }) {
   // Keep showing the loader while auth is unresolved or while redirecting away.
   const sessionState = typeof window !== "undefined" ? getAuthSessionState() : "missing";
   if (!ready || sessionState !== "authenticated") {
-    return <Loader />;
+    return <Loader minHeight={120} size="sm" />;
   }
 
   return children;

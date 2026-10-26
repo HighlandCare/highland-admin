@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Head from "next/head";
 import { Box, Container, Stack, Typography } from "@mui/material";
 import { useRouter } from "next/router";
@@ -31,6 +31,7 @@ const Page = () => {
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [hydrated, setHydrated] = useState(false);
+  const loadedOnceRef = useRef(false);
 
   useEffect(() => {
     const islogin = JSON.parse(typeof window !== "undefined" && localStorage.getItem("isLogin"));
@@ -66,8 +67,9 @@ const Page = () => {
 
   const loadQueries = useCallback(
     async ({ silent = false } = {}) => {
+      const block = !silent && !loadedOnceRef.current;
       try {
-        if (!silent) {
+        if (block) {
           setIsLoading(true);
         }
 
@@ -87,6 +89,7 @@ const Page = () => {
         setRows(list);
         setTotal(pagination.total);
         setTotalPages(pagination.totalPages);
+        loadedOnceRef.current = true;
       } catch (error) {
         console.error("Error loading support queries:", error);
         setRows([]);
@@ -94,9 +97,7 @@ const Page = () => {
         setTotalPages(1);
         toast.error(error.message || "Failed to load support queries");
       } finally {
-        if (!silent) {
-          setIsLoading(false);
-        }
+        setIsLoading(false);
       }
     },
     [page, status, role, category, search]
@@ -141,7 +142,7 @@ const Page = () => {
               </Typography>
             </Stack>
 
-            <DataTableLoadingShell hasData={rows.length > 0} loading={isLoading}>
+            <DataTableLoadingShell loading={isLoading}>
               <SupportQueriesTable
                 category={category}
                 items={rows}

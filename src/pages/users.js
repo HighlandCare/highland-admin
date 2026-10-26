@@ -1,4 +1,4 @@
-import { React, useCallback, useEffect, useState } from "react";
+import { React, useCallback, useEffect, useRef, useState } from "react";
 import { Layout as DashboardLayout } from "../layouts/dashboard/layout";
 import Head from "next/head";
 import { Box, Container, Stack, Typography } from "@mui/material";
@@ -7,7 +7,6 @@ import { useRouter } from "next/router";
 import { DataTableLoadingShell, ROWS_PER_PAGE } from "../components/data-table";
 import { UsersTable } from "../sections/users/users-table";
 import { pageContainerSx, pageMainSx, pageTitleSx } from "../utils/pageLayout";
-import { listHasRows } from "../utils/listUtils";
 import { excludeAdminUsersFromResponse } from "../utils/userUtils";
 import {
   LIST_FILTER_KEYS,
@@ -18,6 +17,7 @@ const Page = () => {
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [users, setUsers] = useState({});
+  const loadedOnceRef = useRef(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -30,18 +30,18 @@ const Page = () => {
 
   const fetchUsers = useCallback(
     async ({ silent = false } = {}) => {
+      const block = !silent && !loadedOnceRef.current;
       try {
-        if (!silent) {
+        if (block) {
           setIsLoading(true);
         }
         const response = await getUsers(page, ROWS_PER_PAGE);
         setUsers(excludeAdminUsersFromResponse(response));
+        loadedOnceRef.current = true;
       } catch (error) {
         console.error("Error fetching users:", error);
       } finally {
-        if (!silent) {
-          setIsLoading(false);
-        }
+        setIsLoading(false);
       }
     },
     [page]
@@ -82,7 +82,7 @@ const Page = () => {
               Users List
             </Typography>
 
-            <DataTableLoadingShell hasData={listHasRows(users)} loading={isLoading}>
+            <DataTableLoadingShell loading={isLoading}>
               <UsersTable
                 items={users}
                 onPageChange={handlePageChange}

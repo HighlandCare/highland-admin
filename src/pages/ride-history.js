@@ -1,13 +1,13 @@
-import { React, useState, useEffect } from "react";
+import { React, useState, useEffect, useRef } from "react";
 import { Layout as DashboardLayout } from "../layouts/dashboard/layout";
 import Head from "next/head";
 import { Box, Container, Stack, Typography } from "@mui/material";
 import { getRideHistory } from "../Services/Auth.service";
 import { useRouter } from "next/router";
+import Loader from "../components/Loader";
 import { DataTableLoadingShell } from "../components/data-table";
 import { RideHistoryTable } from "../sections/driver-earnings/ride-history-table";
 import { pageContainerSx, pageMainSx, pageTitleSx } from "../utils/pageLayout";
-import { listHasRows } from "../utils/listUtils";
 import {
   clearRideHistoryListState,
   consumeRideHistoryListState,
@@ -31,6 +31,7 @@ const Page = () => {
   const [filters, setFilters] = useState(defaultRideHistoryFilters);
   const [isLoading, setIsLoading] = useState(true);
   const [rideHistory, setRideHistory] = useState({});
+  const loadedOnceRef = useRef(false);
 
   useEffect(() => {
     const islogin = JSON.parse(typeof window !== "undefined" && localStorage.getItem("isLogin"));
@@ -91,8 +92,11 @@ const Page = () => {
     let active = true;
 
     const fetchRideHistory = async () => {
+      const block = !loadedOnceRef.current;
       try {
-        setIsLoading(true);
+        if (block) {
+          setIsLoading(true);
+        }
         const response = await getRideHistory(page, limit, {
           ...filters,
           recordType: "ride",
@@ -100,6 +104,7 @@ const Page = () => {
         });
         if (active) {
           setRideHistory(response);
+          loadedOnceRef.current = true;
         }
       } catch (error) {
         console.error("Error fetching ride history:", error);
@@ -131,6 +136,10 @@ const Page = () => {
     setPage(1);
   };
 
+  if (!hydrated) {
+    return <Loader minHeight={160} size="sm" />;
+  }
+
   return (
     <>
       <Head>
@@ -144,10 +153,7 @@ const Page = () => {
               Booking History
             </Typography>
 
-            <DataTableLoadingShell
-              hasData={listHasRows(rideHistory)}
-              loading={!hydrated || isLoading}
-            >
+            <DataTableLoadingShell loading={isLoading}>
               <RideHistoryTable
                 filters={filters}
                 items={rideHistory}

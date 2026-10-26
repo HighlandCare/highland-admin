@@ -17,29 +17,25 @@ export const SEARCH_DEBOUNCE_MS = 150;
 
 export const dataTableLoadingOverlaySx = {
   alignItems: "center",
-  bgcolor: "rgba(255, 255, 255, 0.72)",
+  bgcolor: "rgba(255, 255, 255, 0.4)",
   display: "flex",
   inset: 0,
   justifyContent: "center",
+  pointerEvents: "none",
   position: "absolute",
   zIndex: 2,
 };
 
 /**
- * Blocking overlay only on the first empty load.
- * When hasData is true, keep the table visible and show a thin top progress bar.
+ * Keeps filters/table mounted while data loads.
+ * Uses a thin progress bar + light overlay (not a heavy full-page spinner).
  */
-export const DataTableLoadingShell = ({
-  children,
-  loading = false,
-  hasData = false,
-}) => (
+export const DataTableLoadingShell = ({ children, loading = false }) => (
   <Box sx={{ position: "relative", width: "100%" }}>
-    {loading && hasData ? (
+    {loading ? (
       <LinearProgress
-        color="primary"
         sx={{
-          borderRadius: 0,
+          borderRadius: "3px 3px 0 0",
           height: 3,
           left: 0,
           position: "absolute",
@@ -49,18 +45,25 @@ export const DataTableLoadingShell = ({
         }}
       />
     ) : null}
-    {loading && !hasData ? (
-      <Box sx={{ ...dataTableLoadingOverlaySx, minHeight: 220 }}>
+    {loading ? (
+      <Box sx={dataTableLoadingOverlaySx}>
         <Loader size="sm" />
       </Box>
     ) : null}
-    {children}
+    <Box
+      sx={{
+        opacity: loading ? 0.65 : 1,
+        pointerEvents: loading ? "none" : "auto",
+        transition: "opacity 80ms linear",
+      }}
+    >
+      {children}
+    </Box>
   </Box>
 );
 
 DataTableLoadingShell.propTypes = {
   children: PropTypes.node,
-  hasData: PropTypes.bool,
   loading: PropTypes.bool,
 };
 

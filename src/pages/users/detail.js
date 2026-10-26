@@ -286,7 +286,7 @@ const Page = () => {
         <Container maxWidth="xl" sx={pageContainerSx}>
           <DetailPageFrame backHref="/users" backLabel="Back to Users">
             <DetailPageState
-              loading={isLoading && !user}
+              loading={isLoading}
               notFoundMessage="The selected user could not be loaded."
               notFoundTitle={!isLoading && !user ? "User not found" : undefined}
             >

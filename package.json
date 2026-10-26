@@ -22,6 +22,8 @@
     "@mui/material": "5.11.10",
     "@mui/system": "5.11.9",
     "@mui/x-date-pickers": "5.0.19",
+    "@next/swc-win32-x64-msvc": "^16.4.3",
+    "@popperjs/core": "^2.11.8",
     "@react-google-maps/api": "^2.20.8",
     "apexcharts": "3.37.0",
     "axios": "^1.4.0",

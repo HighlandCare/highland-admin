@@ -243,7 +243,7 @@ const Page = () => {
         <Container maxWidth="xl" sx={pageContainerSx}>
           <DetailPageFrame backHref="/driver-earnings" backLabel="Back to Driver Earnings">
             <DetailPageState
-              loading={isLoading && !driver}
+              loading={isLoading}
               notFoundMessage="The selected driver earnings could not be loaded."
               notFoundTitle={!isLoading && !driver ? "Driver earnings not found" : undefined}
             >

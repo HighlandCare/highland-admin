@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import {
@@ -74,6 +74,7 @@ const Page = () => {
   const [savingId, setSavingId] = useState(null);
   const [error, setError] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const loadedOnceRef = useRef(false);
 
   useEffect(() => {
     const islogin = JSON.parse(
@@ -89,8 +90,11 @@ const Page = () => {
     let active = true;
 
     const load = async () => {
+      const block = !loadedOnceRef.current;
       try {
-        setIsLoading(true);
+        if (block) {
+          setIsLoading(true);
+        }
         setError(null);
         const response = await getRideAdjustments(page + 1, PAGE_SIZE, {
           status: "pending_review",
@@ -99,6 +103,7 @@ const Page = () => {
         if (active) {
           setRows(Array.isArray(response?.data) ? response.data : []);
           setTotal(Number(response?.pagination?.total) || 0);
+          loadedOnceRef.current = true;
         }
       } catch (err) {
         console.error("Error loading ride adjustments:", err);
@@ -166,7 +171,7 @@ const Page = () => {
             {error ? <Alert severity="error">{error}</Alert> : null}
 
             {isLoading && !rows.length ? (
-              <Loader page />
+              <Loader minHeight={220} size="md" />
             ) : (
               <Card>
                 <CardHeader title={`Pending review (${total})`} />

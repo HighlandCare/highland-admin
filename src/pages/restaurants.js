@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import EyeIcon from "@heroicons/react/24/outline/EyeIcon";
@@ -32,7 +32,6 @@ import {
 } from "../components/table-cells";
 import { getRestaurants } from "../Services/Auth.service";
 import { pageContainerSx, pageMainSx, pageTitleSx } from "../utils/pageLayout";
-import { listHasRows } from "../utils/listUtils";
 import {
   LIST_FILTER_KEYS,
   consumeListFilterState,
@@ -61,6 +60,7 @@ const Page = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [items, setItems] = useState({});
   const [hydrated, setHydrated] = useState(false);
+  const loadedOnceRef = useRef(false);
 
   useEffect(() => {
     const isLogin = JSON.parse(typeof window !== "undefined" && localStorage.getItem("isLogin"));
@@ -97,10 +97,16 @@ const Page = () => {
     let active = true;
 
     const load = async () => {
+      const block = !loadedOnceRef.current;
       try {
-        setIsLoading(true);
+        if (block) {
+          setIsLoading(true);
+        }
         const response = await getRestaurants(page, 20, { status, search });
-        if (active) setItems(response);
+        if (active) {
+          setItems(response);
+          loadedOnceRef.current = true;
+        }
       } catch (error) {
         console.error(error);
       } finally {
@@ -140,7 +146,7 @@ const Page = () => {
               Restaurant Management
             </Typography>
 
-            <DataTableLoadingShell hasData={listHasRows(items) || rows.length > 0} loading={isLoading}>
+            <DataTableLoadingShell loading={isLoading}>
               <DataTable
                 empty={!rows.length}
                 minWidth={800}
