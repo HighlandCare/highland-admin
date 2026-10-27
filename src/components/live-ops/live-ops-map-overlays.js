@@ -139,56 +139,320 @@ export default function LiveOpsMapOverlays({
             ? "#ef4444"
             : "#00828A";
 
+  const renderSearchAndFilter = () => (
+    <Stack direction="row" spacing={1} sx={{ width: "100%", minWidth: 0 }}>
+      <LiveOpsLocationSearch
+        value={locationSearch}
+        onChange={onLocationSearchChange}
+        onPlaceSelect={onPlaceSelect}
+        onCurrentLocation={onCurrentLocation}
+        locating={locating}
+        mapMarkers={mapMarkers}
+      />
+      <IconButton
+        onClick={(e) => setFilterAnchor(e.currentTarget)}
+        aria-label="Open map filters"
+        sx={{
+          ...glass,
+          width: 48,
+          height: 48,
+          color: "primary.main",
+          flexShrink: 0,
+          bgcolor: hasGeoFilter ? "primary.alpha12" : glass.bgcolor,
+          borderColor: hasGeoFilter ? "primary.main" : "divider",
+          "&:hover": { bgcolor: "primary.alpha8" },
+        }}
+      >
+        <FunnelIcon width={20} />
+      </IconButton>
+    </Stack>
+  );
+
+  const renderLiveActivityChip = () => (
+    <Box
+      sx={{
+        ...glass,
+        px: { xs: 1.25, sm: 2 },
+        py: 1,
+        display: "flex",
+        alignItems: "center",
+        gap: 1,
+        flexWrap: "wrap",
+        alignSelf: "flex-start",
+        maxWidth: "100%",
+      }}
+    >
+      <Box
+        sx={{
+          width: 8,
+          height: 8,
+          borderRadius: "50%",
+          bgcolor: "success.main",
+          boxShadow: "0 0 10px rgba(34,197,94,.55)",
+          animation: "pulse 2s infinite",
+          flexShrink: 0,
+          "@keyframes pulse": {
+            "0%, 100%": { opacity: 1 },
+            "50%": { opacity: 0.4 },
+          },
+        }}
+      />
+      <Typography sx={{ color: "text.primary", fontSize: 13, fontWeight: 600 }}>
+        Live Activity
+      </Typography>
+      <Typography sx={{ color: "text.secondary", fontSize: 12, display: { xs: "none", sm: "block" } }}>
+        Real-time
+      </Typography>
+      {activeHotspotCount > 0 ? (
+        <Typography
+          sx={{
+            color: "#ef4444",
+            fontSize: 11,
+            fontWeight: 700,
+            px: 1,
+            py: 0.25,
+            borderRadius: 999,
+            bgcolor: "rgba(239,68,68,0.12)",
+          }}
+        >
+          High demand area
+        </Typography>
+      ) : null}
+    </Box>
+  );
+
   return (
     <>
+      {/* Mobile / tablet: stack Live Activity → search → cards so nothing overlaps */}
+      <Box
+        sx={{
+          position: "absolute",
+          top: 8,
+          left: 8,
+          right: 8,
+          zIndex: 1100,
+          display: { xs: "flex", lg: "none" },
+          flexDirection: "column",
+          gap: 1,
+          maxHeight: "calc(100% - 96px)",
+          overflowY: "auto",
+          overflowX: "hidden",
+          pointerEvents: "none",
+          "& > *": { pointerEvents: "auto" },
+        }}
+      >
+        {renderLiveActivityChip()}
+        {renderSearchAndFilter()}
+        {tourStopIndex && tourStopTotal ? (
+          <Box sx={{ ...glass, px: 2, py: 0.75, alignSelf: "center" }}>
+            <Typography sx={{ color: "primary.main", fontSize: 12, fontWeight: 700 }}>
+              Viewing location {tourStopIndex} of {tourStopTotal}
+            </Typography>
+          </Box>
+        ) : null}
+        {showDemandStack ? (
+          <Box
+            sx={{
+              position: "relative",
+              width: "100%",
+              maxWidth: 340,
+              minHeight: 130,
+              alignSelf: "flex-start",
+            }}
+          >
+            {stackedHotspots.length === 1
+              ? [2, 1].map((depth) => (
+                  <Box
+                    key={`demand-stack-peek-mobile-${depth}`}
+                    aria-hidden
+                    sx={{
+                      position: "absolute",
+                      top: depth * 10,
+                      left: depth * 10,
+                      right: depth * 10,
+                      height: 72,
+                      zIndex: 10 + (3 - depth),
+                      ...glass,
+                      borderColor: "#f97316",
+                      borderWidth: 1.5,
+                      opacity: 0.45 - depth * 0.08,
+                      pointerEvents: "none",
+                      boxShadow: "0 6px 16px rgba(0,0,0,0.2)",
+                    }}
+                  />
+                ))
+              : null}
+            {stackedHotspots
+              .slice()
+              .reverse()
+              .map((hotspot, reverseIndex) => {
+                const depth = stackedHotspots.length - 1 - reverseIndex;
+                const isFront = depth === 0;
+                const notify = getDemandHotspotStaticNotifyText(hotspot);
+                const offset = depth * 10;
+
+                return (
+                  <Box
+                    key={`mobile-${hotspot.id || `demand-${depth}`}`}
+                    sx={{
+                      position: "absolute",
+                      top: offset,
+                      left: offset,
+                      right: depth === 0 ? 0 : offset,
+                      zIndex: 20 + (stackedHotspots.length - depth),
+                      ...glass,
+                      borderColor: isFront ? "#ef4444" : "#f97316",
+                      borderWidth: isFront ? 2 : 1.5,
+                      p: isFront ? 2 : 1.5,
+                      pr: isFront ? 5 : 1.5,
+                      opacity: isFront ? 1 : Math.max(0.4, 0.78 - depth * 0.18),
+                      transform: isFront ? "none" : `scale(${1 - depth * 0.04})`,
+                      transformOrigin: "top left",
+                      pointerEvents: isFront ? "auto" : "none",
+                      boxShadow: isFront
+                        ? "0 12px 28px rgba(0,0,0,0.35)"
+                        : "0 6px 16px rgba(0,0,0,0.2)",
+                    }}
+                  >
+                    {isFront ? (
+                      <>
+                        <IconButton
+                          aria-label="Close demand cards"
+                          onClick={handleCloseDemandStack}
+                          size="small"
+                          sx={{
+                            position: "absolute",
+                            top: 6,
+                            right: 6,
+                            zIndex: 2,
+                            color: "text.secondary",
+                            bgcolor: "rgba(255,255,255,0.08)",
+                            border: "1px solid",
+                            borderColor: "rgba(255,255,255,0.12)",
+                            "&:hover": {
+                              color: "text.primary",
+                              bgcolor: "rgba(255,255,255,0.14)",
+                            },
+                          }}
+                        >
+                          <XMarkIcon width={18} />
+                        </IconButton>
+                        <Typography
+                          sx={{ color: "#ef4444", fontSize: 12, fontWeight: 700, mb: 0.5 }}
+                        >
+                          High demand zone
+                        </Typography>
+                        <Typography sx={{ color: "text.primary", fontWeight: 700, fontSize: 16 }}>
+                          {notify.pendingLabel || hotspot.label}
+                        </Typography>
+                        <Typography
+                          sx={{ color: "#f97316", fontSize: 13, fontWeight: 700, mt: 1 }}
+                        >
+                          {notify.notifyLabel}
+                        </Typography>
+                      </>
+                    ) : (
+                      <>
+                        <Typography sx={{ color: "#ef4444", fontSize: 12, fontWeight: 700 }}>
+                          {notify.pendingLabel || hotspot.label}
+                        </Typography>
+                        <Typography
+                          sx={{ color: "#f97316", fontSize: 11, fontWeight: 700, mt: 0.5 }}
+                        >
+                          {notify.notifyLabel}
+                        </Typography>
+                      </>
+                    )}
+                  </Box>
+                );
+              })}
+          </Box>
+        ) : null}
+        {selectedMarker ? (
+          <Box
+            sx={{
+              ...glass,
+              borderColor: markerBorder,
+              borderWidth: 2,
+              p: 2,
+              width: "100%",
+              maxWidth: 360,
+              alignSelf: "flex-start",
+            }}
+          >
+            <Typography sx={{ color: markerBorder, fontSize: 12, fontWeight: 700, mb: 0.5 }}>
+              {selectedMarker.type === "driver_signup" || selectedMarker.type === "online_driver"
+                ? "Driver"
+                : selectedMarker.type === "ride_request"
+                  ? "Ride Request"
+                  : selectedMarker.type === "dispute"
+                    ? "Dispute"
+                    : selectedMarker.type === "emergency"
+                      ? "Urgent"
+                      : "Customer"}
+            </Typography>
+            <Typography sx={{ color: "text.primary", fontWeight: 700, fontSize: 16 }}>
+              {selectedMarker.title}
+            </Typography>
+            <Typography sx={{ color: "text.secondary", fontSize: 13, mt: 0.5 }}>
+              {selectedMarker.subtitle}
+            </Typography>
+            {selectedMarker.phone ? (
+              <Typography sx={{ color: "text.primary", fontSize: 13, mt: 1 }}>
+                {selectedMarker.phone}
+              </Typography>
+            ) : null}
+            <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+              <Button
+                size="small"
+                variant="outlined"
+                sx={{ color: "text.secondary", flex: 1, minWidth: 0, whiteSpace: "nowrap" }}
+                onClick={onCloseMarker}
+              >
+                Close
+              </Button>
+              <Button
+                size="small"
+                variant="outlined"
+                sx={{
+                  flex: 1,
+                  minWidth: 0,
+                  px: 1.5,
+                  whiteSpace: "nowrap",
+                  color: markerBorder,
+                  borderColor: markerBorder,
+                  "&:hover": {
+                    borderColor: markerBorder,
+                    bgcolor: `${markerBorder}14`,
+                  },
+                }}
+                disabled={!detailPath}
+                onClick={() => {
+                  if (onViewDetails) {
+                    onViewDetails(selectedMarker);
+                    return;
+                  }
+                  handleViewDetails();
+                }}
+              >
+                View Details
+              </Button>
+            </Stack>
+          </Box>
+        ) : null}
+      </Box>
+
+      {/* Desktop: Live Activity left, search centered (no overlap) */}
       <Box
         sx={{
           position: "absolute",
           top: 16,
           left: 16,
           zIndex: 1000,
-          ...glass,
-          px: 2,
-          py: 1,
-          display: { xs: "none", md: "flex" },
-          alignItems: "center",
-          gap: 1,
+          display: { xs: "none", lg: "block" },
         }}
       >
-        <Box
-          sx={{
-            width: 8,
-            height: 8,
-            borderRadius: "50%",
-            bgcolor: "success.main",
-            boxShadow: "0 0 10px rgba(34,197,94,.55)",
-            animation: "pulse 2s infinite",
-            "@keyframes pulse": {
-              "0%, 100%": { opacity: 1 },
-              "50%": { opacity: 0.4 },
-            },
-          }}
-        />
-        <Typography sx={{ color: "text.primary", fontSize: 13, fontWeight: 600 }}>
-          Live Activity
-        </Typography>
-        <Typography sx={{ color: "text.secondary", fontSize: 12 }}>Real-time</Typography>
-        {activeHotspotCount > 0 ? (
-          <Typography
-            sx={{
-              color: "#ef4444",
-              fontSize: 11,
-              fontWeight: 700,
-              ml: 0.5,
-              px: 1,
-              py: 0.25,
-              borderRadius: 999,
-              bgcolor: "rgba(239,68,68,0.12)",
-            }}
-          >
-            High demand area
-          </Typography>
-        ) : null}
+        {renderLiveActivityChip()}
       </Box>
 
       <Stack
@@ -196,51 +460,30 @@ export default function LiveOpsMapOverlays({
         spacing={1}
         sx={{
           position: "absolute",
-          top: { xs: 8, sm: 16 },
-          left: { xs: 8, sm: "50%" },
-          right: { xs: 8, sm: "auto" },
-          transform: { xs: "none", sm: "translateX(-50%)" },
+          top: 16,
+          left: "50%",
+          transform: "translateX(-50%)",
           zIndex: 1000,
-          width: { xs: "auto", sm: "calc(100% - 32px)", md: 420 },
+          width: 420,
+          maxWidth: "calc(100% - 360px)",
+          display: { xs: "none", lg: "flex" },
         }}
       >
-        <LiveOpsLocationSearch
-          value={locationSearch}
-          onChange={onLocationSearchChange}
-          onPlaceSelect={onPlaceSelect}
-          onCurrentLocation={onCurrentLocation}
-          locating={locating}
-          mapMarkers={mapMarkers}
-        />
-        <IconButton
-          onClick={(e) => setFilterAnchor(e.currentTarget)}
-          aria-label="Open map filters"
-          sx={{
-            ...glass,
-            width: 48,
-            height: 48,
-            color: "primary.main",
-            flexShrink: 0,
-            bgcolor: hasGeoFilter ? "primary.alpha12" : glass.bgcolor,
-            borderColor: hasGeoFilter ? "primary.main" : "divider",
-            "&:hover": { bgcolor: "primary.alpha8" },
-          }}
-        >
-          <FunnelIcon width={20} />
-        </IconButton>
+        {renderSearchAndFilter()}
       </Stack>
 
       {tourStopIndex && tourStopTotal ? (
         <Box
           sx={{
             position: "absolute",
-            top: { xs: 56, sm: 72 },
+            top: 72,
             left: "50%",
             transform: "translateX(-50%)",
             zIndex: 1000,
             ...glass,
             px: 2,
             py: 0.75,
+            display: { xs: "none", lg: "block" },
           }}
         >
           <Typography sx={{ color: "primary.main", fontSize: 12, fontWeight: 700 }}>
@@ -333,16 +576,16 @@ export default function LiveOpsMapOverlays({
         <Box
           sx={{
             position: "absolute",
-            top: { xs: 60, sm: 72 },
-            left: { xs: 8, sm: 16 },
-            right: { xs: 8, sm: "auto" },
+            top: 72,
+            left: 16,
             zIndex: 1000,
             ...glass,
             borderColor: markerBorder,
             borderWidth: 2,
             p: 2,
-            minWidth: { xs: 0, sm: 300 },
-            maxWidth: { xs: "none", sm: 360 },
+            minWidth: 300,
+            maxWidth: 360,
+            display: { xs: "none", lg: "block" },
           }}
         >
           <Typography sx={{ color: markerBorder, fontSize: 12, fontWeight: 700, mb: 0.5 }}>
@@ -410,13 +653,12 @@ export default function LiveOpsMapOverlays({
         <Box
           sx={{
             position: "absolute",
-            top: { xs: 64, sm: 72 },
-            left: { xs: 8, sm: 16 },
-            right: { xs: 8, sm: "auto" },
+            top: 72,
+            left: 16,
             zIndex: 1100,
-            width: { xs: "auto", sm: 340 },
-            maxWidth: { xs: "calc(100% - 16px)", sm: 340 },
+            width: 340,
             minHeight: 130,
+            display: { xs: "none", lg: "block" },
           }}
         >
           {/* Decorative back layers so a single zone still reads as a stack */}
