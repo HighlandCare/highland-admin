@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import PropTypes from "prop-types";
 import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM, sanitizeLiveOpsMarkers } from "../../utils/googleMaps";
 import { buildLeafletMarkerIcon } from "../../utils/liveOpsMarkerIcons";
 import { useLiveOpsUi } from "../../contexts/live-ops-ui-context";
@@ -15,6 +14,32 @@ const LIGHT_TILE_URL = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{
 const DARK_TILE_URL = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
 const TRAFFIC_TILE_URL = "https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png";
 const TILE_ATTRIBUTION = "&copy; OpenStreetMap &copy; CARTO";
+const LEAFLET_CSS_HREF = "/leaflet/leaflet.css";
+
+/** Load Leaflet CSS from /public so Next webpack never resolves package image URLs. */
+function ensureLeafletCss() {
+  if (typeof document === "undefined") {
+    return;
+  }
+  if (document.getElementById("leaflet-css")) {
+    return;
+  }
+  const link = document.createElement("link");
+  link.id = "leaflet-css";
+  link.rel = "stylesheet";
+  link.href = LEAFLET_CSS_HREF;
+  document.head.appendChild(link);
+}
+
+// Default icon assets live under /public/leaflet (survives npm reinstall).
+if (typeof window !== "undefined" && L?.Icon?.Default) {
+  delete L.Icon.Default.prototype._getIconUrl;
+  L.Icon.Default.mergeOptions({
+    iconRetinaUrl: "/leaflet/marker-icon-2x.png",
+    iconUrl: "/leaflet/marker-icon.png",
+    shadowUrl: "/leaflet/marker-shadow.png",
+  });
+}
 
 export default function LiveOpsLeafletMap({
   center,
@@ -45,6 +70,7 @@ export default function LiveOpsLeafletMap({
   const centerLng = center?.lng ?? DEFAULT_MAP_CENTER.lng;
 
   useEffect(() => {
+    ensureLeafletCss();
     if (!containerRef.current || mapRef.current) return undefined;
 
     const map = L.map(containerRef.current, {
