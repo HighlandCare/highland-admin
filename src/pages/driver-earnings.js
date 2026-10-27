@@ -8,13 +8,16 @@ import ClockIcon from "@heroicons/react/24/solid/ClockIcon";
 import UsersIcon from "@heroicons/react/24/solid/UsersIcon";
 import { getDriverEarnings } from "../Services/Auth.service";
 import { useRouter } from "next/router";
-import Loader from "../components/Loader";
 import { DriverEarningsTable } from "../sections/driver-earnings/driver-earnings-table";
 import { EarningsAnalytics } from "../sections/driver-earnings/earnings-analytics";
 import { OverviewStatCard } from "../sections/overview/overview-stat-card";
-import { ROWS_PER_PAGE } from "../components/data-table";
+import { DataTableLoadingShell, ROWS_PER_PAGE } from "../components/data-table";
 import { pageContainerSx, pageMainSx, pageTitleSx } from "../utils/pageLayout";
-import { fetchAllPages, getListFromResponse } from "../utils/listUtils";
+import { fetchAllPages } from "../utils/listUtils";
+import {
+  LIST_FILTER_KEYS,
+  createListFilterRouteGuard,
+} from "../utils/listFilterState";
 import {
   formatEarningsCurrency,
   hasEarningsApiTotals,
@@ -40,6 +43,7 @@ const Page = () => {
   const [earnings, setEarnings] = useState({});
   const [analytics, setAnalytics] = useState(emptyAnalytics);
   const analyticsLoadedRef = useRef(false);
+  const loadedOnceRef = useRef(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -92,15 +96,20 @@ const Page = () => {
     };
 
     const fetchEarnings = async () => {
+      const block = !loadedOnceRef.current;
       try {
-        setIsLoading(true);
+        if (block) {
+          setIsLoading(true);
+        }
         const response = await getDriverEarnings(page, ROWS_PER_PAGE);
         if (!active) {
           return;
         }
 
         setEarnings(response);
-        await loadAnalytics(response);
+        loadedOnceRef.current = true;
+        // Don't block the table loader on analytics (can walk many pages).
+        void loadAnalytics(response);
       } catch (error) {
         console.error("Error fetching driver earnings:", error);
       } finally {
@@ -117,11 +126,22 @@ const Page = () => {
     };
   }, [page]);
 
+  useEffect(() => {
+    const handleRouteChangeStart = createListFilterRouteGuard(LIST_FILTER_KEYS.driverEarnings, {
+      listPath: "/driver-earnings",
+      detailPaths: ["/driver-earnings/detail"],
+    });
+
+    router.events.on("routeChangeStart", handleRouteChangeStart);
+    return () => {
+      router.events.off("routeChangeStart", handleRouteChangeStart);
+    };
+  }, [router.events]);
+
   const handlePageChange = (newPage) => {
     setPage(newPage);
   };
 
-  const hasData = Boolean(getListFromResponse(earnings).length);
   const showStats = isLoading || isAnalyticsLoading || analytics.hasEarnings;
   const statsLoading = isLoading || isAnalyticsLoading;
 
@@ -190,33 +210,13 @@ const Page = () => {
               </Grid>
             )}
 
-            {isLoading && !hasData ? (
-              <Loader page />
-            ) : (
-              <Box sx={{ position: "relative" }}>
-                {isLoading && (
-                  <Box
-                    sx={{
-                      alignItems: "center",
-                      bgcolor: "rgba(255, 255, 255, 0.72)",
-                      display: "flex",
-                      inset: 0,
-                      justifyContent: "center",
-                      position: "absolute",
-                      zIndex: 2,
-                    }}
-                  >
-                    <Loader size="md" />
-                  </Box>
-                )}
-                <DriverEarningsTable
-                  items={earnings}
-                  onPageChange={handlePageChange}
-                  page={page}
-                  title="Driver Earnings"
-                />
-              </Box>
-            )}
+            <DataTableLoadingShell loading={isLoading}>
+              <DriverEarningsTable
+                items={earnings}
+                onPageChange={handlePageChange}
+                page={page}
+              />
+            </DataTableLoadingShell>
           </Stack>
         </Container>
       </Box>

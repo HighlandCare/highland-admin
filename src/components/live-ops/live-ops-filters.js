@@ -116,7 +116,6 @@ export default function LiveOpsFilters({
           ["customer_signup", "Customers", "#22c55e"],
           ["driver_signup", "Drivers", "#eab308"],
           ["ride_request", "Ride requests", "#3b82f6"],
-          ["food_order", "Food orders", "#a855f7"],
           ["online_driver", "Online drivers", "#f97316"],
           ["emergency", "Urgent issues", "#ef4444"],
         ].map(([key, label, color]) => (

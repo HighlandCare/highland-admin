@@ -5,6 +5,7 @@ import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import { CssBaseline } from "@mui/material";
 import { ThemeProvider } from "@mui/material/styles";
 
+import AuthGuard from "../components/auth-guard";
 import { useNProgress } from "../hooks/use-nprogress";
 import { createTheme } from "../theme";
 
@@ -13,6 +14,7 @@ import "simplebar-react/dist/simplebar.min.css";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import "../styles/google-places.css";
+import "../styles/live-ops-map.css";
 const clientSideEmotionCache = createEmotionCache();
 
 const App = (props) => {
@@ -45,7 +47,7 @@ const App = (props) => {
             draggable
             theme="light"
           />
-          {getLayout(<Component {...pageProps} />)}
+          <AuthGuard>{getLayout(<Component {...pageProps} />)}</AuthGuard>
         </ThemeProvider>
       </LocalizationProvider>
     </CacheProvider>

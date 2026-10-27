@@ -177,6 +177,11 @@ const formatProfileFieldValue = (key, value) => {
     return null;
   }
 
+  if (key === "rating") {
+    const number = Number(value);
+    return Number.isFinite(number) ? number.toFixed(1) : null;
+  }
+
   if (typeof value === "boolean") {
     return value ? "Yes" : "No";
   }
@@ -718,6 +723,133 @@ export const normalizeDriverTransactions = (payload) => {
     })
     .filter(Boolean)
     .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+};
+
+export const buildDriverTransactionPayload = (allTransactions = [], params = {}) => {
+  const page = Math.max(Number(params.page) || 1, 1);
+  const limit = Math.max(Number(params.limit) || 20, 1);
+  const status = String(params.status || "").trim().toLowerCase();
+  const serviceCategory = String(params.serviceCategory || "").trim();
+  const fromDate = params.from ? new Date(params.from) : null;
+  const toDate = params.to ? new Date(params.to) : null;
+
+  if (toDate && !Number.isNaN(toDate.getTime())) {
+    toDate.setHours(23, 59, 59, 999);
+  }
+
+  let filtered = Array.isArray(allTransactions) ? [...allTransactions] : [];
+
+  if (status) {
+    filtered = filtered.filter(
+      (tx) => String(tx.status || tx.type || "").trim().toLowerCase() === status
+    );
+  }
+
+  if (serviceCategory) {
+    filtered = filtered.filter(
+      (tx) => (tx.serviceCategory || "transportation") === serviceCategory
+    );
+  }
+
+  if (fromDate && !Number.isNaN(fromDate.getTime())) {
+    filtered = filtered.filter((tx) => {
+      const date = new Date(tx.date || tx.createdAt);
+      return !Number.isNaN(date.getTime()) && date >= fromDate;
+    });
+  }
+
+  if (toDate && !Number.isNaN(toDate.getTime())) {
+    filtered = filtered.filter((tx) => {
+      const date = new Date(tx.date || tx.createdAt);
+      return !Number.isNaN(date.getTime()) && date <= toDate;
+    });
+  }
+
+  filtered.sort(
+    (a, b) =>
+      new Date(b.date || b.createdAt || 0).getTime() -
+      new Date(a.date || a.createdAt || 0).getTime()
+  );
+
+  let creditTotal = 0;
+  let debitTotal = 0;
+  let ridesEarned = 0;
+  let foodEarned = 0;
+
+  filtered.forEach((tx) => {
+    const amount = Number(tx.amount) || 0;
+    const txStatus = String(tx.status || tx.type || "").toLowerCase();
+    const category = tx.serviceCategory || "transportation";
+
+    if (txStatus === "debit") {
+      debitTotal += amount;
+      return;
+    }
+
+    creditTotal += amount;
+    if (category === "food_beverage") {
+      foodEarned += amount;
+    } else {
+      ridesEarned += amount;
+    }
+  });
+
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / limit) || 1);
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * limit;
+
+  return {
+    transactions: filtered.slice(start, start + limit),
+    pagination: {
+      page: safePage,
+      limit,
+      total,
+      totalPages,
+    },
+    analytics: {
+      totalEarned: creditTotal,
+      totalWithdrawn: debitTotal,
+      ridesEarned,
+      foodEarned,
+      transactionCount: total,
+      totalCredits: creditTotal,
+    },
+  };
+};
+
+export const resolveDriverTransactionsResponse = (response, params = {}) => {
+  const payload = response?.data && !Array.isArray(response.data) ? response.data : response;
+  const hasServerPagination =
+    payload &&
+    typeof payload === "object" &&
+    Array.isArray(payload.transactions) &&
+    payload.pagination &&
+    typeof payload.pagination === "object";
+
+  if (hasServerPagination) {
+    return {
+      transactions: normalizeDriverTransactions(payload.transactions),
+      pagination: {
+        page: Number(payload.pagination.page) || Number(params.page) || 1,
+        limit: Number(payload.pagination.limit) || Number(params.limit) || 20,
+        total: Number(payload.pagination.total) || payload.transactions.length,
+        totalPages:
+          Number(payload.pagination.totalPages) ||
+          Math.max(
+            1,
+            Math.ceil(
+              (Number(payload.pagination.total) || payload.transactions.length) /
+                (Number(payload.pagination.limit) || Number(params.limit) || 20)
+            ) || 1
+          ),
+      },
+      analytics: payload.analytics || null,
+    };
+  }
+
+  const allTransactions = normalizeDriverTransactions(payload);
+  return buildDriverTransactionPayload(allTransactions, params);
 };
 
 export const getTransactionsFromDriverRecord = (driver) => {

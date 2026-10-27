@@ -1,19 +1,23 @@
-import { React, useCallback, useEffect, useState } from "react";
+import { React, useCallback, useEffect, useRef, useState } from "react";
 import { Layout as DashboardLayout } from "../layouts/dashboard/layout";
 import Head from "next/head";
-import { Box, Container, Stack } from "@mui/material";
+import { Box, Container, Stack, Typography } from "@mui/material";
 import { getUsers } from "../Services/Auth.service";
 import { useRouter } from "next/router";
-import Loader from "../components/Loader";
+import { DataTableLoadingShell, ROWS_PER_PAGE } from "../components/data-table";
 import { UsersTable } from "../sections/users/users-table";
-import { ROWS_PER_PAGE } from "../components/data-table";
-import { pageContainerSx, pageMainSx } from "../utils/pageLayout";
+import { pageContainerSx, pageMainSx, pageTitleSx } from "../utils/pageLayout";
 import { excludeAdminUsersFromResponse } from "../utils/userUtils";
+import {
+  LIST_FILTER_KEYS,
+  createListFilterRouteGuard,
+} from "../utils/listFilterState";
 
 const Page = () => {
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [users, setUsers] = useState({});
+  const loadedOnceRef = useRef(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -26,18 +30,18 @@ const Page = () => {
 
   const fetchUsers = useCallback(
     async ({ silent = false } = {}) => {
+      const block = !silent && !loadedOnceRef.current;
       try {
-        if (!silent) {
+        if (block) {
           setIsLoading(true);
         }
         const response = await getUsers(page, ROWS_PER_PAGE);
         setUsers(excludeAdminUsersFromResponse(response));
+        loadedOnceRef.current = true;
       } catch (error) {
         console.error("Error fetching users:", error);
       } finally {
-        if (!silent) {
-          setIsLoading(false);
-        }
+        setIsLoading(false);
       }
     },
     [page]
@@ -47,13 +51,23 @@ const Page = () => {
     fetchUsers();
   }, [fetchUsers]);
 
+  useEffect(() => {
+    const handleRouteChangeStart = createListFilterRouteGuard(LIST_FILTER_KEYS.users, {
+      listPath: "/users",
+      detailPaths: ["/users/detail"],
+    });
+
+    router.events.on("routeChangeStart", handleRouteChangeStart);
+    return () => {
+      router.events.off("routeChangeStart", handleRouteChangeStart);
+    };
+  }, [router.events]);
+
   const handlePageChange = (newPage) => {
     setPage(newPage);
   };
 
   const handleRefresh = () => fetchUsers({ silent: true });
-
-  const hasData = Boolean(users?.data?.length);
 
   return (
     <>
@@ -64,33 +78,18 @@ const Page = () => {
       <Box component="main" sx={pageMainSx}>
         <Container maxWidth="xl" sx={pageContainerSx}>
           <Stack spacing={3} sx={{ flex: 1 }}>
-            {isLoading && !hasData ? (
-              <Loader page />
-            ) : (
-              <Box sx={{ position: "relative" }}>
-                {isLoading && (
-                  <Box
-                    sx={{
-                      alignItems: "center",
-                      bgcolor: "rgba(255, 255, 255, 0.72)",
-                      display: "flex",
-                      inset: 0,
-                      justifyContent: "center",
-                      position: "absolute",
-                      zIndex: 2,
-                    }}
-                  >
-                    <Loader size="md" />
-                  </Box>
-                )}
-                <UsersTable
-                  items={users}
-                  onPageChange={handlePageChange}
-                  onRefresh={handleRefresh}
-                  page={page}
-                />
-              </Box>
-            )}
+            <Typography sx={pageTitleSx} variant="h4">
+              Users List
+            </Typography>
+
+            <DataTableLoadingShell loading={isLoading}>
+              <UsersTable
+                items={users}
+                onPageChange={handlePageChange}
+                onRefresh={handleRefresh}
+                page={page}
+              />
+            </DataTableLoadingShell>
           </Stack>
         </Container>
       </Box>

@@ -42,6 +42,42 @@ export const getUserById = async (userId) => {
   }
 };
 
+/**
+ * Paginated customer transactions + spend analytics.
+ * @param {string} userId - profile id or auth id
+ * @param {object} params - page, limit, status, serviceCategory, referenceType, from, to
+ */
+export const getUserTransactions = async (userId, params = {}) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") {
+        query.set(key, String(value));
+      }
+    });
+    const qs = query.toString();
+    const response = await Action.get(
+      `admin/users/${encodeURIComponent(userId)}/transactions${qs ? `?${qs}` : ""}`,
+      {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
 export const getChap = async (page, limit = 10) => {
   try {
     const authToken = JSON.parse(localStorage.getItem("token"));
@@ -163,14 +199,36 @@ export const getDashboardAnalytics = async ({ latestLimit = 10, year } = {}) => 
   }
 };
 
-export const getDriverTransactions = async (driverId) => {
+export const getDriverTransactions = async (driverId, params = {}) => {
   try {
     const authToken = JSON.parse(localStorage.getItem("token"));
-    const response = await Action.get(`admin/driver-transactions/${driverId}`, {
-      headers: {
-        Authorization: `Bearer ${authToken}`,
-      },
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") {
+        query.set(key, String(value));
+      }
     });
+    const qs = query.toString();
+    const headers = { Authorization: `Bearer ${authToken}` };
+
+    try {
+      const response = await Action.get(
+        `admin/driver-earnings/${encodeURIComponent(driverId)}/transactions${
+          qs ? `?${qs}` : ""
+        }`,
+        { headers }
+      );
+      return response.data;
+    } catch (error) {
+      if (error?.response?.status && error.response.status !== 404) {
+        throw error;
+      }
+    }
+
+    const response = await Action.get(
+      `admin/driver-earnings/${encodeURIComponent(driverId)}${qs ? `?${qs}` : ""}`,
+      { headers }
+    );
     return response.data;
   } catch (error) {
     if (error.response) {
@@ -184,31 +242,63 @@ export const getDriverTransactions = async (driverId) => {
   }
 };
 
-export const getRideHistory = async (page, limit = 20, filters = {}) => {
+const appendRideHistoryParam = (params, key, value) => {
+  if (value == null || value === "") {
+    return;
+  }
+  params.set(key, String(value));
+};
+
+const appendRideHistoryBoolParam = (params, key, value) => {
+  if (value === true || value === "true") {
+    params.set(key, "true");
+  } else if (value === false || value === "false") {
+    params.set(key, "false");
+  }
+};
+
+/** GET /admin/ride-history — query params only (list + export). */
+export const getRideHistory = async (page = 1, limit = 20, filters = {}) => {
   try {
     const authToken = JSON.parse(localStorage.getItem("token"));
+    const isExport = filters.export === true || filters.export === "true" || filters.forExport === true;
+    const safeLimit = isExport
+      ? Math.min(Math.max(Number(limit) || 2000, 1), 2000)
+      : Math.min(Math.max(Number(limit) || 20, 1), 100);
+
     const params = new URLSearchParams({
-      page: String(page),
-      limit: String(limit),
+      page: String(Math.max(Number(page) || 1, 1)),
+      limit: String(safeLimit),
     });
 
-    if (filters.status) {
-      params.set("status", filters.status);
+    if (isExport) {
+      params.set("export", "true");
     }
 
-    if (filters.havePaid === true || filters.havePaid === "true") {
-      params.set("havePaid", "true");
-    } else if (filters.havePaid === false || filters.havePaid === "false") {
-      params.set("havePaid", "false");
-    }
-
-    if (filters.startDate) {
-      params.set("startDate", filters.startDate);
-    }
-
-    if (filters.endDate) {
-      params.set("endDate", filters.endDate);
-    }
+    appendRideHistoryParam(params, "recordType", filters.recordType || filters.service);
+    appendRideHistoryParam(params, "type", filters.type || filters.bookingType);
+    appendRideHistoryParam(params, "category", filters.category);
+    appendRideHistoryParam(params, "status", filters.status);
+    appendRideHistoryParam(params, "mode", filters.mode);
+    appendRideHistoryParam(params, "pricingMode", filters.pricingMode);
+    appendRideHistoryParam(params, "paymentStatus", filters.paymentStatus);
+    appendRideHistoryParam(params, "customerId", filters.customerId || filters.userId);
+    appendRideHistoryParam(params, "driverId", filters.driverId);
+    appendRideHistoryParam(params, "rideId", filters.rideId || filters.bookingId);
+    appendRideHistoryParam(params, "orderId", filters.orderId);
+    appendRideHistoryParam(params, "restaurantId", filters.restaurantId);
+    appendRideHistoryBoolParam(params, "havePaid", filters.havePaid);
+    appendRideHistoryBoolParam(params, "isTestRide", filters.isTestRide);
+    appendRideHistoryParam(
+      params,
+      "stripePaymentIntentId",
+      filters.stripePaymentIntentId || filters.paymentIntentId
+    );
+    appendRideHistoryParam(params, "startDate", filters.startDate || filters.from);
+    appendRideHistoryParam(params, "endDate", filters.endDate || filters.to);
+    appendRideHistoryParam(params, "dateField", filters.dateField);
+    appendRideHistoryParam(params, "sortBy", filters.sortBy);
+    appendRideHistoryParam(params, "sortOrder", filters.sortOrder);
 
     if (filters.search?.trim()) {
       params.set("search", filters.search.trim());
@@ -228,7 +318,9 @@ export const getRideHistory = async (page, limit = 20, filters = {}) => {
     } else {
       console.error("General Error:", error.message);
     }
-    throw error;
+    const message =
+      error?.response?.data?.message || error?.message || "Failed to load booking history";
+    throw new Error(typeof message === "string" ? message : "Failed to load booking history");
   }
 };
 
@@ -241,6 +333,123 @@ export const getRideById = async (rideId) => {
         Authorization: `Bearer ${authToken}`,
       },
     });
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
+/**
+ * Multi-destination ride traceability: the consolidated audit (stops, timing,
+ * pricing, payment, adjustments) and the raw event log behind it.
+ */
+export const getRideAudit = async (rideId) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+
+    const response = await Action.get(`admin/rides/${rideId}/audit`, {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
+export const getRideEvents = async (rideId, page = 1, limit = 100) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+
+    const response = await Action.get(
+      `admin/rides/${rideId}/events?${params.toString()}`,
+      {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
+export const getRideAdjustments = async (page = 1, limit = 20, filters = {}) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+      status: filters.status || "pending_review",
+    });
+
+    if (filters.type) {
+      params.set("type", filters.type);
+    }
+
+    const response = await Action.get(`admin/ride-adjustments?${params.toString()}`, {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
+/**
+ * Records an operator decision on a waiting deviation. Deliberately non-financial:
+ * the customer paid the amount authorized before the ride and this does not
+ * charge or refund anything.
+ */
+export const reviewRideAdjustment = async (adjustmentId, status, reviewNotes = "") => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+
+    const response = await Action.post(
+      `admin/ride-adjustments/${adjustmentId}/review`,
+      { status, reviewNotes },
+      {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      }
+    );
     return response.data;
   } catch (error) {
     if (error.response) {
@@ -522,6 +731,112 @@ export const addPrivacy = async (contentType = "privacy", title) => {
   }
 };
 
+export const getIntoxicatingSubstancePolicy = async () => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+
+    const response = await Action.get(`admin/intoxicating-substance-policy`, {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
+export const addIntoxicatingSubstancePolicy = async (
+  contentType = "intoxicating-substance",
+  title
+) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const response = await Action.post(
+      `/admin/intoxicating-substance-policy`,
+      {
+        contentType,
+        title,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
+export const getDriverNondiscriminationPolicy = async () => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+
+    const response = await Action.get(`admin/driver-nondiscrimination-policy`, {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
+export const addDriverNondiscriminationPolicy = async (
+  contentType = "driver-nondiscrimination",
+  title
+) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const response = await Action.post(
+      `/admin/driver-nondiscrimination-policy`,
+      {
+        contentType,
+        title,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      }
+    );
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      console.error("Response Error:", error.response.data);
+    } else if (error.request) {
+      console.error("Request Error:", error.request);
+    } else {
+      console.error("General Error:", error.message);
+    }
+    throw error;
+  }
+};
+
 export const deleteUsers = async (_id) => {
   try {
     const authToken = JSON.parse(localStorage.getItem("token"));
@@ -684,6 +999,13 @@ export const getLoginErrorMessage = (error) => {
     return formatApiErrorMessage(error.response.data.message);
   }
 
+  // Axios sets no `response` when the browser never reached the API
+  // (wrong base URL, backend down, CORS, connection refused).
+  if (!error?.response) {
+    const base = process.env.NEXT_PUBLIC_BASE_URL || "(missing NEXT_PUBLIC_BASE_URL)";
+    return `Cannot reach API at ${base}. Start cura-main (port 1120) or fix highland-admin/.env, then restart next dev.`;
+  }
+
   if (typeof error?.message === "string" && !error.message.startsWith("Error in adminLogin")) {
     return formatApiErrorMessage(error.message);
   }
@@ -697,5 +1019,54 @@ export const adminLogin = async (payload) => {
     return response.data;
   } catch (error) {
     throw new Error(getLoginErrorMessage(error));
+  }
+};
+
+export const getRestaurants = async (page = 1, limit = 20, filters = {}) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(limit),
+    });
+    if (filters.status) params.set("status", filters.status);
+    if (filters.search?.trim()) params.set("search", filters.search.trim());
+
+    const response = await Action.get(`admin/restaurants?${params.toString()}`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    return response.data;
+  } catch (error) {
+    console.error("getRestaurants error:", error?.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const getRestaurantById = async (restaurantId) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const response = await Action.get(
+      `admin/restaurants/${encodeURIComponent(restaurantId)}`,
+      { headers: { Authorization: `Bearer ${authToken}` } }
+    );
+    return response.data;
+  } catch (error) {
+    console.error("getRestaurantById error:", error?.response?.data || error.message);
+    throw error;
+  }
+};
+
+export const updateRestaurantApproval = async (restaurantId, approved) => {
+  try {
+    const authToken = JSON.parse(localStorage.getItem("token"));
+    const response = await Action.patch(
+      `admin/restaurants/${encodeURIComponent(restaurantId)}/approval`,
+      { approved },
+      { headers: { Authorization: `Bearer ${authToken}` } }
+    );
+    return response.data;
+  } catch (error) {
+    console.error("updateRestaurantApproval error:", error?.response?.data || error.message);
+    throw error;
   }
 };

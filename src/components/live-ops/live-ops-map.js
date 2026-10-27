@@ -1,120 +1,89 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import dynamic from "next/dynamic";
-import { GoogleMap, Marker, TrafficLayer, useJsApiLoader } from "@react-google-maps/api";
-import { Box, Stack, Typography } from "@mui/material";
+import { GoogleMap, TrafficLayer, useJsApiLoader } from "@react-google-maps/api";
+import { Box, Typography } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 import {
   DEFAULT_MAP_CENTER,
+  DEFAULT_MAP_ZOOM,
   getGoogleMapsApiKey,
-  getMapsSetupHelp,
+  getLiveOpsMapBackground,
+  getLiveOpsMapStyles,
   GOOGLE_MAP_LIBRARIES,
-  LIVE_OPS_MAP_STYLES,
   sanitizeLiveOpsMarkers,
 } from "../../utils/googleMaps";
-import { buildGoogleMapsMarkerIcon } from "../../utils/liveOpsMarkerIcons";
+import { liveOpsGlass } from "../../theme/live-ops-page-theme";
+import { clusterLiveOpsMarkers } from "../../utils/liveOpsClusters";
 import { useSmoothLiveOpsMarkers } from "../../hooks/useSmoothLiveOpsMarkers";
+import { useLiveOpsUi } from "../../contexts/live-ops-ui-context";
+import LiveOpsGlowMarker from "./live-ops-glow-marker";
+import LiveOpsDemandHotspotsLayer from "./live-ops-demand-hotspots-layer";
 
 const LiveOpsLeafletMap = dynamic(() => import("./live-ops-leaflet-map"), {
   ssr: false,
 });
-function buildMarkerIcon(marker) {
-  return buildGoogleMapsMarkerIcon(marker?.type, marker?.color);
-}
 
-function FallbackNotice({ details }) {
+function MapEngineBadge({ engine, reason }) {
+  const theme = useTheme();
+  const glass = liveOpsGlass(theme);
+  const isGoogle = engine === "google";
+
   return (
     <Box
       sx={{
         position: "absolute",
-        top: 12,
-        left: "50%",
-        transform: "translateX(-50%)",
-        zIndex: 1100,
-        px: 2,
-        py: 1,
-        borderRadius: "10px",
-        bgcolor: "rgba(120, 53, 15, 0.92)",
-        border: "1px solid rgba(251, 191, 36, 0.35)",
-        maxWidth: "90%",
-      }}
-    >
-      <Typography sx={{ color: "#fde68a", fontSize: 12, fontWeight: 700 }}>
-        Using fallback map — Google Maps key is not authorized for this site.
-      </Typography>
-      <Typography sx={{ color: "#fcd34d", fontSize: 11, mt: 0.25 }}>
-        {details[0]}
-      </Typography>
-    </Box>
-  );
-}
-
-FallbackNotice.propTypes = {
-  details: PropTypes.arrayOf(PropTypes.string).isRequired,
-};
-
-function MapsErrorPanel({ title, details, onUseFallback }) {
-  return (
-    <Box
-      sx={{
-        position: "absolute",
-        inset: 0,
+        top: { xs: 64, md: 68 },
+        left: 16,
         zIndex: 1200,
+        ...glass,
+        px: 1.5,
+        py: 0.75,
         display: "flex",
         alignItems: "center",
-        justifyContent: "center",
-        bgcolor: "rgba(248, 249, 250, 0.92)",
-        px: 3,
+        gap: 1,
+        maxWidth: "min(420px, calc(100% - 32px))",
       }}
     >
       <Box
         sx={{
-          maxWidth: 520,
-          p: 3,
-          borderRadius: "16px",
-          bgcolor: "background.paper",
-          border: "1px solid",
-          borderColor: "error.light",
+          width: 8,
+          height: 8,
+          flexShrink: 0,
+          borderRadius: "50%",
+          bgcolor: isGoogle ? "#22c55e" : "#f59e0b",
+          boxShadow: isGoogle
+            ? "0 0 10px rgba(34,197,94,.55)"
+            : "0 0 10px rgba(245,158,11,.55)",
         }}
-      >
-        <Typography sx={{ color: "error.main", fontWeight: 800, fontSize: 20, mb: 1 }}>
-          {title}
+      />
+      <Box sx={{ minWidth: 0 }}>
+        <Typography sx={{ color: "text.primary", fontSize: 12, fontWeight: 800, lineHeight: 1.2 }}>
+          Active map: {isGoogle ? "Google Maps" : "Leaflet (fallback)"}
         </Typography>
-        <Stack spacing={1}>
-          {details.map((line) => (
-            <Typography key={line} sx={{ color: "text.secondary", fontSize: 13 }}>
-              • {line}
-            </Typography>
-          ))}
-        </Stack>
-        {onUseFallback ? (
-          <Typography
-            onClick={onUseFallback}
-            sx={{
-              color: "primary.main",
-              fontSize: 13,
-              fontWeight: 700,
-              mt: 2,
-              cursor: "pointer",
-              "&:hover": { textDecoration: "underline" },
-            }}
-          >
-            Continue with fallback map instead
+        {reason ? (
+          <Typography sx={{ color: "text.secondary", fontSize: 11, mt: 0.25, lineHeight: 1.3 }}>
+            {reason}
           </Typography>
         ) : null}
       </Box>
     </Box>
   );
 }
-MapsErrorPanel.propTypes = {
-  title: PropTypes.string.isRequired,
-  details: PropTypes.arrayOf(PropTypes.string).isRequired,
-  onUseFallback: PropTypes.func,
+
+MapEngineBadge.propTypes = {
+  engine: PropTypes.oneOf(["google", "leaflet"]).isRequired,
+  reason: PropTypes.string,
 };
+
 export default function LiveOpsMap({
   center,
   zoom,
   markers,
+  hotspots = [],
+  showHotspots = true,
   selectedMarker,
+  selectedHotspot,
   showTraffic,
   userLocation,
   fitToMarkers,
@@ -122,41 +91,22 @@ export default function LiveOpsMap({
   mapZoom,
   onFitComplete,
   onMarkerSelect,
+  onHotspotSelect,
   onMapReady,
 }) {
   const mapRef = useRef(null);
   const lastFitKeyRef = useRef(null);
   const lastCameraRef = useRef("");
+  const { mapTheme } = useLiveOpsUi();
   const [authFailed, setAuthFailed] = useState(false);
   const [useFallback, setUseFallback] = useState(false);
+  const [mapInstance, setMapInstance] = useState(null);
   const apiKey = getGoogleMapsApiKey();
-  const mergedMarkers = useMemo(() => {
-    const base = sanitizeLiveOpsMarkers(markers);
-    const selectedLat = Number(selectedMarker?.lat);
-    const selectedLng = Number(selectedMarker?.lng);
-    if (
-      !selectedMarker?.id ||
-      !Number.isFinite(selectedLat) ||
-      !Number.isFinite(selectedLng)
-    ) {
-      return base;
-    }
 
-    const withoutDup = base.filter((marker) => marker.id !== selectedMarker.id);
-    return [
-      ...withoutDup,
-      {
-        ...selectedMarker,
-        lat: selectedLat,
-        lng: selectedLng,
-        type: selectedMarker.type || "driver_signup",
-        color: selectedMarker.color || "yellow",
-        title: selectedMarker.title || selectedMarker.label || "Selected",
-      },
-    ];
-  }, [markers, selectedMarker]);
-
-  const safeMarkers = useSmoothLiveOpsMarkers(mergedMarkers);
+  const safeMarkers = useSmoothLiveOpsMarkers(
+    useMemo(() => sanitizeLiveOpsMarkers(markers), [markers])
+  );
+  const mapItems = useMemo(() => clusterLiveOpsMarkers(safeMarkers), [safeMarkers]);
 
   const { isLoaded, loadError } = useJsApiLoader({
     id: "highland-live-ops-map",
@@ -172,10 +122,7 @@ export default function LiveOpsMap({
     [center?.lat, center?.lng]
   );
 
-  const setupHelp = useMemo(() => {
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    return getMapsSetupHelp(origin);
-  }, []);
+  const initialZoom = zoom ?? mapZoom ?? DEFAULT_MAP_ZOOM;
 
   useEffect(() => {
     window.gm_authFailure = () => setAuthFailed(true);
@@ -192,7 +139,11 @@ export default function LiveOpsMap({
     safeMarkers.forEach((marker) => {
       bounds.extend({ lat: marker.lat, lng: marker.lng });
     });
-    map.fitBounds(bounds, 64);
+    map.fitBounds(bounds, 72);
+    const fittedZoom = map.getZoom();
+    if (Number.isFinite(fittedZoom) && fittedZoom > 14) {
+      map.setZoom(14);
+    }
     return true;
   }, [safeMarkers]);
 
@@ -228,25 +179,44 @@ export default function LiveOpsMap({
     if (isLoaded) onMapReady?.(true);
   }, [isLoaded, onMapReady]);
 
+  const mapStyles = useMemo(() => getLiveOpsMapStyles(mapTheme), [mapTheme]);
+  const mapBackground = getLiveOpsMapBackground(mapTheme);
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+    mapRef.current.setOptions({
+      styles: mapStyles,
+      backgroundColor: mapBackground,
+    });
+  }, [mapBackground, mapStyles]);
+
   const googleUnavailable = !apiKey || useFallback || loadError || authFailed;
+  const leafletReason = !apiKey
+    ? "Google Maps API key is missing"
+    : authFailed
+      ? "Google Maps key is not authorized for this site"
+      : loadError
+        ? "Google Maps failed to load"
+        : "Google Maps unavailable";
 
   if (googleUnavailable) {
     return (
       <Box sx={{ position: "relative", width: "100%", height: "100%" }}>
-        {apiKey && (loadError || authFailed) ? (
-          <FallbackNotice details={setupHelp} />
-        ) : null}
+        {/* <MapEngineBadge engine="leaflet" reason={leafletReason} /> */}
         <LiveOpsLeafletMap
           center={mapCenter}
-          zoom={zoom}
+          zoom={initialZoom}
           mapZoom={mapZoom}
           markers={safeMarkers}
+          hotspots={hotspots}
+          showHotspots={showHotspots}
           showTraffic={showTraffic}
           userLocation={userLocation}
           fitToMarkers={fitToMarkers}
           mapFitKey={mapFitKey}
           onFitComplete={onFitComplete}
           onMarkerSelect={onMarkerSelect}
+          onHotspotSelect={onHotspotSelect}
         />
       </Box>
     );
@@ -271,45 +241,62 @@ export default function LiveOpsMap({
 
   return (
     <Box sx={{ position: "relative", width: "100%", height: "100%" }}>
+      {/* <MapEngineBadge engine="google" /> */}
       <GoogleMap
         mapContainerStyle={{ width: "100%", height: "100%" }}
-        center={mapCenter}
-        zoom={zoom ?? 11}
+        defaultCenter={mapCenter}
+        defaultZoom={initialZoom}
         onLoad={(map) => {
           mapRef.current = map;
+          setMapInstance(map);
+          window.google?.maps?.event?.trigger(map, "resize");
+          map.setCenter(mapCenter);
+          map.setZoom(initialZoom);
           onMapReady?.(true);
         }}
         options={{
-          styles: LIVE_OPS_MAP_STYLES,
+          styles: mapStyles,
           disableDefaultUI: true,
           zoomControl: true,
           zoomControlOptions: {
             position: window.google.maps.ControlPosition.LEFT_BOTTOM,
           },
           gestureHandling: "greedy",
-          backgroundColor: "#f8fafb",
+          backgroundColor: mapBackground,
           clickableIcons: false,
         }}
       >
         {showTraffic ? <TrafficLayer /> : null}
 
-        {safeMarkers.map((marker) => (
-          <Marker
-            key={marker.id}
-            position={{ lat: marker.lat, lng: marker.lng }}
-            icon={buildMarkerIcon(marker)}
-            onClick={() => onMarkerSelect?.(marker)}
-            title={`${marker.title || ""}${marker.subtitle ? ` — ${marker.subtitle}` : ""}`}
-            zIndex={marker.type === "emergency" ? 500 : marker.type === "online_driver" ? 400 : 200}
-          />
-        ))}
+        <LiveOpsDemandHotspotsLayer
+          hotspots={hotspots}
+          showHotspots={showHotspots}
+          onHotspotSelect={onHotspotSelect}
+        />
 
-        {userLocation?.lat != null && userLocation?.lng != null ? (
-          <Marker
-            position={{ lat: userLocation.lat, lng: userLocation.lng }}
-            icon={buildGoogleMapsMarkerIcon("user_location")}
+        {mapInstance
+          ? mapItems.map((item) => (
+              <LiveOpsGlowMarker
+                key={item.marker.id || `${item.marker.lat}-${item.marker.lng}`}
+                lat={item.lat ?? item.marker.lat}
+                lng={item.lng ?? item.marker.lng}
+                type={item.marker.type}
+                color={item.marker.color}
+                selected={selectedMarker?.id === item.marker.id}
+                title={`${item.marker.title || ""}${
+                  item.marker.subtitle ? ` — ${item.marker.subtitle}` : ""
+                }`}
+                onClick={() => onMarkerSelect?.(item.marker)}
+              />
+            ))
+          : null}
+
+        {mapInstance && userLocation?.lat != null && userLocation?.lng != null ? (
+          <LiveOpsGlowMarker
+            lat={userLocation.lat}
+            lng={userLocation.lng}
+            type="user_location"
             title="Your location"
-            zIndex={999}
           />
         ) : null}
       </GoogleMap>
@@ -324,7 +311,10 @@ LiveOpsMap.propTypes = {
   }),
   zoom: PropTypes.number,
   markers: PropTypes.array,
+  hotspots: PropTypes.array,
+  showHotspots: PropTypes.bool,
   selectedMarker: PropTypes.object,
+  selectedHotspot: PropTypes.object,
   showTraffic: PropTypes.bool,
   userLocation: PropTypes.shape({
     lat: PropTypes.number,
@@ -335,5 +325,6 @@ LiveOpsMap.propTypes = {
   mapZoom: PropTypes.number,
   onFitComplete: PropTypes.func,
   onMarkerSelect: PropTypes.func,
+  onHotspotSelect: PropTypes.func,
   onMapReady: PropTypes.func,
 };

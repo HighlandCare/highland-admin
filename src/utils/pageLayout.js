@@ -4,7 +4,9 @@ export const pageMainSx = {
   flexGrow: 1,
   minWidth: 0,
   overflowX: "hidden",
-  py: { xs: 2, md: 2 },
+  overflowY: "visible",
+  pb: "10px",
+  pt: { xs: 1.5, sm: 2 },
   width: "100%",
 };
 
@@ -14,7 +16,7 @@ export const pageContainerSx = {
   flexDirection: "column",
   maxWidth: "100%",
   minWidth: 0,
-  px: { xs: 1.5, sm: 2, md: 3 },
+  px: { xs: 1.25, sm: 2, md: 3 },
 };
 
 export const pageTitleSx = {

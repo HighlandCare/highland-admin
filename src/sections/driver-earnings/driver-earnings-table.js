@@ -4,6 +4,10 @@ import EyeIcon from "@heroicons/react/24/outline/EyeIcon";
 import { useRouter } from "next/router";
 import { TableBody, TableCell, TableHead, TableRow, Typography } from "@mui/material";
 import {
+  detailTableHeadSx,
+  detailTableRowSx,
+} from "../../components/detail-page/detail-page-ui";
+import {
   DataTable,
   DataTableToolbar,
   filterBySearch,
@@ -28,6 +32,12 @@ import {
   getEarningsDriverImage,
   storeEarningsDetail,
 } from "../../utils/earningsUtils";
+import {
+  LIST_FILTER_KEYS,
+  consumeListFilterState,
+  markListFilterRestore,
+  storeListFilterState,
+} from "../../utils/listFilterState";
 
 const earningsSortValue = "newest";
 
@@ -36,11 +46,23 @@ export const DriverEarningsTable = (props) => {
     items: initialItems = {},
     onPageChange = () => {},
     page = 1,
-    title = "Driver Earnings",
   } = props;
   const router = useRouter();
   const [items, setItems] = useState(initialItems);
   const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    const stored = consumeListFilterState(LIST_FILTER_KEYS.driverEarnings);
+    if (!stored) {
+      return;
+    }
+
+    setSearch(stored.filters?.search ?? "");
+    if (stored.page) {
+      onPageChange(stored.page);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- restore once on mount
+  }, []);
 
   useEffect(() => {
     setItems(initialItems);
@@ -52,6 +74,11 @@ export const DriverEarningsTable = (props) => {
     !(items?.total_records ?? items?.totalRecords ?? items?.total_drivers);
 
   const handleOpenViewDetail = (driver) => {
+    storeListFilterState(LIST_FILTER_KEYS.driverEarnings, {
+      page,
+      filters: { search },
+    });
+    markListFilterRestore(LIST_FILTER_KEYS.driverEarnings);
     storeEarningsDetail(driver);
     const detailId = getEarningsDriverId(driver);
     if (!detailId) {
@@ -110,11 +137,10 @@ export const DriverEarningsTable = (props) => {
           onSearchChange={handleSearchChange}
           searchPlaceholder="Search drivers"
           searchValue={search}
-          title={title}
         />
       }
     >
-      <TableHead>
+      <TableHead sx={detailTableHeadSx}>
         <TableRow>
           <TableCell>Driver</TableCell>
           <TableCell>E-mail</TableCell>
@@ -136,7 +162,7 @@ export const DriverEarningsTable = (props) => {
           </TableRow>
         ) : (
           rows.map((driver) => (
-            <TableRow hover key={getEarningsDriverId(driver)}>
+            <TableRow hover key={getEarningsDriverId(driver)} sx={detailTableRowSx}>
               <TableCell>
                 <TablePersonCell
                   imageUrl={getEarningsDriverImage(driver) || undefined}
@@ -184,5 +210,4 @@ DriverEarningsTable.propTypes = {
   items: PropTypes.object,
   onPageChange: PropTypes.func,
   page: PropTypes.number,
-  title: PropTypes.string,
 };

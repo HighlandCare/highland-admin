@@ -1,18 +1,22 @@
-import { React, useCallback, useEffect, useState } from "react";
+import { React, useCallback, useEffect, useRef, useState } from "react";
 import { Layout as DashboardLayout } from "../layouts/dashboard/layout";
 import Head from "next/head";
-import { Box, Container, Stack } from "@mui/material";
+import { Box, Container, Stack, Typography } from "@mui/material";
 import { getChap } from "../Services/Auth.service";
 import { useRouter } from "next/router";
-import Loader from "../components/Loader";
 import { ChapTable } from "../sections/chaperone/chap-table";
-import { ROWS_PER_PAGE } from "../components/data-table";
-import { pageContainerSx, pageMainSx } from "../utils/pageLayout";
+import { DataTableLoadingShell, ROWS_PER_PAGE } from "../components/data-table";
+import { pageContainerSx, pageMainSx, pageTitleSx } from "../utils/pageLayout";
+import {
+  LIST_FILTER_KEYS,
+  createListFilterRouteGuard,
+} from "../utils/listFilterState";
 
 const Page = () => {
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [chape, setChape] = useState({});
+  const loadedOnceRef = useRef(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -25,18 +29,18 @@ const Page = () => {
 
   const fetchData = useCallback(
     async ({ silent = false } = {}) => {
+      const block = !silent && !loadedOnceRef.current;
       try {
-        if (!silent) {
+        if (block) {
           setIsLoading(true);
         }
         const response = await getChap(page, ROWS_PER_PAGE);
         setChape(response);
+        loadedOnceRef.current = true;
       } catch (error) {
         console.error("Error fetching drivers:", error);
       } finally {
-        if (!silent) {
-          setIsLoading(false);
-        }
+        setIsLoading(false);
       }
     },
     [page]
@@ -46,13 +50,23 @@ const Page = () => {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    const handleRouteChangeStart = createListFilterRouteGuard(LIST_FILTER_KEYS.chaperone, {
+      listPath: "/chaperone",
+      detailPaths: ["/chaperone/detail"],
+    });
+
+    router.events.on("routeChangeStart", handleRouteChangeStart);
+    return () => {
+      router.events.off("routeChangeStart", handleRouteChangeStart);
+    };
+  }, [router.events]);
+
   const handlePageChange = (newPage) => {
     setPage(newPage);
   };
 
   const handleRefresh = () => fetchData({ silent: true });
-
-  const hasData = Boolean(chape?.data?.length);
 
   return (
     <>
@@ -63,34 +77,18 @@ const Page = () => {
       <Box component="main" sx={pageMainSx}>
         <Container maxWidth="xl" sx={pageContainerSx}>
           <Stack spacing={3} sx={{ flex: 1 }}>
-            {isLoading && !hasData ? (
-              <Loader page />
-            ) : (
-              <Box sx={{ position: "relative" }}>
-                {isLoading && (
-                  <Box
-                    sx={{
-                      alignItems: "center",
-                      bgcolor: "rgba(255, 255, 255, 0.72)",
-                      display: "flex",
-                      inset: 0,
-                      justifyContent: "center",
-                      position: "absolute",
-                      zIndex: 2,
-                    }}
-                  >
-                    <Loader size="md" />
-                  </Box>
-                )}
-                <ChapTable
-                  items={chape}
-                  onPageChange={handlePageChange}
-                  onRefresh={handleRefresh}
-                  page={page}
-                  title="Drivers"
-                />
-              </Box>
-            )}
+            <Typography sx={pageTitleSx} variant="h4">
+              Drivers
+            </Typography>
+
+            <DataTableLoadingShell loading={isLoading}>
+              <ChapTable
+                items={chape}
+                onPageChange={handlePageChange}
+                onRefresh={handleRefresh}
+                page={page}
+              />
+            </DataTableLoadingShell>
           </Stack>
         </Container>
       </Box>

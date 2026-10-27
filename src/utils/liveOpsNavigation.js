@@ -10,6 +10,7 @@ const ID_PREFIXES = [
   "online_driver-",
   "emergency-",
   "dispute-",
+  "urgent-",
   "customer-",
   "driver-",
   "ride-",
@@ -19,8 +20,12 @@ const ID_PREFIXES = [
   "signup-",
 ];
 
-function resolveRideDetailPath(rideId) {
-  return rideId ? `/orders/detail?id=${encodeURIComponent(rideId)}` : "/ride-history";
+function resolveFoodOrderDetailPath(orderId) {
+  return orderId ? `/orders/detail?id=${encodeURIComponent(orderId)}` : "/ride-history";
+}
+
+function resolveTransportRideDetailPath(rideId) {
+  return rideId ? `/ride-history/detail?id=${encodeURIComponent(rideId)}` : "/ride-history";
 }
 
 function resolveDisputeDetailPath(item) {
@@ -64,13 +69,33 @@ function firstNonEmpty(...values) {
 
 function stripKnownPrefix(id) {
   if (!id) return null;
-  const value = String(id);
-  for (const prefix of ID_PREFIXES) {
-    if (value.startsWith(prefix) && value.length > prefix.length) {
-      return value.slice(prefix.length);
+  let value = String(id).trim();
+  if (!value || value === "undefined" || value === "null") return null;
+
+  // Keep stripping known live-ops prefixes (e.g. urgent-<mongoId>).
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const prefix of ID_PREFIXES) {
+      if (value.toLowerCase().startsWith(prefix) && value.length > prefix.length) {
+        value = value.slice(prefix.length);
+        changed = true;
+        break;
+      }
     }
   }
-  return value;
+
+  return value || null;
+}
+
+function cleanEntityId(...values) {
+  for (const value of values) {
+    const raw = firstNonEmpty(value);
+    if (!raw) continue;
+    const cleaned = stripKnownPrefix(raw);
+    if (cleaned) return cleaned;
+  }
+  return null;
 }
 
 function resolveExplicitPath(item) {
@@ -86,6 +111,10 @@ function isDisputeLike(item) {
   const status = String(item.status || item.disputeStatus || "").toLowerCase();
   if (status === "disputed" || status === "emergency" || status === "urgent") return true;
   if (item.disputeId || item.emergencyId) return true;
+  const id = String(item.id || "").toLowerCase();
+  if (id.startsWith("urgent-") || id.startsWith("emergency-") || id.startsWith("dispute-")) {
+    return true;
+  }
   return false;
 }
 
@@ -140,7 +169,7 @@ export function resolveLiveOpsEntityId(item) {
   }
 
   if (isDisputeLike(item)) {
-    return firstNonEmpty(
+    return cleanEntityId(
       item.disputeId,
       item.emergencyId,
       item.rideId,
@@ -150,12 +179,12 @@ export function resolveLiveOpsEntityId(item) {
       item.entityId,
       item.refId,
       item._id,
-      strippedId
+      item.id
     );
   }
 
   if (isOrderLike(item) || type === "ride_request" || type === "food_order" || type === "chaperoneride") {
-    return firstNonEmpty(
+    return cleanEntityId(
       item.rideId,
       item.bookingId,
       item.orderId,
@@ -165,11 +194,11 @@ export function resolveLiveOpsEntityId(item) {
       item.entityId,
       item.refId,
       item._id,
-      strippedId
+      item.id
     );
   }
 
-  return firstNonEmpty(
+  return cleanEntityId(
     item.entityId,
     item.refId,
     item._id,
@@ -181,40 +210,87 @@ export function resolveLiveOpsEntityId(item) {
     item.userId,
     item.driverId,
     item.customerId,
-    strippedId
+    item.id
+  );
+}
+
+/** Detail routes that exist in this admin app. Missing screens resolve to "#". */
+const DETAIL_ROUTES = {
+  customer: "/users/detail",
+  driver: "/chaperone/detail",
+  dispute: "/disputes/detail",
+  ride: "/ride-history/detail",
+};
+
+function buildDetailPath(basePath, id) {
+  if (!basePath || !id) return "#";
+  return `${basePath}?id=${encodeURIComponent(id)}`;
+}
+
+function resolveDisputeDetailId(item) {
+  return cleanEntityId(
+    item?.disputeId,
+    item?.emergencyId,
+    item?.dispute?._id,
+    item?.dispute?.id,
+    item?.dispute?.disputeId,
+    item?.rideId,
+    item?.bookingId,
+    item?.entityId,
+    item?.refId,
+    item?._id,
+    item?.id
+  );
+}
+
+function resolveRideDetailId(item) {
+  return cleanEntityId(
+    item?.rideId,
+    item?.bookingId,
+    item?.orderId,
+    item?.ride?._id,
+    item?.ride?.rideId,
+    item?.ride?.id,
+    item?.booking?._id,
+    item?.order?._id,
+    item?.entityId,
+    item?.refId,
+    item?._id,
+    item?.id
   );
 }
 
 export function resolveLiveOpsDetailPath(item) {
-  if (!item) return null;
+  if (!item) return "#";
 
   const explicit = resolveExplicitPath(item);
   if (explicit) return explicit;
 
   const type = String(item.type || "").toLowerCase();
-  const id = resolveLiveOpsEntityId(item);
 
   if (type === "customer_signup" || type === "customer") {
-    return id ? `/users/detail?id=${encodeURIComponent(id)}` : "/users";
+    return buildDetailPath(DETAIL_ROUTES.customer, resolveLiveOpsEntityId(item));
   }
 
+  const id = resolveLiveOpsEntityId(item);
+
   if (type === "food_order") {
+    const markerId = String(item.id || "");
     const orderId = firstNonEmpty(
       item.orderId,
-      String(item.id || "").startsWith("food-urgent-") ||
-        String(item.id || "").startsWith("food-")
-        ? stripKnownPrefix(item.id)
+      markerId.startsWith("food-urgent-") || markerId.startsWith("food-")
+        ? stripKnownPrefix(markerId)
         : null,
-      item.category === "food" ? id : null
+      id
     );
-    return orderId ? resolveRideDetailPath(orderId) : "/ride-history";
+    return orderId ? resolveFoodOrderDetailPath(orderId) : "/ride-history";
   }
 
   if (type === "driver_signup" || type === "online_driver" || type === "driver") {
-    return id ? `/chaperone/detail?id=${encodeURIComponent(id)}` : "/chaperone";
+    return buildDetailPath(DETAIL_ROUTES.driver, id);
   }
 
-  if (isDisputeLike(item)) {
+  if (type === "emergency" || type === "dispute" || isDisputeLike(item)) {
     const disputePath = resolveDisputeDetailPath(item);
     if (disputePath) return disputePath;
 
@@ -236,31 +312,50 @@ export function resolveLiveOpsDetailPath(item) {
     );
 
     if (orderId) {
-      return resolveRideDetailPath(orderId);
+      return resolveFoodOrderDetailPath(orderId);
     }
 
     if (status === "cancelled" || status === "rejected") {
-      return resolveRideDetailPath(rideId || id);
+      if (orderId) {
+        return resolveFoodOrderDetailPath(orderId);
+      }
+      return resolveTransportRideDetailPath(rideId || id);
     }
 
     if (status === "disputed") {
-      return rideId
-        ? `/disputes/detail?id=${encodeURIComponent(rideId)}`
-        : "/disputes";
+      const disputeId = resolveDisputeDetailId(item);
+      if (disputeId) {
+        return buildDetailPath(DETAIL_ROUTES.dispute, disputeId);
+      }
+      return "/disputes";
     }
 
-    return resolveRideDetailPath(rideId || id);
+    return resolveTransportRideDetailPath(rideId || id);
   }
 
-  if (isOrderLike(item) || type === "ride_request" || type === "food_order" || type === "chaperoneride") {
-    return id ? resolveRideDetailPath(id) : "/ride-history";
+  if (
+    isOrderLike(item) ||
+    type === "ride_request" ||
+    type === "chaperoneride" ||
+    type === "ride" ||
+    type === "booking" ||
+    type === "order"
+  ) {
+    const rideId = resolveRideDetailId(item) || id;
+    if (type === "food_order") {
+      return rideId ? resolveFoodOrderDetailPath(rideId) : "/ride-history";
+    }
+    return rideId ? resolveTransportRideDetailPath(rideId) : "/ride-history";
   }
 
   if (id) {
-    return resolveRideDetailPath(id);
+    if (type === "food_order" || item.category === "food") {
+      return resolveFoodOrderDetailPath(id);
+    }
+    return resolveTransportRideDetailPath(id);
   }
 
-  return null;
+  return "#";
 }
 
 export function collectLiveOpsIdCandidates(item) {

@@ -2,15 +2,17 @@ import ChartBarIcon from "@heroicons/react/24/solid/ChartBarIcon";
 import MapIcon from "@heroicons/react/24/solid/MapIcon";
 
 import UsersIcon from "@heroicons/react/24/solid/UsersIcon";
-import ShieldCheckIcon from "@heroicons/react/24/solid/ShieldCheckIcon";
 import NewspaperIcon from "@heroicons/react/24/solid/NewspaperIcon";
 import InformationCircleIcon from "@heroicons/react/24/solid/InformationCircleIcon";
 import Cog6ToothIcon from "@heroicons/react/24/solid/Cog6ToothIcon";
 
 import QuestionMarkCircleIcon from "@heroicons/react/24/solid/QuestionMarkCircleIcon";
 import CurrencyDollarIcon from "@heroicons/react/24/solid/CurrencyDollarIcon";
+import ReceiptPercentIcon from "@heroicons/react/24/solid/ReceiptPercentIcon";
 import ClockIcon from "@heroicons/react/24/solid/ClockIcon";
 import ExclamationTriangleIcon from "@heroicons/react/24/solid/ExclamationTriangleIcon";
+import ChatBubbleLeftRightIcon from "@heroicons/react/24/solid/ChatBubbleLeftRightIcon";
+import BuildingStorefrontIcon from "@heroicons/react/24/solid/BuildingStorefrontIcon";
 import { SvgIcon } from "@mui/material";
 export const items = [
   {
@@ -50,6 +52,15 @@ export const items = [
       </SvgIcon>
     ),
   },
+  // {
+  //   title: "Restaurant Management",
+  //   path: "/restaurants",
+  //   icon: (
+  //     <SvgIcon fontSize="small">
+  //       <BuildingStorefrontIcon />
+  //     </SvgIcon>
+  //   ),
+  // },
   {
     title: "Driver Earnings",
     path: "/driver-earnings",
@@ -60,6 +71,25 @@ export const items = [
     ),
   },
   {
+    title: "Commission & Fare",
+    path: "/commission",
+    icon: (
+      <SvgIcon fontSize="small">
+        <ReceiptPercentIcon />
+      </SvgIcon>
+    ),
+    children: [
+      {
+        title: "Transportation",
+        path: "/commission?category=transportation",
+      },
+      {
+        title: "Food & Beverage",
+        path: "/commission?category=food_beverage&tab=commission",
+      },
+    ],
+  },
+  {
     title: "Ride History",
     path: "/ride-history",
     icon: (
@@ -68,6 +98,15 @@ export const items = [
       </SvgIcon>
     ),
   },
+  // {
+  //   title: "Waiting Adjustments",
+  //   path: "/ride-adjustments",
+  //   icon: (
+  //     <SvgIcon fontSize="small">
+  //       <ClockIcon />
+  //     </SvgIcon>
+  //   ),
+  // },
   {
     title: "Disputes",
     path: "/disputes",
@@ -77,31 +116,49 @@ export const items = [
       </SvgIcon>
     ),
   },
-
   {
-    title: "About",
-    path: "/about",
+    title: "Help & Feedback",
+    path: "/help-feedback",
     icon: (
       <SvgIcon fontSize="small">
-        <InformationCircleIcon />
+        <ChatBubbleLeftRightIcon />
       </SvgIcon>
     ),
   },
+
   {
-    title: "Terms & Condition",
+    title: "Legal Information",
     path: "/terms",
     icon: (
       <SvgIcon fontSize="small">
         <NewspaperIcon />
       </SvgIcon>
     ),
+    children: [
+      {
+        title: "Terms & Conditions",
+        path: "/terms",
+      },
+      {
+        title: "Privacy Policy",
+        path: "/policy",
+      },
+      {
+        title: "Intoxicating Substance Policy",
+        path: "/intoxicating-substance",
+      },
+      {
+        title: "Driver Nondiscrimination Policy",
+        path: "/driver-nondiscrimination",
+      },
+    ],
   },
   {
-    title: "Privacy Policy",
-    path: "/policy",
+    title: "About",
+    path: "/about",
     icon: (
       <SvgIcon fontSize="small">
-        <ShieldCheckIcon />
+        <InformationCircleIcon />
       </SvgIcon>
     ),
   },

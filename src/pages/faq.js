@@ -215,7 +215,7 @@ const Page = () => {
         <Container maxWidth="xl" sx={pageContainerSx}>
           <Stack spacing={3} sx={{ flex: 1 }}>
             {isLoading ? (
-              <Loader page />
+              <Loader minHeight={220} size="md" />
             ) : (
               <FAQTable
                 actions={

@@ -13,10 +13,12 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  MenuItem,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
+  TextField,
   Typography,
 } from "@mui/material";
 import {
@@ -52,7 +54,24 @@ import {
   storeUserDetail,
   updateUserBlockInList,
 } from "../../utils/userUtils";
+import {
+  LIST_FILTER_KEYS,
+  consumeListFilterState,
+  markListFilterRestore,
+  storeListFilterState,
+} from "../../utils/listFilterState";
 import Loader from "../../components/Loader";
+
+const ACCOUNT_STATUS_FILTER_OPTIONS = [
+  { label: "All", value: "all" },
+  { label: "Active", value: "active" },
+  { label: "Blocked", value: "blocked" },
+];
+
+const filterFieldSx = {
+  minWidth: { xs: "100%", sm: 160 },
+  "& .MuiInputBase-root": { bgcolor: "background.paper" },
+};
 
 export const UsersTable = (props) => {
   const {
@@ -60,14 +79,28 @@ export const UsersTable = (props) => {
     onPageChange = () => {},
     onRefresh,
     page = 1,
-    title = "Users",
   } = props;
   const router = useRouter();
   const [search, setSearch] = useState("");
+  const [accountStatus, setAccountStatus] = useState("all");
   const [submittingId, setSubmittingId] = useState(null);
   const [items, setItems] = useState(initialItems);
   const [userToDelete, setUserToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    const stored = consumeListFilterState(LIST_FILTER_KEYS.users);
+    if (!stored) {
+      return;
+    }
+
+    setSearch(stored.filters?.search ?? "");
+    setAccountStatus(stored.filters?.accountStatus ?? "all");
+    if (stored.page) {
+      onPageChange(stored.page);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- restore once on mount
+  }, []);
 
   useEffect(() => {
     setItems(excludeAdminUsersFromResponse(initialItems));
@@ -86,6 +119,11 @@ export const UsersTable = (props) => {
   const isEmpty = !pageUsers.length && !(items?.total_records ?? items?.totalRecords);
 
   const handleOpenViewDetail = (user) => {
+    storeListFilterState(LIST_FILTER_KEYS.users, {
+      page,
+      filters: { search, accountStatus },
+    });
+    markListFilterRestore(LIST_FILTER_KEYS.users);
     storeUserDetail(user);
     const detailId = user._id || getCustomerAuthId(user);
     router.push(`/users/detail?id=${detailId}`);
@@ -173,7 +211,15 @@ export const UsersTable = (props) => {
       return [];
     }
 
-    const filtered = filterBySearch(pageUsers, search, (user) => {
+    const byStatus =
+      accountStatus === "all"
+        ? pageUsers
+        : pageUsers.filter((user) => {
+            const label = getUserAccountStatusMeta(user).label.toLowerCase();
+            return label === accountStatus;
+          });
+
+    const filtered = filterBySearch(byStatus, search, (user) => {
       const accountMeta = getUserAccountStatusMeta(user);
 
       return [
@@ -195,7 +241,7 @@ export const UsersTable = (props) => {
       nameA: a?.user?.fullName || "",
       nameB: b?.user?.fullName || "",
     }));
-  }, [pageUsers, search]);
+  }, [accountStatus, pageUsers, search]);
 
   const paginationMeta = useMemo(
     () => getServerPaginationMeta(items, page, pageUsers.length),
@@ -206,6 +252,29 @@ export const UsersTable = (props) => {
     setSearch(value);
     onPageChange(1);
   };
+
+  const handleAccountStatusChange = (value) => {
+    setAccountStatus(value);
+    onPageChange(1);
+  };
+
+  const filterActions = (
+    <TextField
+      InputLabelProps={{ shrink: true }}
+      label="Account"
+      onChange={(event) => handleAccountStatusChange(event.target.value)}
+      select
+      size="small"
+      sx={filterFieldSx}
+      value={accountStatus}
+    >
+      {ACCOUNT_STATUS_FILTER_OPTIONS.map((option) => (
+        <MenuItem key={option.value} value={option.value}>
+          {option.label}
+        </MenuItem>
+      ))}
+    </TextField>
+  );
 
   return (
     <>
@@ -219,9 +288,10 @@ export const UsersTable = (props) => {
         })}
         toolbar={
           <DataTableToolbar
+            actions={filterActions}
             onSearchChange={handleSearchChange}
+            searchPlaceholder="Search name, email, or phone"
             searchValue={search}
-            title={title}
           />
         }
       >
@@ -347,5 +417,4 @@ UsersTable.propTypes = {
   onPageChange: PropTypes.func,
   onRefresh: PropTypes.func,
   page: PropTypes.number,
-  title: PropTypes.string,
 };

@@ -1,24 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import Head from "next/head";
-import NextLink from "next/link";
 import { useRouter } from "next/router";
-import ArrowLeftIcon from "@heroicons/react/24/outline/ArrowLeftIcon";
 import CheckCircleIcon from "@heroicons/react/24/outline/CheckCircleIcon";
-import ClockIcon from "@heroicons/react/24/outline/ClockIcon";
-import CreditCardIcon from "@heroicons/react/24/outline/CreditCardIcon";
 import DocumentTextIcon from "@heroicons/react/24/outline/DocumentTextIcon";
-import MapPinIcon from "@heroicons/react/24/outline/MapPinIcon";
-import UserIcon from "@heroicons/react/24/outline/UserIcon";
 import XCircleIcon from "@heroicons/react/24/outline/XCircleIcon";
 import { toast } from "react-toastify";
 import {
   Box,
   Button,
-  Card,
-  CardContent,
   Container,
-  Divider,
-  Grid,
+  MenuItem,
   Stack,
   SvgIcon,
   TextField,
@@ -28,18 +19,28 @@ import { alpha } from "@mui/material/styles";
 import { Layout as DashboardLayout } from "../../layouts/dashboard/layout";
 import Loader from "../../components/Loader";
 import { StatusBadge } from "../../components/table-cells";
+import {
+  DetailHero,
+  DetailPageFrame,
+  DetailPageState,
+  DetailPanel,
+  DetailRowList,
+  DetailSection,
+} from "../../components/detail-page/detail-page-ui";
 import { getRideById } from "../../Services/Auth.service";
 import {
-  approveDispute,
   getDisputeById,
+  messageDisputeParties,
   rejectDispute,
+  resolveDispute,
   reviewDispute,
 } from "../../Services/Dispute.service";
 import { formatDateTime, formatRelativeDate } from "../../utils/dateUtils";
-import { pageContainerSx, pageMainSx, pageTitleSx } from "../../utils/pageLayout";
+import { pageContainerSx, pageMainSx } from "../../utils/pageLayout";
 import {
   applyDisputeActionLocally,
   canReviewDispute,
+  clampDisputeAmount,
   formatRideCurrency,
   formatRidePaymentStatus,
   formatRideReason,
@@ -47,6 +48,7 @@ import {
   getDisputeActionId,
   getDisputeAdminNotes,
   getDisputeFromResponse,
+  getDisputeSettlementCaps,
   getDisputeStatusMeta,
   getRideCustomerName,
   getRideDestinationAddress,
@@ -55,15 +57,22 @@ import {
   getStoredDisputeDetail,
   storeDisputeDetail,
 } from "../../utils/disputeUtils";
-import {
-  formatRideCommissionRate,
-  formatRideCoordinates,
-  formatRideField,
-  getRideAdminEarning,
-  getRideDriverEarning,
-  getRideFromResponse,
-} from "../../utils/rideUtils";
+import { formatRideField, getRideFromResponse } from "../../utils/rideUtils";
 import { brand } from "../../theme/colors";
+import {
+  LIST_FILTER_KEYS,
+  createDetailFilterRouteGuard,
+} from "../../utils/listFilterState";
+
+const SOW_OPTIONS = [
+  { value: "pay_driver", label: "Pay provider" },
+  { value: "refund_customer", label: "Refund user" },
+];
+
+const selectLabelSx = {
+  bgcolor: "background.paper",
+  px: 0.5,
+};
 
 const hasDetailValue = (value) => {
   if (value == null) {
@@ -91,133 +100,8 @@ const formatTimestamp = (value) => {
   return formatDateTime(value);
 };
 
-const hasUsableTimestamp = (value) => Boolean(formatTimestamp(value));
-
-const MetaChip = ({ label, value }) => {
-  if (!hasDetailValue(value)) {
-    return null;
-  }
-
-  return (
-    <Box
-      sx={{
-        bgcolor: "background.paper",
-        border: "1px solid",
-        borderColor: "neutral.200",
-        borderRadius: 2,
-        minWidth: 120,
-        px: 1.75,
-        py: 1.25,
-      }}
-    >
-      <Typography color="text.secondary" sx={{ display: "block", mb: 0.25 }} variant="caption">
-        {label}
-      </Typography>
-      <Typography fontWeight={700} sx={{ wordBreak: "break-word" }} variant="body2">
-        {value}
-      </Typography>
-    </Box>
-  );
-};
-
-const DetailRow = ({ label, value }) => {
-  const isEmail = label === "Email" || (typeof value === "string" && value.includes("@"));
-  if (!hasDetailValue(value)) {
-    return null;
-  }
-
-  return (
-    <Stack
-      direction="row"
-      justifyContent="space-between"
-      spacing={2}
-      sx={{
-        borderBottom: "1px solid",
-        borderColor: "neutral.100",
-        py: 1.25,
-        "&:last-child": { borderBottom: "none", pb: 0 },
-        "&:first-of-type": { pt: 0 },
-      }}
-    >
-      <Typography color="text.secondary" sx={{ flexShrink: 0 }} variant="body2">
-        {label}
-      </Typography>
-      <Typography
-        data-email={isEmail ? "true" : undefined}
-        fontWeight={600}
-        sx={{
-          textAlign: "right",
-          wordBreak: "break-word",
-          ...(isEmail ? { textTransform: "lowercase" } : {}),
-        }}
-        variant="body2"
-      >
-        {isEmail ? String(value).toLowerCase() : value}
-      </Typography>
-    </Stack>
-  );
-};
-
-const SectionCard = ({ children, icon: Icon, title }) => (
-  <Card sx={{ border: "1px solid", borderColor: "neutral.200", boxShadow: "none", height: "100%" }}>
-    <CardContent sx={{ p: 2.5, "&:last-child": { pb: 2.5 } }}>
-      <Stack alignItems="center" direction="row" spacing={1} sx={{ mb: 1.5 }}>
-        {Icon ? (
-          <Box
-            sx={{
-              alignItems: "center",
-              bgcolor: alpha(brand.primary, 0.08),
-              borderRadius: 1.5,
-              color: "primary.main",
-              display: "flex",
-              height: 32,
-              justifyContent: "center",
-              width: 32,
-            }}
-          >
-            <SvgIcon fontSize="small">
-              <Icon />
-            </SvgIcon>
-          </Box>
-        ) : null}
-        <Typography fontWeight={700} variant="subtitle1">
-          {title}
-        </Typography>
-      </Stack>
-      {children}
-    </CardContent>
-  </Card>
-);
-
-const getTimingItems = (row) =>
-  [
-    { label: "Ride Start", value: formatTimestamp(row?.rideStartTime) },
-    { label: "Ride End", value: formatTimestamp(row?.rideEndTime) },
-  ].filter((item) => hasDetailValue(item.value));
-
-const getPaymentItems = (row) =>
-  [
-    {
-      label: "Total Amount",
-      value: formatRideCurrency(row?.payment?.totalAmount ?? row?.estFare),
-    },
-    {
-      label: "Driver Amount",
-      value: formatRideCurrency(getRideDriverEarning(row)),
-    },
-    {
-      label: "Admin Commission",
-      value: formatRideCurrency(getRideAdminEarning(row)),
-    },
-    {
-      label: "Commission Rate",
-      value: formatRideCommissionRate(row?.payment?.commissionRate),
-    },
-    {
-      label: "Payment Source",
-      value: formatRideField(row?.payment?.source),
-    },
-  ].filter((item) => hasDetailValue(item.value));
+const normalizeSowResolution = (value) =>
+  value === "refund_customer" ? "refund_customer" : "pay_driver";
 
 const getPersonItems = (person) =>
   [
@@ -226,20 +110,51 @@ const getPersonItems = (person) =>
     { label: "Phone", value: person?.phone },
   ].filter((item) => hasDetailValue(item.value));
 
-const getLocationItems = (address, coordinates) =>
-  [
-    { label: "Address", value: address },
-    { label: "Coordinates", value: coordinates },
-  ].filter((item) => hasDetailValue(item.value));
+const getLocationItems = (address) =>
+  [{ label: "Address", value: address }].filter((item) => hasDetailValue(item.value));
 
 const Page = () => {
   const router = useRouter();
   const { id } = router.query;
   const [row, setRow] = useState(null);
   const [adminNotes, setAdminNotes] = useState("");
+  const [resolution, setResolution] = useState("pay_driver");
+  const [refundToCustomer, setRefundToCustomer] = useState("");
+  const [payToProvider, setPayToProvider] = useState("");
+  const [partyMessage, setPartyMessage] = useState("");
+  const [messageTo, setMessageTo] = useState("both");
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittingAction, setSubmittingAction] = useState(null);
+
+  useEffect(() => {
+    const handleRouteChangeStart = createDetailFilterRouteGuard(LIST_FILTER_KEYS.disputes, {
+      listPath: "/disputes",
+    });
+
+    router.events.on("routeChangeStart", handleRouteChangeStart);
+    return () => {
+      router.events.off("routeChangeStart", handleRouteChangeStart);
+    };
+  }, [router.events]);
+
+  const sowResolution = normalizeSowResolution(resolution);
+
+  const applySettlementDefaults = (disputeRow, nextResolution = "pay_driver") => {
+    const caps = getDisputeSettlementCaps(disputeRow);
+    const next = normalizeSowResolution(nextResolution);
+
+    setResolution(next);
+
+    if (next === "pay_driver") {
+      setPayToProvider(caps.maxPayToProvider ? String(caps.maxPayToProvider) : "");
+      setRefundToCustomer("");
+      return;
+    }
+
+    setRefundToCustomer(caps.maxRefundToCustomer ? String(caps.maxRefundToCustomer) : "");
+    setPayToProvider("");
+  };
 
   useEffect(() => {
     if (!id) {
@@ -255,6 +170,7 @@ const Page = () => {
       if (cached && active) {
         setRow(cached);
         setAdminNotes(getDisputeAdminNotes(cached));
+        applySettlementDefaults(cached, cached.resolution);
         setIsLoading(false);
       }
 
@@ -262,41 +178,58 @@ const Page = () => {
         let nextRow = cached;
         let disputeLoaded = false;
 
-        if (cached?.disputeId || id) {
-          try {
-            const disputeResponse = await getDisputeById(cached?.disputeId || id);
-            const disputeRow = getDisputeFromResponse(disputeResponse);
-            if (disputeRow) {
-              disputeLoaded = true;
-              nextRow = {
-                ...(cached || {}),
-                ...disputeRow,
-                disputeId: disputeRow.disputeId || cached?.disputeId || id,
-                customer: disputeRow.customer || cached?.customer,
-                driver: disputeRow.driver || cached?.driver,
-                from: disputeRow.from || cached?.from,
-                destination: disputeRow.destination || cached?.destination,
-                payment: disputeRow.payment || cached?.payment,
-                adminNotes:
-                  getDisputeAdminNotes(disputeRow) || getDisputeAdminNotes(cached) || "",
-              };
-            }
-          } catch (error) {
-            // Fall through to ride lookup
+        try {
+          const disputeResponse = await getDisputeById(cached?.disputeId || id);
+          const disputeRow = getDisputeFromResponse(disputeResponse);
+          if (disputeRow) {
+            disputeLoaded = true;
+            nextRow = {
+              ...(cached || {}),
+              ...disputeRow,
+              disputeId: disputeRow.disputeId || cached?.disputeId || id,
+              customer: disputeRow.customer || cached?.customer,
+              driver: disputeRow.driver || cached?.driver,
+              from: disputeRow.from || cached?.from,
+              destination: disputeRow.destination || cached?.destination,
+              payment: disputeRow.payment || cached?.payment,
+              paymentBreakdown:
+                disputeRow.paymentBreakdown ||
+                disputeResponse?.data?.paymentBreakdown ||
+                cached?.paymentBreakdown,
+              amount:
+                disputeRow.amount ?? disputeResponse?.data?.amount ?? cached?.amount,
+              settlement: disputeRow.settlement || disputeResponse?.data?.settlement || cached?.settlement,
+              adminMessages:
+                disputeRow.adminMessages ||
+                disputeResponse?.data?.adminMessages ||
+                cached?.adminMessages ||
+                [],
+              adminNotes:
+                getDisputeAdminNotes(disputeRow) || getDisputeAdminNotes(cached) || "",
+            };
           }
+        } catch (error) {
+          // Fall through to optional ride enrichment
         }
 
         const rideId = nextRow?.rideId || cached?.rideId || (!disputeLoaded ? id : null);
-        if (rideId) {
+        if (rideId && (!nextRow?.customer || !nextRow?.driver || !nextRow?.from)) {
           try {
             const rideResponse = await getRideById(rideId);
             const rideData = getRideFromResponse(rideResponse);
             if (rideData) {
               nextRow = {
                 ...(nextRow || {}),
-                ...rideData,
                 rideId: rideData.rideId || rideId,
                 disputeId: nextRow?.disputeId || cached?.disputeId || null,
+                customer: nextRow?.customer || rideData.customer,
+                driver: nextRow?.driver || rideData.driver,
+                from: nextRow?.from || rideData.from,
+                destination: nextRow?.destination || rideData.destination,
+                payment: nextRow?.payment || rideData.payment,
+                estFare: nextRow?.estFare ?? rideData.estFare,
+                distance: nextRow?.distance || rideData.distance,
+                havePaid: nextRow?.havePaid ?? rideData.havePaid,
                 reasonOfDispute: nextRow?.reasonOfDispute || rideData.reasonOfDispute || "",
                 adminNotes:
                   getDisputeAdminNotes(nextRow) ||
@@ -308,7 +241,7 @@ const Page = () => {
               };
             }
           } catch (error) {
-            // Keep whatever we already have
+            // Keep dispute payload as-is
           }
         }
 
@@ -317,6 +250,7 @@ const Page = () => {
             storeDisputeDetail(nextRow);
             setRow(nextRow);
             setAdminNotes(getDisputeAdminNotes(nextRow));
+            applySettlementDefaults(nextRow, nextRow.resolution);
           } else if (!cached) {
             setRow(null);
           }
@@ -361,36 +295,95 @@ const Page = () => {
 
       if (action === "review") {
         response = await reviewDispute(actionId, adminNotes.trim());
-      } else if (action === "approve") {
-        response = await approveDispute(actionId, {
+      } else if (action === "resolve") {
+        const caps = getDisputeSettlementCaps(row);
+        const refund =
+          sowResolution === "refund_customer"
+            ? Math.min(Number(refundToCustomer) || 0, caps.maxRefundToCustomer)
+            : 0;
+        const pay =
+          sowResolution === "pay_driver"
+            ? Math.min(Number(payToProvider) || 0, caps.maxPayToProvider)
+            : 0;
+
+        response = await resolveDispute(actionId, {
+          resolution: sowResolution,
           adminNotes: adminNotes.trim() || undefined,
+          refundToCustomer: refund,
+          payToProvider: pay,
         });
-      } else {
+      } else if (action === "reject") {
         response = await rejectDispute(actionId, {
           adminNotes: adminNotes.trim() || undefined,
         });
+      } else {
+        throw new Error("Unsupported dispute action.");
       }
 
       const updated = getDisputeFromResponse(response);
       const nextRow = {
-        ...applyDisputeActionLocally(row, action, adminNotes),
+        ...applyDisputeActionLocally(
+          row,
+          action === "resolve" ? "approve" : action,
+          adminNotes
+        ),
         ...(updated || {}),
         adminNotes:
           getDisputeAdminNotes(updated) || adminNotes.trim() || getDisputeAdminNotes(row),
         disputeId: row.disputeId || actionId,
         rideId: row.rideId,
+        status:
+          updated?.status ||
+          (action === "reject" ? "rejected" : action === "review" ? "under-review" : "resolved"),
+        resolution: updated?.resolution || (action === "resolve" ? sowResolution : row.resolution),
+        settlement: updated?.settlement || row.settlement,
       };
 
       storeDisputeDetail(nextRow);
       setRow(nextRow);
-      setAdminNotes(getDisputeAdminNotes(nextRow));
       toast.success(
         action === "review"
-          ? "Dispute marked under review"
-          : action === "approve"
-            ? "Dispute approved"
-            : "Dispute rejected"
+          ? "Marked under review"
+          : action === "reject"
+            ? "Dispute rejected"
+            : "Dispute resolved"
       );
+    } catch (error) {
+      toast.error(getDisputeActionErrorMessage(error));
+    } finally {
+      setIsSubmitting(false);
+      setSubmittingAction(null);
+    }
+  };
+
+  const handleSendMessage = async () => {
+    const actionId = getDisputeActionId(row);
+    if (!actionId || !partyMessage.trim()) {
+      toast.error("Enter a message to send.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmittingAction("message");
+
+    try {
+      const response = await messageDisputeParties(actionId, {
+        to: messageTo,
+        message: partyMessage.trim(),
+      });
+      const updated = getDisputeFromResponse(response);
+      if (updated) {
+        const nextRow = {
+          ...row,
+          ...updated,
+          disputeId: row.disputeId || actionId,
+          adminMessages: updated.adminMessages || row.adminMessages || [],
+        };
+        storeDisputeDetail(nextRow);
+        setRow(nextRow);
+      }
+      setPartyMessage("");
+      toast.success("Message sent");
     } catch (error) {
       toast.error(getDisputeActionErrorMessage(error));
     } finally {
@@ -402,54 +395,135 @@ const Page = () => {
   const statusMeta = row ? getDisputeStatusMeta(row.status) : null;
   const showActions = canReviewDispute(row);
   const savedNotes = row ? getDisputeAdminNotes(row) : "";
+  const settlementCaps = useMemo(
+    () => (row ? getDisputeSettlementCaps(row) : null),
+    [row]
+  );
+  const reasonValue = row ? formatRideReason(row.reasonOfDispute) : null;
+  const adminMessages = Array.isArray(row?.adminMessages) ? row.adminMessages : [];
 
-  const sections = useMemo(() => {
+  const heroStats = useMemo(() => {
     if (!row) {
       return [];
     }
 
     return [
-      { key: "timing", title: "Timing", icon: ClockIcon, items: getTimingItems(row) },
-      { key: "payment", title: "Payment", icon: CreditCardIcon, items: getPaymentItems(row) },
       {
-        key: "customer",
-        title: "Customer",
-        icon: UserIcon,
-        items: getPersonItems(row.customer),
+        label: "Amount",
+        value: formatRideCurrency(row.amount ?? row.payment?.totalAmount ?? row.estFare),
       },
       {
-        key: "driver",
-        title: "Driver",
-        icon: UserIcon,
-        items: getPersonItems(row.driver),
+        label: "Payment",
+        value: row.havePaid != null ? formatRidePaymentStatus(row.havePaid) : null,
       },
+      { label: "Distance", value: formatRideField(row.distance) },
+    ].filter((stat) => hasDetailValue(stat.value));
+  }, [row]);
+
+  const detailSections = useMemo(() => {
+    if (!row) {
+      return [];
+    }
+
+    const sections = [
+      {
+        key: "case",
+        title: "Dispute case",
+        items: [
+          {
+            label: "Type",
+            value: row.disputeType ? String(row.disputeType).replace(/_/g, " ") : null,
+          },
+          {
+            label: "Opened by",
+            value:
+              row.openedByRole === "customer"
+                ? "Customer"
+                : row.openedByRole === "chaperone"
+                  ? "Driver"
+                  : null,
+          },
+          { label: "Priority", value: row.priority || null },
+          {
+            label: "Evidence files",
+            value: Array.isArray(row.evidence) && row.evidence.length ? String(row.evidence.length) : null,
+          },
+          {
+            label: "Amount",
+            value: formatRideCurrency(row.amount ?? row.payment?.totalAmount ?? row.estFare),
+          },
+          {
+            label: "Resolution",
+            value: row.resolution
+              ? String(row.resolution).replace(/_/g, " ")
+              : null,
+          },
+        ].filter((item) => hasDetailValue(item.value)),
+      },
+      {
+        key: "timing",
+        title: "Timing",
+        items: [
+          { label: "Created", value: formatTimestamp(row.createdAt) },
+          { label: "Updated", value: formatRelativeDate(row.updatedAt) },
+        ].filter((item) => hasDetailValue(item.value)),
+      },
+      {
+        key: "settlement",
+        title: "Settlement",
+        items: [
+          {
+            label: "Refund to customer",
+            value: formatRideCurrency(row.settlement?.refundToCustomer),
+          },
+          {
+            label: "Pay to provider",
+            value: formatRideCurrency(row.settlement?.payToProvider),
+          },
+          {
+            label: "Platform commission",
+            value: formatRideCurrency(
+              row.settlement?.platformCommission ?? row.paymentBreakdown?.platformCommission
+            ),
+          },
+        ].filter((item) => hasDetailValue(item.value)),
+      },
+      { key: "customer", title: "Customer", items: getPersonItems(row.customer) },
+      { key: "driver", title: "Driver", items: getPersonItems(row.driver) },
       {
         key: "pickup",
         title: "Pickup",
-        icon: MapPinIcon,
-        items: getLocationItems(getRidePickupAddress(row), formatRideCoordinates(row.from)),
+        items: getLocationItems(getRidePickupAddress(row)),
       },
       {
         key: "destination",
         title: "Destination",
-        icon: MapPinIcon,
-        items: getLocationItems(
-          getRideDestinationAddress(row),
-          formatRideCoordinates(row.destination)
-        ),
+        items: getLocationItems(getRideDestinationAddress(row)),
       },
-    ].filter((section) => section.items.length > 0);
+    ];
+
+    return sections.filter((section) => section.items.length > 0);
   }, [row]);
 
-  const fareValue = row
-    ? formatRideCurrency(row.payment?.totalAmount ?? row.estFare)
-    : null;
-  const reasonValue = row ? formatRideReason(row.reasonOfDispute) : null;
-  const createdValue = row ? formatTimestamp(row.createdAt) : null;
-  const updatedValue = row ? formatRelativeDate(row.updatedAt) : null;
-  const distanceValue = row ? formatRideField(row.distance) : null;
-  const passengersValue = row ? formatRideField(row.numberOfPassenger) : null;
-  const paymentStatusValue = row ? formatRidePaymentStatus(row.havePaid) : null;
+  const reasonFooter = hasDetailValue(reasonValue) ? (
+    <Box
+      sx={{
+        bgcolor: "background.paper",
+        border: "1px solid",
+        borderColor: "neutral.200",
+        borderRadius: 2,
+        px: 2,
+        py: 1.5,
+      }}
+    >
+      <Typography color="text.secondary" variant="caption">
+        Dispute reason
+      </Typography>
+      <Typography fontWeight={600} sx={{ mt: 0.5 }} variant="body1">
+        {reasonValue}
+      </Typography>
+    </Box>
+  ) : null;
 
   return (
     <>
@@ -459,122 +533,36 @@ const Page = () => {
 
       <Box component="main" sx={pageMainSx}>
         <Container maxWidth="xl" sx={pageContainerSx}>
-          <Stack spacing={2.5}>
-            <Button
-              component={NextLink}
-              href="/disputes"
-              startIcon={
-                <SvgIcon fontSize="small">
-                  <ArrowLeftIcon />
-                </SvgIcon>
-              }
-              sx={{ alignSelf: "flex-start", textTransform: "capitalize" }}
+          <DetailPageFrame backHref="/disputes" backLabel="Back to Disputes">
+            <DetailPageState
+              loading={isLoading}
+              notFoundMessage="The selected dispute could not be loaded."
+              notFoundTitle={!isLoading && !row ? "Dispute not found" : undefined}
             >
-              Back to Disputes
-            </Button>
+              {row ? (
+                <Stack spacing={2.5}>
+                  <DetailPanel>
+                    <DetailHero
+                      badge={
+                        statusMeta ? (
+                          <StatusBadge color={statusMeta.color} label={statusMeta.label} />
+                        ) : null
+                      }
+                      footer={reasonFooter}
+                      stats={heroStats}
+                      subtitle={`${getRideDriverName(row)} → ${getRideCustomerName(row)}`}
+                      title="Dispute case"
+                    />
 
-            {isLoading ? (
-              <Loader page />
-            ) : !row ? (
-              <Card sx={{ border: "1px solid", borderColor: "neutral.200", boxShadow: "none" }}>
-                <CardContent sx={{ py: 8, textAlign: "center" }}>
-                  <Typography variant="h6">Dispute not found</Typography>
-                  <Typography color="text.secondary" sx={{ mt: 1 }} variant="body2">
-                    The selected dispute could not be loaded.
-                  </Typography>
-                </CardContent>
-              </Card>
-            ) : (
-              <>
-                <Card
-                  sx={{
-                    border: "1px solid",
-                    borderColor: "neutral.200",
-                    boxShadow: "none",
-                    overflow: "hidden",
-                  }}
-                >
-                  <Box
-                    sx={{
-                      background: `linear-gradient(135deg, ${alpha(brand.primary, 0.08)} 0%, ${alpha(
-                        brand.secondary,
-                        0.04
-                      )} 100%)`,
-                      borderBottom: "1px solid",
-                      borderColor: "neutral.200",
-                      px: { xs: 2.5, md: 3 },
-                      py: { xs: 2.5, md: 3 },
-                    }}
-                  >
-                    <Stack
-                      alignItems={{ xs: "flex-start", sm: "center" }}
-                      direction={{ xs: "column", sm: "row" }}
-                      justifyContent="space-between"
-                      spacing={2}
+                    <DetailSection
+                      description={
+                        showActions
+                          ? "Review notes, apply a SOW ruling, or reject this dispute."
+                          : "This dispute is closed. Saved notes and settlement details are shown below."
+                      }
+                      noBorder
+                      title="Admin review"
                     >
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography sx={{ ...pageTitleSx, mb: 0.75 }} variant="h4">
-                          Dispute case
-                        </Typography>
-                        <Typography color="text.secondary" variant="body1">
-                          {getRideDriverName(row)}
-                          <Box component="span" sx={{ color: "text.disabled", mx: 1 }}>
-                            →
-                          </Box>
-                          {getRideCustomerName(row)}
-                        </Typography>
-                      </Box>
-                      {statusMeta ? (
-                        <StatusBadge color={statusMeta.color} label={statusMeta.label} />
-                      ) : null}
-                    </Stack>
-
-                    {hasDetailValue(reasonValue) ? (
-                      <Box
-                        sx={{
-                          bgcolor: "background.paper",
-                          border: "1px solid",
-                          borderColor: "neutral.200",
-                          borderRadius: 2,
-                          mt: 2.5,
-                          px: 2,
-                          py: 1.5,
-                        }}
-                      >
-                        <Typography color="text.secondary" variant="caption">
-                          Dispute reason
-                        </Typography>
-                        <Typography fontWeight={600} sx={{ mt: 0.5 }} variant="body1">
-                          {reasonValue}
-                        </Typography>
-                      </Box>
-                    ) : null}
-
-                    <Stack direction="row" flexWrap="wrap" gap={1.25} sx={{ mt: 2 }}>
-                      <MetaChip label="Fare" value={fareValue} />
-                      <MetaChip label="Payment" value={paymentStatusValue} />
-                      <MetaChip label="Distance" value={distanceValue} />
-                      <MetaChip label="Passengers" value={passengersValue} />
-                      <MetaChip label="Created" value={createdValue} />
-                      <MetaChip label="Updated" value={updatedValue} />
-                    </Stack>
-                  </Box>
-                </Card>
-
-                <Card sx={{ border: "1px solid", borderColor: "neutral.200", boxShadow: "none" }}>
-                  <CardContent sx={{ p: { xs: 2.5, md: 3 }, "&:last-child": { pb: { xs: 2.5, md: 3 } } }}>
-                    <Stack spacing={2}>
-                      <Box>
-                        <Typography fontWeight={700} variant="h6">
-                          Admin review
-                        </Typography>
-                        <Typography color="text.secondary" sx={{ mt: 0.5 }} variant="body2">
-                          {showActions
-                            ? "Add notes, then mark under review, approve, or reject."
-                            : "This dispute is closed. Previous admin notes are shown below."}
-                        </Typography>
-                      </Box>
-
                       {hasDetailValue(savedNotes) ? (
                         <Box
                           sx={{
@@ -582,6 +570,7 @@ const Page = () => {
                             border: "1px solid",
                             borderColor: alpha(brand.primary, 0.16),
                             borderRadius: 2,
+                            mb: 2,
                             px: 2,
                             py: 1.5,
                           }}
@@ -599,16 +588,115 @@ const Page = () => {
                       ) : null}
 
                       {showActions ? (
-                        <>
+                        <Stack spacing={2}>
                           <TextField
                             fullWidth
                             label="Admin notes"
                             minRows={3}
                             multiline
                             onChange={(event) => setAdminNotes(event.target.value)}
-                            placeholder="Explain your decision for review, approval, or rejection"
+                            placeholder="Explain your decision for review or ruling"
                             value={adminNotes}
                           />
+
+                          <TextField
+                            fullWidth
+                            InputLabelProps={{ sx: selectLabelSx }}
+                            label="SOW ruling"
+                            onChange={(event) =>
+                              applySettlementDefaults(row, event.target.value)
+                            }
+                            select
+                            value={sowResolution}
+                          >
+                            {SOW_OPTIONS.map((option) => (
+                              <MenuItem key={option.value} value={option.value}>
+                                {option.label}
+                              </MenuItem>
+                            ))}
+                          </TextField>
+
+                          {settlementCaps?.totalAmount ? (
+                            <Box
+                              sx={{
+                                bgcolor: "neutral.100",
+                                borderRadius: 2,
+                                px: 2,
+                                py: 1.5,
+                              }}
+                            >
+                              <Typography color="text.secondary" variant="caption">
+                                Settlement caps
+                              </Typography>
+                              <Typography sx={{ mt: 0.5 }} variant="body2">
+                                Total:{" "}
+                                <strong>{formatRideCurrency(settlementCaps.totalAmount)}</strong>
+                                {" · "}
+                                Max to provider:{" "}
+                                <strong>
+                                  {formatRideCurrency(settlementCaps.maxPayToProvider)}
+                                </strong>
+                                {" · "}
+                                Max refund:{" "}
+                                <strong>
+                                  {formatRideCurrency(settlementCaps.maxRefundToCustomer)}
+                                </strong>
+                              </Typography>
+                            </Box>
+                          ) : null}
+
+                          {sowResolution === "refund_customer" ? (
+                            <TextField
+                              fullWidth
+                              helperText={
+                                settlementCaps
+                                  ? `Max ${formatRideCurrency(settlementCaps.maxRefundToCustomer)}`
+                                  : undefined
+                              }
+                              inputProps={{
+                                min: 0,
+                                max: settlementCaps?.maxRefundToCustomer ?? undefined,
+                                step: "0.01",
+                              }}
+                              label="Refund to customer ($)"
+                              onChange={(event) =>
+                                setRefundToCustomer(
+                                  clampDisputeAmount(
+                                    event.target.value,
+                                    settlementCaps?.maxRefundToCustomer
+                                  )
+                                )
+                              }
+                              type="number"
+                              value={refundToCustomer}
+                            />
+                          ) : (
+                            <TextField
+                              fullWidth
+                              helperText={
+                                settlementCaps
+                                  ? `Max ${formatRideCurrency(settlementCaps.maxPayToProvider)}`
+                                  : undefined
+                              }
+                              inputProps={{
+                                min: 0,
+                                max: settlementCaps?.maxPayToProvider ?? undefined,
+                                step: "0.01",
+                              }}
+                              label="Pay to provider ($)"
+                              onChange={(event) =>
+                                setPayToProvider(
+                                  clampDisputeAmount(
+                                    event.target.value,
+                                    settlementCaps?.maxPayToProvider
+                                  )
+                                )
+                              }
+                              type="number"
+                              value={payToProvider}
+                            />
+                          )}
+
                           <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
                             <Button
                               disabled={isSubmitting}
@@ -625,10 +713,6 @@ const Page = () => {
                                 borderColor: "info.main",
                                 color: "info.main",
                                 minHeight: 44,
-                                "&:hover": {
-                                  borderColor: "info.dark",
-                                  bgcolor: alpha("#0288d1", 0.06),
-                                },
                               }}
                               variant="outlined"
                             >
@@ -642,9 +726,9 @@ const Page = () => {
                               color="success"
                               disabled={isSubmitting}
                               fullWidth
-                              onClick={() => handleAction("approve")}
+                              onClick={() => handleAction("resolve")}
                               startIcon={
-                                submittingAction === "approve" ? null : (
+                                submittingAction === "resolve" ? null : (
                                   <SvgIcon fontSize="small">
                                     <CheckCircleIcon />
                                   </SvgIcon>
@@ -653,10 +737,10 @@ const Page = () => {
                               sx={{ minHeight: 44 }}
                               variant="contained"
                             >
-                              {submittingAction === "approve" ? (
+                              {submittingAction === "resolve" ? (
                                 <Loader color="#fff" inline size="xs" />
                               ) : (
-                                "Approve"
+                                "Apply ruling"
                               )}
                             </Button>
                             <Button
@@ -681,7 +765,43 @@ const Page = () => {
                               )}
                             </Button>
                           </Stack>
-                        </>
+
+                          <Typography color="text.secondary" variant="subtitle2">
+                            Message parties
+                          </Typography>
+                          <TextField
+                            fullWidth
+                            InputLabelProps={{ sx: selectLabelSx }}
+                            label="Send to"
+                            onChange={(event) => setMessageTo(event.target.value)}
+                            select
+                            value={messageTo}
+                          >
+                            <MenuItem value="both">Customer &amp; driver</MenuItem>
+                            <MenuItem value="customer">Customer only</MenuItem>
+                            <MenuItem value="driver">Driver only</MenuItem>
+                          </TextField>
+                          <TextField
+                            fullWidth
+                            label="Support message"
+                            minRows={2}
+                            multiline
+                            onChange={(event) => setPartyMessage(event.target.value)}
+                            placeholder="Message for customer and/or driver"
+                            value={partyMessage}
+                          />
+                          <Button
+                            disabled={isSubmitting || !partyMessage.trim()}
+                            onClick={handleSendMessage}
+                            variant="outlined"
+                          >
+                            {submittingAction === "message" ? (
+                              <Loader color="#0288d1" inline size="xs" />
+                            ) : (
+                              "Send message"
+                            )}
+                          </Button>
+                        </Stack>
                       ) : (
                         !hasDetailValue(savedNotes) && (
                           <Typography color="text.secondary" variant="body2">
@@ -689,31 +809,49 @@ const Page = () => {
                           </Typography>
                         )
                       )}
-                    </Stack>
-                  </CardContent>
-                </Card>
+                    </DetailSection>
 
-                {sections.length ? (
-                  <Grid container spacing={2}>
-                    {sections.map((section) => (
-                      <Grid item key={section.key} md={6} xs={12}>
-                        <SectionCard icon={section.icon} title={section.title}>
-                          <Stack>
-                            {section.items.map((item, index) => (
-                              <Box key={item.label}>
-                                {index > 0 ? <Divider /> : null}
-                                <DetailRow label={item.label} value={item.value} />
-                              </Box>
-                            ))}
-                          </Stack>
-                        </SectionCard>
-                      </Grid>
+                    {adminMessages.length ? (
+                      <DetailSection title="Admin messages">
+                        <Stack spacing={1.5}>
+                          {adminMessages.map((message, index) => (
+                            <Box
+                              key={message._id || message.id || `message-${index}`}
+                              sx={{
+                                border: "1px solid",
+                                borderColor: "neutral.200",
+                                borderRadius: 2,
+                                px: 2,
+                                py: 1.5,
+                              }}
+                            >
+                              <Typography color="text.secondary" variant="caption">
+                                {[
+                                  message.to ? `To: ${message.to}` : null,
+                                  formatTimestamp(message.createdAt),
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ") || "Message"}
+                              </Typography>
+                              <Typography sx={{ mt: 0.5, whiteSpace: "pre-wrap" }} variant="body2">
+                                {message.message || message.body || "—"}
+                              </Typography>
+                            </Box>
+                          ))}
+                        </Stack>
+                      </DetailSection>
+                    ) : null}
+
+                    {detailSections.map((section) => (
+                      <DetailSection key={section.key} title={section.title}>
+                        <DetailRowList items={section.items} />
+                      </DetailSection>
                     ))}
-                  </Grid>
-                ) : null}
-              </>
-            )}
-          </Stack>
+                  </DetailPanel>
+                </Stack>
+              ) : null}
+            </DetailPageState>
+          </DetailPageFrame>
         </Container>
       </Box>
     </>

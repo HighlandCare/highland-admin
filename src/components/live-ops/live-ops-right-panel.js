@@ -90,7 +90,6 @@ export default function LiveOpsRightPanel({
     { key: "customer_signup", label: "Customers" },
     { key: "driver_signup", label: "Drivers" },
     { key: "ride_request", label: "Bookings" },
-    { key: "food_order", label: "Food" },
   ];
 
   const visibleFeed =
@@ -101,7 +100,7 @@ export default function LiveOpsRightPanel({
   return (
     <Box
       sx={{
-        width: mobile ? "100%" : 360,
+        width: mobile ? "100%" : 280,
         height: "100%",
         maxHeight: "100%",
         minHeight: 0,
@@ -148,7 +147,7 @@ export default function LiveOpsRightPanel({
               label={tab.label}
               onClick={() => onFilterChange?.(tab.key)}
               sx={{
-                bgcolor: filter === tab.key ? "primary.main" : "neutral.50",
+                bgcolor: filter === tab.key ? "primary.main" : "action.hover",
                 color: filter === tab.key ? "primary.contrastText" : "text.primary",
                 fontWeight: 600,
                 border: "1px solid",
@@ -280,7 +279,7 @@ export default function LiveOpsRightPanel({
             />
             <LiveStatCard
               label="Active Bookings"
-              value={(s.activeRides ?? 0) + (s.activeFoodDeliveries ?? 0)}
+              value={s.activeRides ?? 0}
               sublabel="In progress"
               accent="#0284c7"
             />

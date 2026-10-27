@@ -139,6 +139,14 @@ export const normalizeDisputeRow = (record, { source = "ride" } = {}) => {
       record.reason ||
       record.description ||
       "",
+    disputeType: record.disputeType || null,
+    openedByRole: record.openedByRole || null,
+    amount: record.amount ?? ride?.estFare ?? null,
+    evidence: record.evidence || [],
+    priority: record.priority || null,
+    paymentBreakdown: record.paymentBreakdown || null,
+    settlement: record.settlement || null,
+    adminMessages: record.adminMessages || [],
     adminNotes:
       record.adminNotes ||
       record.notes ||
@@ -247,6 +255,61 @@ export const applyDisputeActionLocally = (row, action, notes = "") => {
     status: nextStatus,
     updatedAt: new Date().toISOString(),
   };
+};
+
+/** Same commission tiers as cura-main rideCommission.js */
+export const getDisputeCommissionRate = (amount) => {
+  const total = Number(amount) || 0;
+  if (total <= 0) return 0;
+  if (total < 40) return 0.23;
+  if (total <= 70) return 0.32;
+  return 0.43;
+};
+
+/**
+ * Max transferable amounts for dispute settlement UI.
+ * - Customer refund max = full disputed fare
+ * - Provider pay max = fare after platform/admin commission cut
+ */
+export const getDisputeSettlementCaps = (row) => {
+  const breakdown = row?.paymentBreakdown;
+  const total = Number(
+    breakdown?.totalAmount ??
+      row?.amount ??
+      row?.payment?.totalAmount ??
+      row?.estFare ??
+      0
+  );
+
+  if (breakdown?.driverAmount != null && breakdown?.platformCommission != null) {
+    return {
+      totalAmount: total,
+      maxRefundToCustomer: total,
+      maxPayToProvider: Number(breakdown.driverAmount) || 0,
+      platformCommission: Number(breakdown.platformCommission) || 0,
+      commissionRate: Number(breakdown.commissionRate) || getDisputeCommissionRate(total),
+    };
+  }
+
+  const commissionRate = getDisputeCommissionRate(total);
+  const maxPayToProvider = Number((total * (1 - commissionRate)).toFixed(2));
+  const platformCommission = Number((total - maxPayToProvider).toFixed(2));
+
+  return {
+    totalAmount: total,
+    maxRefundToCustomer: total,
+    maxPayToProvider,
+    platformCommission,
+    commissionRate,
+  };
+};
+
+export const clampDisputeAmount = (value, max) => {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return "";
+  const cap = Number(max) || 0;
+  if (n > cap) return String(cap);
+  return String(n);
 };
 
 export {

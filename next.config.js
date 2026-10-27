@@ -3,26 +3,67 @@ const normalizeBaseUrl = (url) => {
     return "";
   }
 
-  const trimmed = String(url).trim();
+  let trimmed = String(url).trim().replace(/^["']|["']$/g, "");
+
+  // Axios needs a real protocol. "localhost:1120/..." → "Unsupported protocol localhost:"
+  if (trimmed && !/^https?:\/\//i.test(trimmed)) {
+    trimmed = `http://${trimmed}`;
+  }
+
   return trimmed.endsWith("/") ? trimmed : `${trimmed}/`;
 };
 
+// Only use the explicit API base — never fall back to Vercel/Next `URL`
+const apiBaseUrl = normalizeBaseUrl(process.env.NEXT_PUBLIC_BASE_URL);
+
+if (!apiBaseUrl) {
+  console.warn(
+    "[highland-admin] NEXT_PUBLIC_BASE_URL is missing. Set it in .env (e.g. http://127.0.0.1:1120/api/v1)"
+  );
+} else {
+  console.log("[highland-admin] API base URL:", apiBaseUrl);
+}
+
 module.exports = {
   env: {
-    NEXT_PUBLIC_BASE_URL: normalizeBaseUrl(
-      process.env.NEXT_PUBLIC_BASE_URL || process.env.BASE_URL || process.env.URL
-    ),
+    NEXT_PUBLIC_BASE_URL: apiBaseUrl,
+  },
+  async rewrites() {
+    const socketTarget = (
+      process.env.NEXT_PUBLIC_SOCKET_URL ||
+      process.env.NEXT_PUBLIC_SOCKET_CONNECTION_URL ||
+      "https://highland.prodservers.com:9180"
+    )
+      .trim()
+      .replace(/\/$/, "");
+
+    if (!socketTarget) {
+      return [];
+    }
+
+    return [
+      {
+        source: "/socket.io/:path*",
+        destination: `${socketTarget}/socket.io/:path*`,
+      },
+    ];
   },
   exportPathMap: async function (defaultPathMap) {
     return {
       "/users/index": { page: "/users" },
+      "/users/detail/index": { page: "/users/detail" },
       "/about/index": { page: "/about" },
       "/chaperone/index": { page: "/chaperone" },
       "/chaperone/detail/index": { page: "/chaperone/detail" },
+      "/restaurants/index": { page: "/restaurants" },
+      "/restaurants/detail/index": { page: "/restaurants/detail" },
       "/driver-earnings/index": { page: "/driver-earnings" },
+      "/commission/index": { page: "/commission" },
       "/ride-history/index": { page: "/ride-history" },
       "/ride-history/detail/index": { page: "/ride-history/detail" },
       "/orders/detail/index": { page: "/orders/detail" },
+      "/disputes/index": { page: "/disputes" },
+      "/disputes/detail/index": { page: "/disputes/detail" },
       "/faq/index": { page: "/faq" },
       "/feedback/index": { page: "/feedback" },
       "/policy/index": { page: "/policy" },
@@ -33,6 +74,7 @@ module.exports = {
   },
 
   reactStrictMode: true,
+  transpilePackages: ["country-state-city"],
   images: {
     unoptimized: true,
   },

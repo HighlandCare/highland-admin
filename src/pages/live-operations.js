@@ -5,10 +5,14 @@ import {
   Box,
   Button,
   Drawer,
+  IconButton,
   Stack,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import UsersIcon from "@heroicons/react/24/solid/UsersIcon";
+import SunIcon from "@heroicons/react/24/solid/SunIcon";
+import MoonIcon from "@heroicons/react/24/solid/MoonIcon";
 import { useRouter } from "next/router";
 import { Layout as DashboardLayout } from "../layouts/dashboard/layout";
 import BaseLayout from "../layouts/BaseLayout";
@@ -25,12 +29,17 @@ import {
 import { OverviewRideAnalytics } from "../sections/overview/overview-ride-analytics";
 import { OverviewRideStatus } from "../sections/overview/overview-ride-status";
 import { loadDashboardAnalytics } from "../utils/dashboardUtils";
-import { useLiveOpsUi } from "../contexts/live-ops-ui-context";
-import { parseCoordinateQuery } from "../utils/googleMaps";
+import { LiveOpsThemeProvider, useLiveOpsUi } from "../contexts/live-ops-ui-context";
+import { DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM, parseCoordinateQuery, sanitizeLiveOpsMarkers } from "../utils/googleMaps";
 import {
+  enrichLiveOpsItem,
+  resolveLiveOpsDetailPath,
   resolveLiveOpsListPath,
 } from "../utils/liveOpsNavigation";
+import { storeDisputeDetail } from "../utils/disputeUtils";
+import { storeOrderDetailContext, storeRideDetail } from "../utils/rideUtils";
 import { filterMarkersNearLocation } from "../hooks/useSmoothLiveOpsMarkers";
+import { DEFAULT_GEO_FILTER, filterHotspotsByGeo, filterMarkersByGeo, parseGeoCoords } from "../utils/liveOpsGeo";
 import { toast } from "react-toastify";
 
 const LiveOpsMap = dynamic(() => import("../components/live-ops/live-ops-map"), {
@@ -51,20 +60,48 @@ const LiveOpsMap = dynamic(() => import("../components/live-ops/live-ops-map"), 
   ),
 });
 
-const SIDE_NAV_WIDTH = 280;
-const TOP_NAV_HEIGHT = 64;
 const STOP_TOUR_DELAY_MS = 2200;
 
 const MARKER_TYPE_FILTERS = [
   { key: "customer_signup", label: "Customers" },
   { key: "driver_signup", label: "Drivers" },
   { key: "ride_request", label: "Pending rides" },
-  { key: "food_order", label: "Food orders" },
   { key: "online_driver", label: "Online drivers" },
   { key: "emergency", label: "Urgent" },
 ];
 
 const DEFAULT_MARKER_TYPES = MARKER_TYPE_FILTERS.map((item) => item.key);
+
+/** Hide food delivery / food order rows from Live Operations. */
+const isFoodLiveOpsItem = (item) => {
+  if (!item) return false;
+  if (item.type === "food_order" || item.category === "food") return true;
+  const id = String(item.id || "");
+  return id.startsWith("food-") || id.startsWith("food-urgent-") || id.startsWith("food_order");
+};
+
+const stripFoodFromSnapshot = (snapshot) => {
+  if (!snapshot) return null;
+
+  const markers = (snapshot.markers ?? []).filter((item) => !isFoodLiveOpsItem(item));
+  const feed = (snapshot.feed ?? []).filter((item) => !isFoodLiveOpsItem(item));
+  const legend = { ...(snapshot.legend || {}) };
+  delete legend.food_order;
+
+  const stats = {
+    ...(snapshot.stats || {}),
+    activeFoodDeliveries: 0,
+    liveBookings: snapshot.stats?.activeRides ?? snapshot.stats?.liveBookings ?? 0,
+  };
+
+  return {
+    ...snapshot,
+    markers,
+    feed,
+    legend,
+    stats,
+  };
+};
 
 function resolveBookingStops(item, markers = []) {
   if (Array.isArray(item?.stops) && item.stops.length) {
@@ -93,21 +130,24 @@ function resolveBookingStops(item, markers = []) {
 
 const Page = () => {
   const router = useRouter();
-  const { isMapFullscreen, setMapFullscreen } = useLiveOpsUi();
+  const { isMapFullscreen, setMapFullscreen, mapTheme, toggleMapTheme } = useLiveOpsUi();
   const [isLogin, setIsLogin] = useState(null);
   const [viewMode, setViewMode] = useState("map");
   const [loading, setLoading] = useState(true);
   const [snapshot, setSnapshot] = useState(null);
   const [feedFilter, setFeedFilter] = useState("all");
-  const [region, setRegion] = useState("all");
+  const [region, setRegion] = useState("texas");
   const [selectedMarkerTypes, setSelectedMarkerTypes] = useState(DEFAULT_MARKER_TYPES);
   const [onlineOnly, setOnlineOnly] = useState(false);
   const [selectedMarker, setSelectedMarker] = useState(null);
+  const [selectedHotspot, setSelectedHotspot] = useState(null);
+  const [showHotspots, setShowHotspots] = useState(true);
   const [locationSearch, setLocationSearch] = useState("");
-  const [mapViewCenter, setMapViewCenter] = useState(null);
-  const [mapZoom, setMapZoom] = useState(null);
+  const [geoFilter, setGeoFilter] = useState(DEFAULT_GEO_FILTER);
+  const [mapViewCenter, setMapViewCenter] = useState(DEFAULT_MAP_CENTER);
+  const [mapZoom, setMapZoom] = useState(DEFAULT_MAP_ZOOM);
   const [userLocation, setUserLocation] = useState(null);
-  const [fitToMarkers, setFitToMarkers] = useState(true);
+  const [fitToMarkers, setFitToMarkers] = useState(false);
   const [mapFitKey, setMapFitKey] = useState(0);
   const [locating, setLocating] = useState(false);
   const [analytics, setAnalytics] = useState(null);
@@ -118,6 +158,15 @@ const Page = () => {
   const tourTimerRef = useRef(null);
   const refreshTimerRef = useRef(null);
   const socketApiRef = useRef(null);
+  const didInitialFitRef = useRef(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const clearLocationTour = useCallback(() => {
     if (tourTimerRef.current) {
@@ -137,7 +186,10 @@ const Page = () => {
       });
 
       if (response?.status && response?.data) {
-        setSnapshot((prev) => mergeLiveOpsSnapshot(prev, response.data));
+        if (!isMountedRef.current) return;
+        setSnapshot((prev) =>
+          stripFoodFromSnapshot(mergeLiveOpsSnapshot(prev, stripFoodFromSnapshot(response.data)))
+        );
       }
     } catch (error) {
       console.error("Live ops snapshot failed:", error);
@@ -175,13 +227,28 @@ const Page = () => {
     const connection = connectLiveOpsSocket({
       region,
       onEvent: (eventName, payload) => {
+        if (!isMountedRef.current) return;
+
         if (eventName === "live-ops:refresh") {
           scheduleSoftRefresh();
           return;
         }
 
+        if (isFoodLiveOpsItem(payload?.marker || payload?.item || payload)) {
+          return;
+        }
+
+        if (eventName === "live-ops:hotspots.patch" && Array.isArray(payload?.hotspots)) {
+          const top = [...payload.hotspots].sort(
+            (a, b) => (Number(b.pendingCount) || 0) - (Number(a.pendingCount) || 0)
+          )[0];
+          if (top?.id) {
+            setSelectedHotspot((current) => current ?? top);
+          }
+        }
+
         setSnapshot((prev) => {
-          const next = applyLiveOpsSocketEvent(prev, eventName, payload);
+          const next = stripFoodFromSnapshot(applyLiveOpsSocketEvent(prev, eventName, payload));
 
           if (
             (eventName === "live-ops:driver.location" ||
@@ -213,7 +280,21 @@ const Page = () => {
     socketApiRef.current = connection;
     connection.syncNow?.();
 
+    const handleRouteChangeStart = () => {
+      isMountedRef.current = false;
+      if (refreshTimerRef.current) {
+        clearTimeout(refreshTimerRef.current);
+        refreshTimerRef.current = null;
+      }
+      connection?.disconnect?.();
+      socketApiRef.current = null;
+      setMapFullscreen(false);
+    };
+
+    router.events.on("routeChangeStart", handleRouteChangeStart);
+
     return () => {
+      router.events.off("routeChangeStart", handleRouteChangeStart);
       if (refreshTimerRef.current) {
         clearTimeout(refreshTimerRef.current);
         refreshTimerRef.current = null;
@@ -221,7 +302,7 @@ const Page = () => {
       socketApiRef.current = null;
       connection?.disconnect?.();
     };
-  }, [isLogin, viewMode, loadSnapshot]);
+  }, [isLogin, viewMode, loadSnapshot, router.events, setMapFullscreen]);
 
   useEffect(() => {
     socketApiRef.current?.setRegion?.(region);
@@ -267,31 +348,88 @@ const Page = () => {
   };
 
   const filteredMarkers = useMemo(() => {
-    const markers = snapshot?.markers ?? [];
-    return markers.filter((marker) => {
+    const markers = (snapshot?.markers ?? []).filter((marker) => !isFoodLiveOpsItem(marker));
+    const typeFiltered = markers.filter((marker) => {
       if (onlineOnly) {
         return marker.type === "online_driver" && marker.available !== false;
       }
+      if (marker.type === "dispute") {
+        return selectedMarkerTypes.includes("emergency") || selectedMarkerTypes.includes("dispute");
+      }
       return selectedMarkerTypes.includes(marker.type);
     });
-  }, [snapshot?.markers, selectedMarkerTypes, onlineOnly]);
+    return filterMarkersByGeo(typeFiltered, geoFilter);
+  }, [snapshot?.markers, selectedMarkerTypes, onlineOnly, geoFilter]);
+
+  const filteredHotspots = useMemo(() => {
+    const hotspots = (snapshot?.hotspots ?? []).filter((hotspot) => hotspot?.active !== false);
+    return filterHotspotsByGeo(hotspots, geoFilter);
+  }, [snapshot?.hotspots, geoFilter]);
+
+  const activeHotspotCount = filteredHotspots.length;
+
+  const primaryActiveHotspot = useMemo(() => {
+    if (!filteredHotspots.length) return null;
+    return [...filteredHotspots].sort(
+      (a, b) => (Number(b.pendingCount) || 0) - (Number(a.pendingCount) || 0)
+    )[0];
+  }, [filteredHotspots]);
+
+  const lastAutoPanHotspotIdRef = useRef(null);
+
+  useEffect(() => {
+    if (!primaryActiveHotspot?.id) {
+      lastAutoPanHotspotIdRef.current = null;
+      return;
+    }
+
+    if (lastAutoPanHotspotIdRef.current === primaryActiveHotspot.id) return;
+
+    const lat = Number(primaryActiveHotspot.lat);
+    const lng = Number(primaryActiveHotspot.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+    lastAutoPanHotspotIdRef.current = primaryActiveHotspot.id;
+    setMapViewCenter({ lat, lng });
+    setMapZoom((current) => (current && current >= 12 ? current : 13));
+  }, [primaryActiveHotspot]);
 
   const filteredLegend = useMemo(() => {
     const counts = {
       customer_signup: 0,
       driver_signup: 0,
       ride_request: 0,
-      food_order: 0,
       online_driver: 0,
       emergency: 0,
     };
     filteredMarkers.forEach((marker) => {
-      if (Object.prototype.hasOwnProperty.call(counts, marker.type)) {
-        counts[marker.type] += 1;
+      const legendKey = marker.type === "dispute" ? "emergency" : marker.type;
+      if (Object.prototype.hasOwnProperty.call(counts, legendKey)) {
+        counts[legendKey] += 1;
       }
     });
+    if (primaryActiveHotspot?.pendingCount) {
+      counts.ride_request = Math.max(
+        counts.ride_request,
+        Number(primaryActiveHotspot.pendingCount) || 0
+      );
+    }
     return counts;
-  }, [filteredMarkers]);
+  }, [filteredMarkers, primaryActiveHotspot]);
+
+  const rideOnlyFeed = useMemo(
+    () => (snapshot?.feed ?? []).filter((item) => !isFoodLiveOpsItem(item)),
+    [snapshot?.feed]
+  );
+
+  const rideOnlyStats = useMemo(() => {
+    const s = snapshot?.stats ?? {};
+    return {
+      ...s,
+      activeFoodDeliveries: 0,
+      liveBookings: s.activeRides ?? 0,
+    };
+  }, [snapshot?.stats]);
 
   useEffect(() => {
     if (!selectedMarker) return;
@@ -300,7 +438,7 @@ const Page = () => {
   }, [filteredMarkers, selectedMarker]);
 
   const regionCenter = useMemo(
-    () => snapshot?.region?.center ?? { lat: 32.7767, lng: -96.797 },
+    () => snapshot?.region?.center ?? DEFAULT_MAP_CENTER,
     [snapshot]
   );
 
@@ -310,10 +448,16 @@ const Page = () => {
     (place) => {
       clearLocationTour();
       setMapViewCenter({ lat: place.lat, lng: place.lng });
-      setMapZoom(14);
+      setMapZoom(place.marker ? 15 : 14);
       setFitToMarkers(false);
-      setSelectedMarker(null);
       if (place.address) setLocationSearch(place.address);
+
+      if (place.marker) {
+        setSelectedMarker(place.marker);
+        return;
+      }
+
+      setSelectedMarker(null);
 
       const nearby = filterMarkersNearLocation(snapshot?.markers ?? [], place, 30);
       const onlineNearby = nearby.filter((m) => m.type === "online_driver").length;
@@ -333,34 +477,57 @@ const Page = () => {
   );
 
   const handleCurrentLocation = useCallback(() => {
+    if (typeof window === "undefined" || !window.isSecureContext) {
+      toast.error("Current location requires HTTPS or localhost.");
+      return;
+    }
+
     if (!navigator.geolocation) {
       toast.error("Geolocation is not supported in this browser.");
       return;
     }
 
+    const applyPosition = (position) => {
+      const next = {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+      };
+      clearLocationTour();
+      setUserLocation(next);
+      setMapViewCenter(next);
+      setMapZoom(15);
+      setFitToMarkers(false);
+      setSelectedMarker(null);
+      setLocationSearch(`${next.lat.toFixed(5)}, ${next.lng.toFixed(5)}`);
+      setLocating(false);
+      toast.success("Centered map on your current location.");
+    };
+
+    const handleGeoError = (error, triedFallback = false) => {
+      if (!triedFallback && (error.code === 3 || error.code === 2)) {
+        navigator.geolocation.getCurrentPosition(applyPosition, (retryError) => handleGeoError(retryError, true), {
+          enableHighAccuracy: false,
+          maximumAge: 120000,
+          timeout: 12000,
+        });
+        return;
+      }
+
+      setLocating(false);
+      const messages = {
+        1: "Location permission denied. Allow location access in your browser settings.",
+        2: "Location unavailable on this device.",
+        3: "Location request timed out. Try again.",
+      };
+      toast.error(messages[error.code] || error.message || "Unable to get your current location.");
+    };
+
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const next = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        };
-        clearLocationTour();
-        setUserLocation(next);
-        setMapViewCenter(next);
-        setMapZoom(15);
-        setFitToMarkers(false);
-        setSelectedMarker(null);
-        setLocationSearch(`${next.lat.toFixed(5)}, ${next.lng.toFixed(5)}`);
-        setLocating(false);
-        toast.success("Centered map on your current location.");
-      },
-      (error) => {
-        setLocating(false);
-        toast.error(error.message || "Unable to get your current location.");
-      },
-      { enableHighAccuracy: true, timeout: 15000 }
-    );
+    navigator.geolocation.getCurrentPosition(applyPosition, handleGeoError, {
+      enableHighAccuracy: true,
+      maximumAge: 60000,
+      timeout: 15000,
+    });
   }, [clearLocationTour]);
 
   const requestFitToMarkers = useCallback(() => {
@@ -368,33 +535,73 @@ const Page = () => {
     setMapFitKey((key) => key + 1);
   }, []);
 
+  useEffect(() => {
+    if (
+      didInitialFitRef.current ||
+      viewMode !== "map" ||
+      (!geoFilter.state && !geoFilter.city)
+    ) {
+      return;
+    }
+
+    const validMarkers = sanitizeLiveOpsMarkers(snapshot?.markers);
+    if (validMarkers.length > 0) {
+      didInitialFitRef.current = true;
+      requestFitToMarkers();
+    }
+  }, [geoFilter.city, geoFilter.state, requestFitToMarkers, snapshot?.markers, viewMode]);
+
   const handleMapFitComplete = useCallback(() => {
     setFitToMarkers(false);
   }, []);
 
-  const handleLocateRegion = useCallback(() => {
-    clearLocationTour();
-    setMapViewCenter(null);
-    setMapZoom(null);
-    setUserLocation(null);
-    requestFitToMarkers();
-    setSelectedMarker(null);
-    setLocationSearch("");
-  }, [clearLocationTour, requestFitToMarkers]);
-
-  const handleRegionChange = useCallback(
-    (nextRegion) => {
+  const applyGeoFilter = useCallback(
+    (next) => {
+      setGeoFilter(next);
       clearLocationTour();
-      setRegion(nextRegion);
-      setMapViewCenter(null);
-      setMapZoom(null);
-      setUserLocation(null);
-      requestFitToMarkers();
       setSelectedMarker(null);
+      setFitToMarkers(false);
+      setUserLocation(null);
+
+      if (next?.city) {
+        const coords = parseGeoCoords(next.city);
+        if (coords) {
+          setMapViewCenter(coords);
+          setMapZoom(13);
+          setLocationSearch(
+            [next.city.name, next.state?.isoCode || next.state?.name].filter(Boolean).join(", ")
+          );
+        }
+        return;
+      }
+
+      if (next?.state) {
+        const coords = parseGeoCoords(next.state);
+        if (coords) {
+          setMapViewCenter(coords);
+          setMapZoom(7);
+          setLocationSearch(next.state.name);
+        }
+        return;
+      }
+
+      setMapViewCenter(DEFAULT_MAP_CENTER);
+      setMapZoom(DEFAULT_MAP_ZOOM);
       setLocationSearch("");
     },
-    [clearLocationTour, requestFitToMarkers]
+    [clearLocationTour]
   );
+
+  const handleLocateRegion = useCallback(() => {
+    clearLocationTour();
+    setGeoFilter(DEFAULT_GEO_FILTER);
+    setMapViewCenter(DEFAULT_MAP_CENTER);
+    setMapZoom(DEFAULT_MAP_ZOOM);
+    setFitToMarkers(false);
+    setUserLocation(null);
+    setSelectedMarker(null);
+    setLocationSearch("");
+  }, [clearLocationTour]);
 
   const startLocationTour = useCallback(
     (stops, sourceItem) => {
@@ -475,22 +682,74 @@ const Page = () => {
     [snapshot?.markers, startLocationTour]
   );
 
-  const handleMarkerSelect = useCallback(
+  const handleMarkerSelect = useCallback((marker) => {
+    clearLocationTour();
+    setSelectedHotspot(null);
+    setSelectedMarker(marker);
+  }, [clearLocationTour]);
+
+  const handleHotspotSelect = useCallback((hotspot) => {
+    clearLocationTour();
+    setSelectedMarker(null);
+    setSelectedHotspot(hotspot);
+  }, [clearLocationTour]);
+
+  const handleViewDetails = useCallback(
     (marker) => {
-      const stops = resolveBookingStops(marker, snapshot?.markers ?? []);
-      if (stops.length > 1) {
-        startLocationTour(stops, marker);
+      const enriched = enrichLiveOpsItem(marker, snapshot);
+      const path = resolveLiveOpsDetailPath(enriched);
+      if (!path || path === "#") {
         return;
       }
-      clearLocationTour();
-      setSelectedMarker(marker);
-      if (marker?.lat != null && marker?.lng != null) {
-        setMapViewCenter({ lat: marker.lat, lng: marker.lng });
-        setMapZoom(15);
-        setFitToMarkers(false);
+
+      const detailId = (() => {
+        try {
+          return new URL(path, "http://local").searchParams.get("id");
+        } catch {
+          return null;
+        }
+      })();
+
+      if (path.startsWith("/disputes/")) {
+        storeDisputeDetail({
+          ...enriched,
+          disputeId: detailId || enriched.disputeId || enriched.emergencyId,
+          rideId: enriched.rideId || enriched.bookingId,
+          key: detailId || enriched.disputeId || enriched.emergencyId || enriched.rideId,
+        });
+      } else if (path.startsWith("/orders/")) {
+        storeOrderDetailContext({
+          ...enriched,
+          orderId: detailId || enriched.orderId || enriched.rideId,
+          rideId: detailId || enriched.orderId || enriched.rideId,
+          id: detailId || enriched.orderId || enriched.rideId,
+          candidateIds: [
+            detailId,
+            enriched.orderId,
+            enriched.rideId,
+            enriched.bookingId,
+          ].filter(Boolean),
+        });
+        storeRideDetail({
+          ...enriched,
+          rideId: detailId || enriched.orderId || enriched.rideId,
+          orderId: detailId || enriched.orderId || enriched.rideId,
+          _id: detailId || enriched.orderId || enriched.rideId,
+        });
+      } else if (path.startsWith("/ride-history/")) {
+        storeRideDetail({
+          ...enriched,
+          rideId: detailId || enriched.rideId || enriched.bookingId || enriched.orderId,
+          _id: detailId || enriched.rideId || enriched.bookingId || enriched.orderId,
+        });
       }
+
+      if (isMapFullscreen) {
+        setMapFullscreen(false);
+      }
+      router.push(path);
     },
-    [clearLocationTour, snapshot?.markers, startLocationTour]
+    [isMapFullscreen, router, setMapFullscreen, snapshot]
   );
 
   const handleViewAllSignups = useCallback(
@@ -517,29 +776,34 @@ const Page = () => {
   }
 
   return (
-    <>
+    <LiveOpsThemeProvider>
       <Head>
         <title>Live Operations | Highland Care Admin</title>
       </Head>
 
       <Box
+        data-live-ops-theme={mapTheme}
         sx={{
-          position: "fixed",
-          top: {
-            xs: isMapFullscreen ? 0 : TOP_NAV_HEIGHT,
-            lg: 0,
-          },
-          left: {
-            xs: 0,
-            lg: isMapFullscreen ? 0 : SIDE_NAV_WIDTH,
-          },
-          right: 0,
-          bottom: 0,
           display: "flex",
           flexDirection: "column",
+          flex: 1,
+          minHeight: 0,
+          width: "100%",
+          height: "100%",
+          maxHeight: "100%",
+          overflow: "hidden",
           bgcolor: "background.default",
           color: "text.primary",
-          zIndex: isMapFullscreen ? 1400 : 1,
+          ...(isMapFullscreen
+            ? {
+                position: "fixed",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 1400,
+              }
+            : {}),
         }}
       >
         {!isMapFullscreen ? (
@@ -577,6 +841,32 @@ const Page = () => {
                   {" MAP"}
                 </Box>
               </Typography>
+              <Stack direction="row" alignItems="center" spacing={0.75} sx={{ display: { xs: "none", sm: "flex" } }}>
+                <Box
+                  sx={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    bgcolor: "#22c55e",
+                    boxShadow: "0 0 10px rgba(34,197,94,.7)",
+                    animation: "pulse 2s infinite",
+                    "@keyframes pulse": {
+                      "0%, 100%": { opacity: 1 },
+                      "50%": { opacity: 0.35 },
+                    },
+                  }}
+                />
+                <Typography
+                  sx={{
+                    color: "#22c55e",
+                    fontSize: 11,
+                    fontWeight: 800,
+                    letterSpacing: "0.12em",
+                  }}
+                >
+                  LIVE
+                </Typography>
+              </Stack>
             </Stack>
 
             <Stack
@@ -594,6 +884,22 @@ const Page = () => {
               >
                 {clock}
               </Typography>
+              <Tooltip title={mapTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
+                <IconButton
+                  onClick={toggleMapTheme}
+                  aria-label={mapTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                  sx={{
+                    width: 40,
+                    height: 40,
+                    color: "text.primary",
+                    border: "1px solid",
+                    borderColor: "divider",
+                    borderRadius: "10px",
+                  }}
+                >
+                  {mapTheme === "dark" ? <SunIcon width={18} /> : <MoonIcon width={18} />}
+                </IconButton>
+              </Tooltip>
               <Button
                 onClick={() => setIsSignupsOpen(true)}
                 aria-label="Open live signups"
@@ -624,34 +930,43 @@ const Page = () => {
 
         {viewMode === "map" ? (
           <>
-            <Box sx={{ flex: 1, display: "flex", minHeight: 0 }}>
-              <Box sx={{ flex: 1, position: "relative", minWidth: 0 }}>
+            <Box sx={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}>
+              <Box sx={{ flex: 1, position: "relative", minWidth: 0, minHeight: 0, height: "100%" }}>
                 {loading && !snapshot ? (
                   <Loader minHeight="100%" />
                 ) : (
                   <>
                     <LiveOpsMap
                       center={mapCenter}
-                      zoom={snapshot?.region?.zoom ?? 11}
+                      zoom={mapZoom ?? snapshot?.region?.zoom ?? DEFAULT_MAP_ZOOM}
                       markers={filteredMarkers}
+                      hotspots={filteredHotspots}
+                      showHotspots={showHotspots}
                       selectedMarker={selectedMarker}
+                      selectedHotspot={selectedHotspot}
                       userLocation={userLocation}
                       fitToMarkers={fitToMarkers}
                       mapFitKey={mapFitKey}
                       mapZoom={mapZoom}
                       onFitComplete={handleMapFitComplete}
                       onMarkerSelect={handleMarkerSelect}
+                      onHotspotSelect={handleHotspotSelect}
                     />
                     <LiveOpsMapOverlays
                       legend={filteredLegend}
+                      hotspots={filteredHotspots}
+                      activeHotspotCount={activeHotspotCount}
+                      activeHotspot={primaryActiveHotspot}
+                      showHotspots={showHotspots}
+                      onShowHotspotsChange={setShowHotspots}
+                      selectedHotspot={selectedHotspot}
+                      onCloseHotspot={() => setSelectedHotspot(null)}
                       locationSearch={locationSearch}
                       onLocationSearchChange={setLocationSearch}
                       onPlaceSelect={handlePlaceSelect}
                       onCurrentLocation={handleCurrentLocation}
                       locating={locating}
-                      region={region}
-                      regionOptions={snapshot?.region?.options ?? [{ key: "all", label: "All regions" }, { key: "dfw", label: "DFW" }]}
-                      onRegionChange={handleRegionChange}
+                      mapMarkers={filteredMarkers}
                       markerTypes={MARKER_TYPE_FILTERS}
                       selectedMarkerTypes={selectedMarkerTypes}
                       onMarkerTypeToggle={handleMarkerTypeToggle}
@@ -662,11 +977,15 @@ const Page = () => {
                         clearLocationTour();
                         setSelectedMarker(null);
                       }}
+                      onViewDetails={handleViewDetails}
                       onLocateRegion={handleLocateRegion}
                       isMapFullscreen={isMapFullscreen}
                       onToggleFullscreen={toggleFullscreen}
                       tourStopIndex={tourStopIndex}
                       tourStopTotal={tourStopTotal}
+                      snapshot={snapshot}
+                      geoFilter={geoFilter}
+                      onGeoFilterChange={applyGeoFilter}
                     />
                   </>
                 )}
@@ -682,8 +1001,8 @@ const Page = () => {
                   }}
                 >
                   <LiveOpsRightPanel
-                    feed={snapshot?.feed ?? []}
-                    stats={snapshot?.stats}
+                    feed={rideOnlyFeed}
+                    stats={rideOnlyStats}
                     filter={feedFilter}
                     onFilterChange={setFeedFilter}
                     onFeedItemClick={handleFeedItemClick}
@@ -709,8 +1028,8 @@ const Page = () => {
               <LiveOpsRightPanel
                 mobile
                 onClose={() => setIsSignupsOpen(false)}
-                feed={snapshot?.feed ?? []}
-                stats={snapshot?.stats}
+                feed={rideOnlyFeed}
+                stats={rideOnlyStats}
                 filter={feedFilter}
                 onFilterChange={setFeedFilter}
                 onFeedItemClick={(item) => {
@@ -721,10 +1040,10 @@ const Page = () => {
               />
             </Drawer>
 
-            {!isMapFullscreen ? <LiveOpsStatsBar stats={snapshot?.stats} /> : null}
+            {!isMapFullscreen ? <LiveOpsStatsBar stats={rideOnlyStats} /> : null}
           </>
         ) : (
-          <Box sx={{ p: 3, flex: 1, overflow: "auto", bgcolor: "background.default" }}>
+          <Box sx={{ p: { xs: 1.5, sm: 2, md: 3 }, flex: 1, overflow: "auto", bgcolor: "background.default" }}>
             <Stack spacing={3}>
               <Typography variant="h6" sx={{ color: "text.primary", fontWeight: 700 }}>
                 Platform Analytics
@@ -749,7 +1068,7 @@ const Page = () => {
           </Box>
         )}
       </Box>
-    </>
+    </LiveOpsThemeProvider>
   );
 };
 

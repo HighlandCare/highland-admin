@@ -26,6 +26,7 @@ import { OverviewRideAnalytics } from "../sections/overview/overview-ride-analyt
 import { OverviewRideStatus } from "../sections/overview/overview-ride-status";
 import { OverviewLatestRides } from "../sections/overview/overview-latest-rides";
 import { formatCompactCurrency, loadDashboardAnalytics } from "../utils/dashboardUtils";
+import { getAuthSessionState } from "../utils/authSession";
 
 const emptyAnalytics = {
   totalUsers: 0,
@@ -64,13 +65,14 @@ const Page = () => {
   }, []);
 
   useEffect(() => {
-    const loginStatus =
-      typeof window !== "undefined" ? JSON.parse(localStorage.getItem("isLogin")) : null;
+    const sessionState = getAuthSessionState();
+    const authenticated = sessionState === "authenticated";
 
-    setIsLogin(loginStatus);
+    setIsLogin(authenticated);
 
-    if (!loginStatus) {
-      router.push("/auth/login");
+    if (!authenticated) {
+      // AuthGuard handles redirect; keep this page from treating stale login as valid.
+      setIsLoading(false);
     }
   }, [router]);
 
@@ -79,6 +81,11 @@ const Page = () => {
       loadAnalytics();
     }
   }, [isLogin, loadAnalytics]);
+
+  // While auth is unresolved, show only a loader (no dashboard shell).
+  if (isLogin == null) {
+    return <Loader page />;
+  }
 
   const Layout = isLogin ? DashboardLayout : BaseLayout;
   const showUsers = isLoading || analytics.totalUsers > 0;

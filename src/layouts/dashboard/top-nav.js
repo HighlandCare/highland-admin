@@ -3,23 +3,20 @@ import PropTypes from "prop-types";
 import Bars3Icon from "@heroicons/react/24/solid/Bars3Icon";
 
 import {
-  Avatar,
-  Badge,
   Box,
   IconButton,
   Stack,
   SvgIcon,
-  Tooltip,
   useMediaQuery,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 
-const SIDE_NAV_WIDTH = 280;
-const TOP_NAV_HEIGHT = 64;
-
 export const TopNav = (props) => {
-  const { onNavOpen } = props;
-  const lgUp = useMediaQuery((theme) => theme.breakpoints.up("lg"));
+  const { onNavOpen, sideNavWidth = 280 } = props;
+  const lgUp = useMediaQuery((theme) => theme.breakpoints.up("lg"), {
+    defaultMatches: false,
+    noSsr: true,
+  });
 
   return (
     <>
@@ -29,13 +26,17 @@ export const TopNav = (props) => {
           backdropFilter: "blur(6px)",
           backgroundColor: (theme) => alpha(theme.palette.background.default, 0.8),
           left: {
-            lg: `${SIDE_NAV_WIDTH}px`,
+            lg: `${sideNavWidth}px`,
           },
           position: "sticky",
           top: 0,
+          transition: (theme) =>
+            theme.transitions.create(["left", "width"], {
+              duration: theme.transitions.duration.shorter,
+            }),
           width: {
             xs: "100%",
-            lg: `calc(100% - ${SIDE_NAV_WIDTH}px)`,
+            lg: `calc(100% - ${sideNavWidth}px)`,
           },
           zIndex: (theme) => theme.zIndex.appBar,
         }}
@@ -46,18 +47,27 @@ export const TopNav = (props) => {
           justifyContent="space-between"
           spacing={2}
           sx={{
-            minHeight: TOP_NAV_HEIGHT,
-            px: 2,
+            minHeight: 64,
+            px: { xs: 1.5, sm: 2 },
           }}
         >
-          <Stack alignItems="center" direction="row" spacing={2}>
-            {!lgUp && (
-              <IconButton onClick={onNavOpen}>
+          <Stack alignItems="center" direction="row" spacing={1}>
+            {!lgUp ? (
+              <IconButton
+                aria-label="Open navigation menu"
+                edge="start"
+                onClick={onNavOpen}
+                size="large"
+                sx={{
+                  color: "text.primary",
+                  ml: { xs: -0.5, sm: 0 },
+                }}
+              >
                 <SvgIcon fontSize="small">
                   <Bars3Icon />
                 </SvgIcon>
               </IconButton>
-            )}
+            ) : null}
           </Stack>
         </Stack>
       </Box>
@@ -67,4 +77,5 @@ export const TopNav = (props) => {
 
 TopNav.propTypes = {
   onNavOpen: PropTypes.func,
+  sideNavWidth: PropTypes.number,
 };

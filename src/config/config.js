@@ -3,7 +3,13 @@ const normalizeBaseUrl = (url) => {
     return "";
   }
 
-  const trimmed = String(url).trim();
+  let trimmed = String(url).trim().replace(/^["']|["']$/g, "");
+
+  // Axios needs http(s):// — bare "localhost:1120/..." becomes protocol "localhost:"
+  if (trimmed && !/^https?:\/\//i.test(trimmed)) {
+    trimmed = `http://${trimmed}`;
+  }
+
   return trimmed.endsWith("/") ? trimmed : `${trimmed}/`;
 };
 
