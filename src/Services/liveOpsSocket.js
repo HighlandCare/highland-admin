@@ -14,24 +14,30 @@ const LIVE_OPS_EVENTS = [
   "live-ops:refresh",
 ];
 
-export function getLiveOpsSocketUrl() {
-  if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
-    // Same-origin proxy in next.config.js avoids CORS when hitting prod socket from localhost.
-    return window.location.origin;
+function coerceDriverSocketUrl(url) {
+  if (!url) return "";
+  try {
+    const parsed = new URL(url);
+    const looksLikeApi =
+      parsed.port === "1120" || parsed.pathname.includes("/api");
+    if (!looksLikeApi) return parsed.origin;
+    parsed.port = "9180";
+    console.warn(
+      "[live-ops] SOCKET_URL pointed at the API (1120). Using cura-driver 9180 instead:",
+      parsed.origin
+    );
+    return parsed.origin;
+  } catch {
+    return url;
   }
+}
 
+export function getLiveOpsSocketUrl() {
   const raw =
     process.env.NEXT_PUBLIC_SOCKET_URL ||
     process.env.NEXT_PUBLIC_SOCKET_CONNECTION_URL ||
     "";
-  const url = normalizeSocketIoUrl(raw);
-  if (url.includes(":1120") && !url.includes("/api")) {
-    console.warn(
-      "[live-ops] NEXT_PUBLIC_SOCKET_URL points to port 1120 (API). " +
-        "Use cura-driver port 9180 instead, e.g. https://highland.prodservers.com:9180"
-    );
-  }
-  return url;
+  return coerceDriverSocketUrl(normalizeSocketIoUrl(raw));
 }
 
 /**

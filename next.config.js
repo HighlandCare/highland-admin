@@ -15,6 +15,13 @@ const normalizeBaseUrl = (url) => {
 
 // Only use the explicit API base — never fall back to Vercel/Next `URL`
 const apiBaseUrl = normalizeBaseUrl(process.env.NEXT_PUBLIC_BASE_URL);
+const socketUrl = (
+  process.env.NEXT_PUBLIC_SOCKET_URL ||
+  process.env.NEXT_PUBLIC_SOCKET_CONNECTION_URL ||
+  "https://highland.prodservers.com:9180"
+)
+  .trim()
+  .replace(/\/$/, "");
 
 if (!apiBaseUrl) {
   console.warn(
@@ -27,24 +34,21 @@ if (!apiBaseUrl) {
 module.exports = {
   env: {
     NEXT_PUBLIC_BASE_URL: apiBaseUrl,
+    NEXT_PUBLIC_SOCKET_URL: socketUrl,
   },
   async rewrites() {
-    const socketTarget = (
-      process.env.NEXT_PUBLIC_SOCKET_URL ||
-      process.env.NEXT_PUBLIC_SOCKET_CONNECTION_URL ||
-      "https://highland.prodservers.com:9180"
-    )
-      .trim()
-      .replace(/\/$/, "");
-
-    if (!socketTarget) {
+    if (!socketUrl) {
       return [];
     }
 
     return [
       {
+        source: "/socket.io",
+        destination: `${socketUrl}/socket.io/`,
+      },
+      {
         source: "/socket.io/:path*",
-        destination: `${socketTarget}/socket.io/:path*`,
+        destination: `${socketUrl}/socket.io/:path*`,
       },
     ];
   },
