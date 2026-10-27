@@ -24,15 +24,15 @@ export const items = [
       </SvgIcon>
     ),
   },
-  // {
-  //   title: "Live Operations",
-  //   path: "/live-operations",
-  //   icon: (
-  //     <SvgIcon fontSize="small">
-  //       <MapIcon />
-  //     </SvgIcon>
-  //   ),
-  // },
+  {
+    title: "Live Operations",
+    path: "/live-operations",
+    icon: (
+      <SvgIcon fontSize="small">
+        <MapIcon />
+      </SvgIcon>
+    ),
+  },
 
   {
     title: "Users Manangement",
