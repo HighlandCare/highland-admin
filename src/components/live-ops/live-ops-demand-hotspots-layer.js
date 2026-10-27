@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import PropTypes from "prop-types";
 import { useGoogleMap } from "@react-google-maps/api";
 import {
+  DEMAND_ZONE_COLOR,
   getHotspotDisplayRadiusMeters,
   normalizeHotspotCoords,
 } from "../../utils/liveOpsHotspots";
@@ -35,11 +36,11 @@ export default function LiveOpsDemandHotspotsLayer({
         map,
         center: coords,
         radius: displayRadius,
-        fillColor: "#ef4444",
-        fillOpacity: isHigh ? 0.28 : 0.22,
-        strokeColor: "#ef4444",
-        strokeOpacity: 0.85,
-        strokeWeight: isHigh ? 3 : 2.5,
+        fillColor: DEMAND_ZONE_COLOR || "#ef4444",
+        fillOpacity: isHigh ? 0.32 : 0.26,
+        strokeColor: DEMAND_ZONE_COLOR || "#ef4444",
+        strokeOpacity: 0.95,
+        strokeWeight: isHigh ? 3.5 : 3,
         clickable: true,
         zIndex: 1,
       });

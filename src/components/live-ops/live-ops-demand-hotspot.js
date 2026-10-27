@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import PropTypes from "prop-types";
 import { Circle } from "@react-google-maps/api";
 import {
+  DEMAND_ZONE_COLOR,
   getHotspotDisplayRadiusMeters,
   normalizeHotspotCoords,
 } from "../../utils/liveOpsHotspots";
@@ -16,11 +17,11 @@ export default function LiveOpsDemandHotspot({ hotspot, onClick }) {
 
   const circleOptions = useMemo(
     () => ({
-      fillColor: "#ef4444",
-      fillOpacity: isHigh ? 0.22 : 0.18,
-      strokeColor: "#ef4444",
-      strokeOpacity: isHigh ? 0.75 : 0.6,
-      strokeWeight: isHigh ? 3 : 2,
+      fillColor: DEMAND_ZONE_COLOR || "#ef4444",
+      fillOpacity: isHigh ? 0.32 : 0.26,
+      strokeColor: DEMAND_ZONE_COLOR || "#ef4444",
+      strokeOpacity: isHigh ? 0.95 : 0.85,
+      strokeWeight: isHigh ? 3.5 : 3,
       clickable: true,
       zIndex: 40,
     }),

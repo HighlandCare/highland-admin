@@ -1,3 +1,6 @@
+/** High-demand zone circle color on Live Operations map. */
+export const DEMAND_ZONE_COLOR = "#ef4444";
+
 /** Admin map: fixed driver count shown in demand notification banner (no radius text). */
 export const DEMAND_NOTIFY_DISPLAY_DRIVER_COUNT = 10;
 
