@@ -425,7 +425,7 @@ const Page = () => {
                               field("State", personal.state),
                               field("Zip Code", personal.zipCode),
                               field(
-                                "Persona Status",
+                                "Verification Status",
                                 personal.personaStatus
                                   ? String(personal.personaStatus).replace(/^\w/, (c) =>
                                       c.toUpperCase()

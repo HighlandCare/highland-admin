@@ -91,7 +91,7 @@ const PROFILE_FIELD_LABELS = {
   state: "State",
   zipCode: "Zip Code",
   zip: "Zip Code",
-  personaStatus: "Persona Status",
+  personaStatus: "Verification Status",
   isVerified: "Verified",
   verified: "Verified",
   isApproved: "Approved",

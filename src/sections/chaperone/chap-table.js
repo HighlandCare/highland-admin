@@ -68,7 +68,7 @@ const PERSONA_STATUS_FILTER_OPTIONS = [
   { label: "All", value: "all" },
   { label: "Approved", value: "approved" },
   { label: "Declined", value: "declined" },
-  { label: "Pending Persona Review", value: "pending_persona_review" },
+  { label: "Pending Verification Review", value: "pending_persona_review" },
 ];
 
 const ACCOUNT_STATUS_FILTER_OPTIONS = [
@@ -99,7 +99,7 @@ const matchesPersonaFilter = (driver, filterValue) => {
   }
 
   if (filterValue === "pending_persona_review") {
-    return label === "pending persona review";
+    return label === "pending verification review";
   }
 
   return true;
@@ -179,13 +179,13 @@ export const ChapTable = (props) => {
       setAdminPersonaDeclined(driverUserId, personaStatus === "declined");
       toast.success(
         personaStatus === "approved"
-          ? "Persona approved successfully"
-          : "Persona declined successfully"
+          ? "Verification approved successfully"
+          : "Verification declined successfully"
       );
       await refreshTable();
     } catch (error) {
       console.error("Error updating persona status:", error);
-      toast.error("Unable to update persona status. Please try again.");
+      toast.error("Unable to update verification status. Please try again.");
     } finally {
       setSubmittingId(null);
     }
@@ -321,7 +321,7 @@ export const ChapTable = (props) => {
     <>
       <TextField
         InputLabelProps={{ shrink: true }}
-        label="Persona"
+        label="Verification"
         onChange={(event) => handlePersonaStatusChange(event.target.value)}
         select
         size="small"
@@ -377,7 +377,7 @@ export const ChapTable = (props) => {
             <TableCell>E-mail</TableCell>
             <TableCell>Vehicle</TableCell>
             <TableCell>Experience</TableCell>
-            <TableCell>Persona Status</TableCell>
+            <TableCell>Verification Status</TableCell>
             <TableCell>Account Status</TableCell>
             <TableCell align="right">Actions</TableCell>
           </TableRow>
@@ -413,7 +413,7 @@ export const ChapTable = (props) => {
                   icon: CheckCircleIcon,
                   color: "success.main",
                   disabled: isSubmitting,
-                  label: isSubmitting ? "Approving..." : "Approve Persona",
+                  label: isSubmitting ? "Approving..." : "Approve Verification",
                   onClick: () => handleUpdatePersonaStatus(driver, "approved"),
                 });
               }
@@ -422,7 +422,7 @@ export const ChapTable = (props) => {
                 icon: XCircleIcon,
                 color: "error.main",
                 disabled: isSubmitting,
-                label: isSubmitting ? "Declining..." : "Decline Persona",
+                label: isSubmitting ? "Declining..." : "Decline Verification",
                 onClick: () => handleUpdatePersonaStatus(driver, "declined"),
               });
 
