@@ -287,7 +287,7 @@ export const getPersonaStatusMeta = (driverOrStatus) => {
     }
 
     return hasPersonaInquiry(driver)
-      ? { color: "warning", label: "Pending Persona Review" }
+      ? { color: "warning", label: "Pending Verification Review" }
       : { color: "warning", label: "Pending" };
   }
 
@@ -296,10 +296,10 @@ export const getPersonaStatusMeta = (driverOrStatus) => {
   }
 
   if (PERSONA_UNDER_REVIEW_STATUSES.includes(normalized)) {
-    return { color: "warning", label: "Pending Persona Review" };
+    return { color: "warning", label: "Pending Verification Review" };
   }
 
-  return { color: "warning", label: "Pending Persona Review" };
+  return { color: "warning", label: "Pending Verification Review" };
 };
 
 export const isDriverBlocked = (driver) => !driver?.isApproved;
